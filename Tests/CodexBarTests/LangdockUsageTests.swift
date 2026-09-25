@@ -160,9 +160,32 @@ struct LangdockUsageTests {
             after: LangdockUsageError.unauthorized, hadPriorData: true))
         #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.profileUnavailable, hadPriorData: true))
+        #expect(UsageStore.shouldPreservePriorSnapshot(
+            after: LangdockUsageError.profileUnreadable, hadPriorData: true))
+        #expect(UsageStore.shouldPreservePriorSnapshot(
+            after: LangdockUsageError.browserAccessPaused, hadPriorData: true))
     }
 
     #if os(macOS)
+    @Test
+    func `profile discovery separates permission errors from absent stores`() {
+        let home = URL(fileURLWithPath: "/synthetic/home")
+        let profile = home.appendingPathComponent("Library/Application Support/Microsoft Edge/Default").path
+
+        #expect(LangdockEdgeCookieImporter.profileAccessError(
+            profileID: profile,
+            homeDirectories: [home],
+            listDirectory: { _ in throw POSIXError(.EPERM) }) == .profileUnreadable)
+        #expect(LangdockEdgeCookieImporter.profileAccessError(
+            profileID: profile,
+            homeDirectories: [home],
+            listDirectory: { _ in throw POSIXError(.ENOENT) }) == nil)
+        #expect(LangdockEdgeCookieImporter.profileAccessError(
+            profileID: "/other/path/Default",
+            homeDirectories: [home],
+            listDirectory: { _ in throw POSIXError(.EPERM) }) == nil)
+    }
+
     private static func store(_ profileID: String, kind: BrowserCookieStoreKind) -> BrowserCookieStore {
         BrowserCookieStore(
             browser: .edge,

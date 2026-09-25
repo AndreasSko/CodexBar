@@ -74,9 +74,60 @@ public enum LangdockEdgeCookieImporter {
         profileID: String,
         client: BrowserCookieClient = BrowserCookieClient()) throws -> String
     {
-        let store = try self.selectedStore(profileID: profileID, from: client.codexBarStores(for: .edge))
+        guard BrowserCookieAccessGate.shouldAttempt(.edge) else {
+            throw LangdockUsageError.browserAccessPaused
+        }
+        let stores = try client.codexBarStores(for: .edge)
+        let store: BrowserCookieStore
+        do {
+            store = try self.selectedStore(profileID: profileID, from: stores)
+        } catch {
+            if let accessError = self.profileAccessError(
+                profileID: profileID,
+                homeDirectories: client.configuration.homeDirectories)
+            {
+                throw accessError
+            }
+            throw error
+        }
         let records = try client.codexBarRecords(matching: self.query, in: store)
         return try self.cookieHeader(from: records)
+    }
+
+    static func profileAccessError(
+        profileID: String,
+        homeDirectories: [URL],
+        listDirectory: (String) throws -> [String] = FileManager.default.contentsOfDirectory(atPath:))
+        -> LangdockUsageError?
+    {
+        let profile = URL(fileURLWithPath: profileID).standardizedFileURL
+        let root = profile.deletingLastPathComponent()
+        let isEdgeRoot = ChromiumProfileLocator.roots(for: [.edge], homeDirectories: homeDirectories)
+            .contains { $0.url.standardizedFileURL.path == root.path }
+        guard isEdgeRoot else { return nil }
+
+        for directory in [root, profile] {
+            do {
+                _ = try listDirectory(directory.path)
+            } catch {
+                if self.isPermissionError(error) { return .profileUnreadable }
+            }
+        }
+        return nil
+    }
+
+    private static func isPermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileReadNoPermissionError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain,
+           nsError.code == Int(POSIXErrorCode.EACCES.rawValue) || nsError.code == Int(POSIXErrorCode.EPERM.rawValue)
+        {
+            return true
+        }
+        guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error else { return false }
+        return self.isPermissionError(underlying)
     }
 
     public static func cookieHeader(from records: [BrowserCookieRecord]) throws -> String {

@@ -4,6 +4,8 @@ public enum LangdockUsageError: LocalizedError, Sendable, Equatable {
     case unsupportedPlatform
     case profileRequired
     case profileUnavailable
+    case profileUnreadable
+    case browserAccessPaused
     case sessionUnavailable
     case unauthorized
     case forbidden
@@ -15,7 +17,13 @@ public enum LangdockUsageError: LocalizedError, Sendable, Equatable {
         switch self {
         case .unsupportedPlatform: "Langdock web usage requires macOS and Microsoft Edge."
         case .profileRequired: "Select the Edge profile used for Langdock in provider settings."
-        case .profileUnavailable: "The selected Edge profile is unavailable or cannot be read."
+        case .profileUnavailable: "The selected Edge profile has no discoverable cookie store."
+        case .profileUnreadable:
+            "CodexBar cannot read the selected Edge profile. " +
+                "Check Files & Folders access for this CodexBar build."
+        case .browserAccessPaused:
+            "Edge cookie access is blocked. " +
+                "Check CodexBar's Keychain access setting and refresh manually."
         case .sessionUnavailable: "No usable Langdock session was found in the selected Edge profile."
         case .unauthorized: "The selected Edge profile is no longer signed in to Langdock."
         case .forbidden: "Langdock denied access to personal usage for this session."

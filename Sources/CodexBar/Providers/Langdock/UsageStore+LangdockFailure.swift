@@ -42,6 +42,7 @@ enum LangdockFailurePolicy {
         return switch error {
         case let .httpStatus(status): status == 429 || (500...599).contains(status)
         case let .rejected(code): ["TOO_MANY_REQUESTS", "INTERNAL_SERVER_ERROR", "TIMEOUT"].contains(code)
+        case .profileUnreadable, .browserAccessPaused: true
         default: false
         }
     }

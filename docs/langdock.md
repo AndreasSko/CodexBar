@@ -22,6 +22,14 @@ or its session expires. macOS must allow the running CodexBar bundle to read the
 the Edge Safe Storage Keychain item. Browser access errors are shown in CodexBar; no administrator
 rights or access to the Langdock macOS app are required.
 
+If usage disappears after a restart, verify the saved **Edge profile ID** against the profile
+path shown by `edge://version` in the same Edge window as Langdock. A message that Edge cookie
+access is blocked calls for a manual Langdock refresh and a check of CodexBar's Keychain access
+setting. If CodexBar reports that it cannot read the profile, check **Privacy & Security → Files &
+Folders → CodexBar → Microsoft Edge** for the exact app bundle being run. Local ad hoc signed
+builds may need a renewed macOS grant after rebuilding. A missing cookie store remains a separate
+profile or browser-data problem; CodexBar does not try another profile.
+
 Langdock reports a five-hour session percentage and a seven-day weekly percentage. A disabled
 session limit hides the session bar. Missing reset dates remain unknown. If Langdock returns a
 valid response without included plan usage, CodexBar shows “No included usage limits available.”
