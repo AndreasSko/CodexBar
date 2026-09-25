@@ -48,6 +48,7 @@ public enum UsageProvider: String, CaseIterable, Sendable, Codable {
     case moonshot
     case amp
     case t3chat
+    case langdock
     case ollama
     case synthetic
     case openrouter

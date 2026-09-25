@@ -28,6 +28,7 @@ enum BurnProviderChoice: String, AppEnum {
     case kimi
     case kilo
     case kiro
+    case langdock
     case vertexai
     case augment
     case jetbrains
@@ -120,6 +121,7 @@ enum BurnProviderChoice: String, AppEnum {
         .kimi: DisplayRepresentation(title: "Kimi Code"),
         .kilo: DisplayRepresentation(title: "Kilo"),
         .kiro: DisplayRepresentation(title: "Kiro"),
+        .langdock: DisplayRepresentation(title: "Langdock"),
         .vertexai: DisplayRepresentation(title: "Vertex AI"),
         .augment: DisplayRepresentation(title: "Augment"),
         .jetbrains: DisplayRepresentation(title: "JetBrains AI"),
@@ -136,8 +138,8 @@ enum BurnProviderChoice: String, AppEnum {
         .perplexity: DisplayRepresentation(title: "Perplexity"),
         .mimo: DisplayRepresentation(title: "Xiaomi MiMo"),
         .doubao: DisplayRepresentation(title: "Doubao"),
-        .sakana: DisplayRepresentation(title: "Sakana AI"),
         // Provider-specific by design: AppIntents requires literal catalog titles; snapshot data gates eligibility.
+        .sakana: DisplayRepresentation(title: "Sakana AI"),
         .abacus: DisplayRepresentation(title: "Abacus AI"),
         .mistral: DisplayRepresentation(title: "Mistral"),
         .deepseek: DisplayRepresentation(title: "DeepSeek"),
@@ -176,9 +178,9 @@ enum BurnProviderChoice: String, AppEnum {
         .huggingface: DisplayRepresentation(title: "Hugging Face"),
         .raycast: DisplayRepresentation(title: "Raycast"),
         .pi: DisplayRepresentation(title: "Pi"),
+        // Provider-specific by design: AppIntents requires literal catalog titles; snapshot data gates eligibility.
         .v0: DisplayRepresentation(title: "v0"),
         .typesafe: DisplayRepresentation(title: "TypeSafe"),
-        // Provider-specific by design: AppIntents requires literal catalog titles; snapshot data gates eligibility.
         .hyper: DisplayRepresentation(title: "Charm Hyper"),
         .gitkraken: DisplayRepresentation(title: "GitKraken AI"),
         .devpass: DisplayRepresentation(title: "DevPass"),

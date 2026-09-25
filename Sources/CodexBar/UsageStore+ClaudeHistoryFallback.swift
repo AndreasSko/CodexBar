@@ -101,7 +101,7 @@ extension UsageStore {
         if self.underlyingProviderTransportError(error) is CancellationError {
             return true
         }
-        if self.isPreservableNetworkTransportError(error) {
+        if self.isPreservableNetworkTransportError(error) || LangdockFailurePolicy.isTransient(error) {
             return true
         }
 

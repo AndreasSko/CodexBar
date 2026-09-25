@@ -8,6 +8,21 @@ read_when:
 
 # Provider authoring guide
 
+## Langdock personal usage
+
+The first-party Langdock provider is off by default. On macOS, set its **Edge profile ID** to the
+profile directory used for the desired Langdock account, then enable the provider. The ID must match
+one Edge profile discovered by SweetCookieKit; CodexBar never tries another profile or reuses the
+plugin cookie broker's account-wide cache. The app requests only
+`usageSettings.getPersonalUsage` on `https://app.langdock.com`, using applicable cookies from the
+selected store in memory. The profile must be readable by the exact app bundle running CodexBar.
+
+The provider displays the reported five-hour session and seven-day weekly percentages. A disabled
+session limit has no session bar. A valid response without `planUsage` clears both bars and reports
+that no included usage limits are available. Extra Usage and widgets are not supported. The CLI route
+is `codexbar usage --provider langdock --source web`; web import requires macOS.
+
+
 Goal: adding a provider should feel like:
 - add one folder
 - define one descriptor + strategies

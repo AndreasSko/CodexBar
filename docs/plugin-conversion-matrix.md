@@ -17,7 +17,7 @@ script. Settings-derived origins include the private-network HTTP policy for LLM
 
 `converted` means the bundled conversion is present behind `CODEXBAR_JS_PROVIDERS=1`. `cut-over` means the script is
 authoritative on its supported engines; each row states whether a Linux native core remains. Totals count only the
-69 audit rows below, excluding the separately listed plugin-first additions. The registry now contains 87 providers:
+69 audit rows below, excluding the separately listed plugin-first additions. The registry now contains 88 providers:
 69 audit rows, 9 additional plugin-first rows, and 9 providers not yet classified in this matrix (CodeRabbit,
 Hugging Face, IBM Bob, Muse, Nous, Pi, Replicate, TypeSafe, and v0).
 
@@ -59,7 +59,7 @@ Abacus, Muse, LongCat, Replicate, and TypeSafe unchanged.
 | **Audit total** | **69** |
 | Additional plugin-first providers | 9 |
 | Registered providers not yet classified here | 9 |
-| **Registry total** | **87** |
+| **Registry total** | **88** |
 
 ## Matrix
 
