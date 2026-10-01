@@ -7,6 +7,7 @@ public enum LangdockUsageError: LocalizedError, Sendable, Equatable {
     case profileUnreadable
     case browserAccessPaused
     case sessionUnavailable
+    case sessionChanged
     case unauthorized
     case forbidden
     case rejected(String)
@@ -25,6 +26,7 @@ public enum LangdockUsageError: LocalizedError, Sendable, Equatable {
             "Edge cookie access is blocked. " +
                 "Check CodexBar's Keychain access setting and refresh manually."
         case .sessionUnavailable: "No usable Langdock session was found in the selected Edge profile."
+        case .sessionChanged: "The Langdock session in the selected Edge profile changed. Refresh again."
         case .unauthorized: "The selected Edge profile is no longer signed in to Langdock."
         case .forbidden: "Langdock denied access to personal usage for this session."
         case let .rejected(code): "Langdock rejected the usage request (\(code))."

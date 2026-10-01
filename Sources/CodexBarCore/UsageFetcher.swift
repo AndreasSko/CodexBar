@@ -153,6 +153,8 @@ public struct UsageSnapshot: Codable, Sendable {
     public let deepseekPlatformProfiles: [DeepSeekPlatformProfile]
     /// Live-only ownership proof; decoded usage cannot authorize browser balance retention.
     public let deepseekPlatformBalanceOwner: DeepSeekPlatformBalanceOwner?
+    /// Live-only ownership proof; a profile directory alone does not identify a Langdock account.
+    public let langdockSessionOwner: LangdockSessionOwner?
     public let opencodegoUsage: OpenCodeGoUsageSnapshot?
     public let openAIAPIUsage: OpenAIAPIUsageSnapshot?
     public let codexResetCredits: CodexRateLimitResetCreditsSnapshot?
@@ -207,6 +209,7 @@ public struct UsageSnapshot: Codable, Sendable {
         deepseekDetailedUsageState: DeepSeekDetailedUsageState = .notRequested,
         deepseekPlatformProfiles: [DeepSeekPlatformProfile] = [],
         deepseekPlatformBalanceOwner: DeepSeekPlatformBalanceOwner? = nil,
+        langdockSessionOwner: LangdockSessionOwner? = nil,
         opencodegoUsage: OpenCodeGoUsageSnapshot? = nil,
         openAIAPIUsage: OpenAIAPIUsageSnapshot? = nil,
         codexResetCredits: CodexRateLimitResetCreditsSnapshot? = nil,
@@ -236,6 +239,7 @@ public struct UsageSnapshot: Codable, Sendable {
         self.deepseekDetailedUsageState = deepseekDetailedUsageState
         self.deepseekPlatformProfiles = deepseekPlatformProfiles
         self.deepseekPlatformBalanceOwner = deepseekPlatformBalanceOwner
+        self.langdockSessionOwner = langdockSessionOwner
         self.opencodegoUsage = opencodegoUsage
         self.openAIAPIUsage = openAIAPIUsage
         self.codexResetCredits = codexResetCredits
@@ -335,6 +339,7 @@ public struct UsageSnapshot: Codable, Sendable {
         self.deepseekDetailedUsageState = .notRequested // Live-only fetch state
         self.deepseekPlatformProfiles = [] // Live-only browser profile catalog
         self.deepseekPlatformBalanceOwner = nil // Live-only balance ownership
+        self.langdockSessionOwner = nil // Live-only browser session ownership
         self.opencodegoUsage = nil // Not persisted, fetched fresh each time
         self.openAIAPIUsage = try container.decodeIfPresent(OpenAIAPIUsageSnapshot.self, forKey: .openAIAPIUsage)
         self.codexResetCredits = try container.decodeIfPresent(
@@ -542,6 +547,7 @@ public struct UsageSnapshot: Codable, Sendable {
         details: Replacement<[ProviderDetailSection]> = .unchanged,
         deepseekDetailedUsageState: Replacement<DeepSeekDetailedUsageState> = .unchanged,
         deepseekPlatformProfiles: Replacement<[DeepSeekPlatformProfile]> = .unchanged,
+        langdockSessionOwner: Replacement<LangdockSessionOwner?> = .unchanged,
         codexResetCredits: Replacement<CodexRateLimitResetCreditsSnapshot?> = .unchanged,
         grokResetCredits: Replacement<GrokRateLimitResetCreditsSnapshot?> = .unchanged,
         subscriptionExpiresAt: Replacement<Date?> = .unchanged,
@@ -560,6 +566,7 @@ public struct UsageSnapshot: Codable, Sendable {
             deepseekDetailedUsageState: deepseekDetailedUsageState.resolving(self.deepseekDetailedUsageState),
             deepseekPlatformProfiles: deepseekPlatformProfiles.resolving(self.deepseekPlatformProfiles),
             deepseekPlatformBalanceOwner: self.deepseekPlatformBalanceOwner,
+            langdockSessionOwner: langdockSessionOwner.resolving(self.langdockSessionOwner),
             opencodegoUsage: self.opencodegoUsage,
             openAIAPIUsage: self.openAIAPIUsage,
             codexResetCredits: codexResetCredits.resolving(self.codexResetCredits),

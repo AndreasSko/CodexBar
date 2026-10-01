@@ -19,6 +19,7 @@ public enum LangdockProviderDescriptor {
             cliName: "langdock",
             defaultEnabled: false,
             widgetSelectable: false,
+            burnDownWidgetSelectable: false,
             isPrimaryProvider: false,
             usesAccountFallback: false,
             dashboardURL: "https://app.langdock.com/settings/account/usage",
@@ -31,6 +32,7 @@ public enum LangdockProviderDescriptor {
         tokenCost: ProviderTokenCostConfig(
             supportsTokenCost: false,
             noDataMessage: { "Langdock cost usage is not supported." }),
+        history: .unavailable,
         fetchPlan: ProviderFetchPlan(
             sourceModes: [.auto, .web],
             pipeline: ProviderFetchPipeline(resolveStrategies: { _ in [LangdockWebFetchStrategy()] })),

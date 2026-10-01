@@ -48,6 +48,33 @@ struct LangdockUsageTests {
     }
 
     @Test
+    func `inactive session keeps genuine zero values without reviving previous reset dates`() throws {
+        let previous = try LangdockUsageParser.parse(
+            Self.response("""
+            {"sessionUsageLimitsEnabled":true,"sessionUsagePercent":20,
+             "sessionResetsAt":"2026-09-25T12:00:00Z","weeklyUsagePercent":40,
+             "weeklyResetsAt":"2026-09-28T00:00:00Z"}
+            """),
+            statusCode: 200,
+            now: Self.now.addingTimeInterval(-600))
+        let current = try LangdockUsageParser.parse(
+            Self.response("""
+            {"sessionUsageLimitsEnabled":true,"sessionUsagePercent":0,"sessionResetsAt":null,
+             "weeklyUsagePercent":0,"weeklyResetsAt":null}
+            """),
+            statusCode: 200,
+            now: Self.now)
+            .backfillingResetTimesForProvider(.langdock, from: previous)
+
+        #expect(current.primary?.usedPercent == 0)
+        #expect(current.primary?.isSyntheticPlaceholder == false)
+        #expect(current.primary?.resetsAt == nil)
+        #expect(current.secondary?.usedPercent == 0)
+        #expect(current.secondary?.resetsAt == nil)
+        #expect(current.updatedAt == Self.now)
+    }
+
+    @Test
     func `weekly only usage renders one full quota CLI metric`() throws {
         let data = Self.response("""
         {"sessionUsageLimitsEnabled":false,"weeklyUsagePercent":0}
@@ -94,6 +121,20 @@ struct LangdockUsageTests {
         }
     }
 
+    @Test(arguments: [
+        #"[]"#,
+        #"[{},{}]"#,
+        #"[{"result":{"data":null}}]"#,
+        #"[{"error":{}}]"#,
+        #"[{"error":{"json":{"data":{}}}}]"#,
+        #"[{"error":{"json":{"data":{"code":403}}}}]"#,
+    ])
+    func `malformed envelopes and incomplete trpc errors are not successful empty usage`(response: String) {
+        #expect(throws: LangdockUsageError.invalidResponse) {
+            try LangdockUsageParser.parse(Data(response.utf8), statusCode: 200)
+        }
+    }
+
     @Test
     func `trpc and HTTP denials are distinct from missing limits`() {
         let forbidden = Data("""
@@ -134,6 +175,9 @@ struct LangdockUsageTests {
         store.snapshots[.langdock] = UsageSnapshot(
             primary: nil,
             secondary: RateWindow(usedPercent: 25, windowMinutes: 10080, resetsAt: nil, resetDescription: nil),
+            langdockSessionOwner: LangdockSessionOwner(
+                profileID: firstProfile,
+                cookieHeader: "auth_token=synthetic-one"),
             updatedAt: Self.now).withIdentity(ProviderIdentitySnapshot(
             providerID: .langdock,
             accountEmail: nil,
@@ -151,19 +195,116 @@ struct LangdockUsageTests {
     }
 
     @Test
-    func `transient failures preserve prior usage while credential failures clear it`() {
-        #expect(UsageStore.shouldPreservePriorSnapshot(
+    func `unscoped failures cannot preserve usage without a confirmed session owner`() {
+        #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.httpStatus(503), hadPriorData: true))
-        #expect(UsageStore.shouldPreservePriorSnapshot(
+        #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.httpStatus(429), hadPriorData: true))
         #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.unauthorized, hadPriorData: true))
         #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.profileUnavailable, hadPriorData: true))
-        #expect(UsageStore.shouldPreservePriorSnapshot(
+        #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.profileUnreadable, hadPriorData: true))
-        #expect(UsageStore.shouldPreservePriorSnapshot(
+        #expect(!UsageStore.shouldPreservePriorSnapshot(
             after: LangdockUsageError.browserAccessPaused, hadPriorData: true))
+    }
+
+    @MainActor
+    @Test(ProviderTransportRegressionFixtures())
+    func `a successful response without plan usage removes previous menu bars`() async throws {
+        try await ProviderTransportRegressionSupport.withStore(provider: .langdock, hasPriorData: false) { store, _ in
+            let profileID = "/synthetic/Edge/Default"
+            store.settings.updateProviderConfig(provider: .langdock) {
+                $0.source = .web
+                $0.langdockEdgeProfileID = profileID
+            }
+            let previous = try Self.ownedSnapshot(profileID: profileID)
+            store.snapshots[.langdock] = previous
+            store.lastKnownResetSnapshots[.langdock] = previous
+            #expect(store.menuCardModel(for: .langdock, now: Self.now).metrics.count == 2)
+
+            let owner = try #require(previous.langdockSessionOwner)
+            let current = try LangdockUsageParser.parse(
+                Self.response("null"), statusCode: 200, now: Self.now)
+                .withIdentity(previous.identity)
+                .withLangdockSessionOwner(owner)
+            store._test_providerFetchOutcomeOverride = { _ in
+                ProviderFetchOutcome(result: .success(ProviderFetchResult(
+                    usage: current,
+                    credits: nil,
+                    dashboard: nil,
+                    sourceLabel: "synthetic",
+                    strategyID: "langdock.synthetic",
+                    strategyKind: .web)), attempts: [])
+            }
+
+            await store.refreshProvider(.langdock, allowDisabled: true)
+
+            let published = try #require(store.snapshot(for: .langdock))
+            #expect(published.primary == nil)
+            #expect(published.secondary == nil)
+            #expect(published.updatedAt == Self.now)
+            #expect(store.lastKnownResetSnapshots[.langdock]?.primary == nil)
+            #expect(store.lastKnownResetSnapshots[.langdock]?.secondary == nil)
+            #expect(published.details.first?.rows.first?.value == "No included usage limits available")
+            #expect(store.menuCardModel(for: .langdock, now: Self.now).metrics.isEmpty)
+            #expect(store.error(for: .langdock) == nil)
+        }
+    }
+
+    @MainActor
+    @Test(ProviderTransportRegressionFixtures())
+    func `a confirmed session outage shows the error and original capture age with retained bars`() async throws {
+        try await ProviderTransportRegressionSupport.withStore(provider: .langdock, hasPriorData: false) { store, _ in
+            let profileID = "/synthetic/Edge/Default"
+            store.settings.updateProviderConfig(provider: .langdock) {
+                $0.source = .web
+                $0.langdockEdgeProfileID = profileID
+            }
+            store.settings.usageBarsShowUsed = true
+            let previous = try Self.ownedSnapshot(profileID: profileID)
+            store.snapshots[.langdock] = previous
+            store.lastKnownResetSnapshots[.langdock] = previous
+            let failure = LangdockFetchError(
+                owner: previous.langdockSessionOwner,
+                underlyingError: LangdockUsageError.httpStatus(503))
+            store._test_providerFetchOutcomeOverride = { _ in
+                ProviderFetchOutcome(result: .failure(failure), attempts: [])
+            }
+
+            await store.refreshProvider(.langdock, allowDisabled: true)
+
+            #expect(store.snapshot(for: .langdock)?.updatedAt == previous.updatedAt)
+            #expect(store.lastKnownResetSnapshots[.langdock]?.updatedAt == previous.updatedAt)
+            #expect(store.error(for: .langdock) == failure.localizedDescription)
+            let model = store.menuCardModel(for: .langdock, now: Self.now)
+            #expect(model.metrics.map(\.percent) == [20, 40])
+            #expect(model.subtitleText == failure.localizedDescription)
+            #expect(model.lastKnownUsageText == LastKnownUsagePresentation.message(
+                capturedAt: previous.updatedAt, now: Self.now))
+        }
+    }
+
+    private static func ownedSnapshot(profileID: String) throws -> UsageSnapshot {
+        let owner = try #require(LangdockSessionOwner(
+            profileID: profileID,
+            cookieHeader: "auth_token=synthetic-one"))
+        return try LangdockUsageParser.parse(
+            Self.response("""
+            {"sessionUsageLimitsEnabled":true,"sessionUsagePercent":20,
+             "sessionResetsAt":"2026-09-25T12:00:00Z","weeklyUsagePercent":40,
+             "weeklyResetsAt":"2026-09-28T00:00:00Z"}
+            """),
+            statusCode: 200,
+            now: Self.now.addingTimeInterval(-600))
+            .withIdentity(ProviderIdentitySnapshot(
+                providerID: .langdock,
+                accountEmail: nil,
+                accountOrganization: nil,
+                loginMethod: "Edge profile",
+                accountID: profileID))
+            .withLangdockSessionOwner(owner)
     }
 
     #if os(macOS)
@@ -172,16 +313,19 @@ struct LangdockUsageTests {
         let home = URL(fileURLWithPath: "/synthetic/home")
         let profile = home.appendingPathComponent("Library/Application Support/Microsoft Edge/Default").path
 
-        #expect(LangdockEdgeCookieImporter.profileAccessError(
+        #expect(BrowserDetection.selectedChromiumProfileAccessIssue(
             profileID: profile,
+            browser: .edge,
             homeDirectories: [home],
-            listDirectory: { _ in throw POSIXError(.EPERM) }) == .profileUnreadable)
-        #expect(LangdockEdgeCookieImporter.profileAccessError(
+            listDirectory: { _ in throw POSIXError(.EPERM) }) == .accessDenied)
+        #expect(BrowserDetection.selectedChromiumProfileAccessIssue(
             profileID: profile,
+            browser: .edge,
             homeDirectories: [home],
             listDirectory: { _ in throw POSIXError(.ENOENT) }) == nil)
-        #expect(LangdockEdgeCookieImporter.profileAccessError(
+        #expect(BrowserDetection.selectedChromiumProfileAccessIssue(
             profileID: "/other/path/Default",
+            browser: .edge,
             homeDirectories: [home],
             listDirectory: { _ in throw POSIXError(.EPERM) }) == nil)
     }

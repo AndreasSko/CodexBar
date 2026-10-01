@@ -24,28 +24,53 @@ public enum LangdockUsageFetcher {
         cookieHeaderProvider: (@Sendable (String) throws -> String)? = nil) async throws -> UsageSnapshot
     {
         #if os(macOS)
-        guard let edgeProfileID = edgeProfileID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !edgeProfileID.isEmpty
-        else { throw LangdockUsageError.profileRequired }
-        try Task.checkCancellation()
-        let cookieHeader = try cookieHeaderProvider?(edgeProfileID)
-            ?? LangdockEdgeCookieImporter.cookieHeader(profileID: edgeProfileID)
-        try Task.checkCancellation()
-        var request = URLRequest(url: self.usageURL)
-        request.httpMethod = "GET"
-        request.timeoutInterval = max(1, timeout)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("https://app.langdock.com/settings/account/usage", forHTTPHeaderField: "Referer")
-        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
-        let response = try await (transport ?? self.isolatedTransport).response(for: request)
-        try Task.checkCancellation()
-        return try LangdockUsageParser.parse(response.data, statusCode: response.statusCode).withIdentity(
-            ProviderIdentitySnapshot(
-                providerID: .langdock,
-                accountEmail: nil,
-                accountOrganization: nil,
-                loginMethod: "Edge profile",
-                accountID: edgeProfileID))
+        let readCookieHeader: @Sendable (String) throws -> String = cookieHeaderProvider ?? {
+            try LangdockEdgeCookieImporter.cookieHeader(profileID: $0)
+        }
+        var verifiedOwner: LangdockSessionOwner?
+        do {
+            guard let edgeProfileID = edgeProfileID?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !edgeProfileID.isEmpty
+            else { throw LangdockUsageError.profileRequired }
+            try Task.checkCancellation()
+            let cookieHeader = try readCookieHeader(edgeProfileID)
+            guard let requestedOwner = LangdockSessionOwner(profileID: edgeProfileID, cookieHeader: cookieHeader) else {
+                throw LangdockUsageError.sessionUnavailable
+            }
+            let result: Result<UsageSnapshot, Error>
+            do {
+                try Task.checkCancellation()
+                var request = URLRequest(url: self.usageURL)
+                request.httpMethod = "GET"
+                request.timeoutInterval = max(1, timeout)
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                request.setValue("https://app.langdock.com/settings/account/usage", forHTTPHeaderField: "Referer")
+                request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+                let response = try await (transport ?? self.isolatedTransport).response(for: request)
+                result = try .success(LangdockUsageParser.parse(response.data, statusCode: response.statusCode))
+            } catch {
+                result = .failure(error)
+            }
+            // A login can change while HTTP is suspended. Recheck without another Keychain prompt.
+            let currentHeader = try ProviderInteractionContext.$current.withValue(.background) {
+                try readCookieHeader(edgeProfileID)
+            }
+            guard let currentOwner = LangdockSessionOwner(profileID: edgeProfileID, cookieHeader: currentHeader) else {
+                throw LangdockUsageError.sessionUnavailable
+            }
+            verifiedOwner = currentOwner
+            guard currentOwner == requestedOwner else { throw LangdockUsageError.sessionChanged }
+            try Task.checkCancellation()
+            return try result.get().withLangdockSessionOwner(currentOwner).withIdentity(
+                ProviderIdentitySnapshot(
+                    providerID: .langdock,
+                    accountEmail: nil,
+                    accountOrganization: nil,
+                    loginMethod: "Edge profile",
+                    accountID: edgeProfileID))
+        } catch {
+            throw LangdockFetchError(owner: verifiedOwner, underlyingError: error)
+        }
         #else
         throw LangdockUsageError.unsupportedPlatform
         #endif
@@ -82,52 +107,17 @@ public enum LangdockEdgeCookieImporter {
         do {
             store = try self.selectedStore(profileID: profileID, from: stores)
         } catch {
-            if let accessError = self.profileAccessError(
+            if BrowserDetection.selectedChromiumProfileAccessIssue(
                 profileID: profileID,
-                homeDirectories: client.configuration.homeDirectories)
+                browser: .edge,
+                homeDirectories: client.configuration.homeDirectories) == .accessDenied
             {
-                throw accessError
+                throw LangdockUsageError.profileUnreadable
             }
             throw error
         }
         let records = try client.codexBarRecords(matching: self.query, in: store)
         return try self.cookieHeader(from: records)
-    }
-
-    static func profileAccessError(
-        profileID: String,
-        homeDirectories: [URL],
-        listDirectory: (String) throws -> [String] = FileManager.default.contentsOfDirectory(atPath:))
-        -> LangdockUsageError?
-    {
-        let profile = URL(fileURLWithPath: profileID).standardizedFileURL
-        let root = profile.deletingLastPathComponent()
-        let isEdgeRoot = ChromiumProfileLocator.roots(for: [.edge], homeDirectories: homeDirectories)
-            .contains { $0.url.standardizedFileURL.path == root.path }
-        guard isEdgeRoot else { return nil }
-
-        for directory in [root, profile] {
-            do {
-                _ = try listDirectory(directory.path)
-            } catch {
-                if self.isPermissionError(error) { return .profileUnreadable }
-            }
-        }
-        return nil
-    }
-
-    private static func isPermissionError(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileReadNoPermissionError {
-            return true
-        }
-        if nsError.domain == NSPOSIXErrorDomain,
-           nsError.code == Int(POSIXErrorCode.EACCES.rawValue) || nsError.code == Int(POSIXErrorCode.EPERM.rawValue)
-        {
-            return true
-        }
-        guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error else { return false }
-        return self.isPermissionError(underlying)
     }
 
     public static func cookieHeader(from records: [BrowserCookieRecord]) throws -> String {

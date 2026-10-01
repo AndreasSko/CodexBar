@@ -266,7 +266,8 @@ struct BurnProviderOptions: DynamicOptionsProvider {
     static func choices(in snapshot: WidgetSnapshot?, combined: Bool = false) -> [BurnProviderChoice] {
         guard let snapshot else { return [] }
         return BurnProviderChoice.allCases.filter { choice in
-            guard snapshot.enabledProviders.contains(choice.provider.instanceID),
+            guard ProviderDescriptorRegistry.descriptor(for: choice.provider).metadata.burnDownWidgetSelectable,
+                  snapshot.enabledProviders.contains(choice.provider.instanceID),
                   let state = BurnDownState(snapshot: snapshot, provider: choice.provider, selection: .primary)
             else { return false }
             let selections = combined ? state.combinedSelections : state.availableSelections
@@ -301,7 +302,8 @@ struct BurnDownState {
         selection: BurnWindowChoice,
         now: Date = Date())
     {
-        guard let entry = snapshot.entries.first(where: { $0.provider == provider.instanceID }) else { return nil }
+        guard ProviderDescriptorRegistry.descriptor(for: provider).metadata.burnDownWidgetSelectable,
+              let entry = snapshot.entries.first(where: { $0.provider == provider.instanceID }) else { return nil }
         self.entry = entry
         self.selection = selection
         self.now = now

@@ -2,12 +2,20 @@ import CodexBarCore
 import Foundation
 
 extension UsageStore {
+    func langdockLastKnownUsageCapturedAt(for provider: UsageProvider, snapshot: UsageSnapshot?) -> Date? {
+        guard provider == .langdock, self.userFacingError(for: provider) != nil else { return nil }
+        return snapshot?.updatedAt
+    }
+
     func profileScopedSnapshot(for instanceID: ProviderInstanceID) -> UsageSnapshot? {
         let snapshot = self.snapshots[instanceID]
         guard instanceID == .langdock else { return snapshot }
+        let settings = LangdockProviderSettings(
+            edgeProfileID: self.settings.providerConfig(for: .langdock)?.langdockEdgeProfileID)
         guard let snapshot,
-              let profileID = self.settings.providerConfig(for: .langdock)?.langdockEdgeProfileID,
-              snapshot.identity?.accountID == profileID
+              let profileID = settings.edgeProfileID,
+              snapshot.identity?.accountID == profileID,
+              snapshot.langdockSessionOwner?.profileID == profileID
         else { return nil }
         return snapshot
     }
@@ -37,8 +45,18 @@ extension UsageSnapshot {
 }
 
 enum LangdockFailurePolicy {
+    static func hasMatchingOwner(after error: Error, priorSnapshot: UsageSnapshot?) -> Bool {
+        guard let failure = error as? LangdockFetchError else {
+            return !(error is LangdockUsageError) && priorSnapshot?.identity?.providerID != .langdock &&
+                priorSnapshot?.langdockSessionOwner == nil
+        }
+        guard let owner = failure.owner else { return false }
+        return priorSnapshot?.langdockSessionOwner == owner
+    }
+
     static func isTransient(_ error: Error) -> Bool {
-        guard let error = error as? LangdockUsageError else { return false }
+        let underlying = (error as? LangdockFetchError)?.underlyingError ?? error
+        guard let error = underlying as? LangdockUsageError else { return false }
         return switch error {
         case let .httpStatus(status): status == 429 || (500...599).contains(status)
         case let .rejected(code): ["TOO_MANY_REQUESTS", "INTERNAL_SERVER_ERROR", "TIMEOUT"].contains(code)
