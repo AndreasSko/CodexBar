@@ -49,7 +49,10 @@ struct SpendTimeZoneControls: View {
     }
 
     var selectedIdentifier: String {
-        self.settings.costUsageBucketCalendar.timeZone.identifier
+        let storedIdentifier = self.settings.costUsageBucketTimeZoneIdentifier
+        return CostUsageBucketTimeZone.isValidIdentifier(storedIdentifier)
+            ? storedIdentifier
+            : self.settings.costUsageBucketCalendar.timeZone.identifier
     }
 
     var timeZoneIdentifiers: [String] {

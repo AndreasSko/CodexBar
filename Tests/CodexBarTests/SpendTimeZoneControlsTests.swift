@@ -50,6 +50,20 @@ struct SpendTimeZoneControlsTests {
         #expect(settings.costUsageSettingsRevision == revision + 1)
     }
 
+    @Test(arguments: ["UTC", "GMT+8"])
+    func `picker preserves saved labels that Foundation normalizes`(identifier: String) {
+        let defaults = InMemoryUserDefaults(values: ["tokenCostUsageBucketTimeZone": identifier])
+        let settings = testSettingsStore(suiteName: #function, userDefaults: defaults)
+        let controls = SpendTimeZoneControls(settings: settings)
+        #expect(controls.selectedIdentifier == identifier)
+        #expect(controls.timeZoneIdentifiers.contains(identifier))
+
+        controls.timeZoneBinding.wrappedValue = "Asia/Shanghai"
+        controls.timeZoneBinding.wrappedValue = identifier
+        #expect(controls.selectedIdentifier == identifier)
+        #expect(defaults.string(forKey: "tokenCostUsageBucketTimeZone") == identifier)
+    }
+
     @Test
     func `current zone button pins the selected zone and retains daylight saving rules`() throws {
         let defaults = InMemoryUserDefaults(values: [
