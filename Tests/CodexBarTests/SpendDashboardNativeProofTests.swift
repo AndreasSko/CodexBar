@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
 import XCTest
+#if canImport(SQLite3)
+import SQLite3
+#endif
 @testable import CodexBar
 @testable import CodexBarCore
 
@@ -39,7 +42,10 @@ final class SpendDashboardNativeProofTests: XCTestCase {
         store._test_widgetSnapshotSaveOverride = { _ in }
         let now = Date()
         let configuration = SpendDashboardSource.configuration(settings: settings, store: store)
-        let inputs = Self.syntheticInputs(now: now, calendar: configuration.bucketCalendar)
+        var inputs = Self.syntheticInputs(now: now, calendar: configuration.bucketCalendar)
+        if environment["CODEXBAR_SPEND_PROJECTLESS_NATIVE_PROOF"] == "1" {
+            inputs += try Self.independentChatInputs(now: now, calendar: configuration.bucketCalendar, output: output)
+        }
         let controller = SpendDashboardController(
             userDefaults: InMemoryUserDefaults(),
             requestBuilder: { mode in
@@ -107,6 +113,8 @@ final class SpendDashboardNativeProofTests: XCTestCase {
                 "selectedDay": controller.selectedDay == nil ? "none" : "set",
                 "privacy": settings.hidePersonalInfo,
                 "groups": controller.model.groups.count,
+                "projectRows": controller.model.groups.flatMap(\.projects).filter { !$0.isProjectless }.count,
+                "independentChatRows": controller.model.groups.flatMap(\.projects).filter(\.isProjectless).count,
             ]
             try JSONSerialization.data(withJSONObject: receipt, options: [.sortedKeys])
                 .write(to: output.appendingPathComponent("state.json"), options: .atomic)
@@ -114,6 +122,85 @@ final class SpendDashboardNativeProofTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(150))
         } while Date() < deadline
         XCTFail("Native proof did not finish before its deadline")
+    }
+
+    private static func independentChatInputs(
+        now: Date,
+        calendar: Calendar,
+        output: URL) throws -> [SpendDashboardModel.ProviderInput]
+    {
+        let home = output.appendingPathComponent("synthetic-home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let ids = ["synthetic-chat-service", "synthetic-chat-network", "synthetic-chat-attachment"]
+        try JSONSerialization.data(withJSONObject: ["projectless-thread-ids": ids])
+            .write(to: home.appendingPathComponent(".codex-global-state.json"))
+        #if canImport(SQLite3)
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(home.appendingPathComponent("state_5.sqlite").path, &database), SQLITE_OK)
+        defer { sqlite3_close(database) }
+        XCTAssertEqual(sqlite3_exec(
+            database,
+            "CREATE TABLE threads (id TEXT, title TEXT, agent_path TEXT, project_id TEXT)",
+            nil,
+            nil,
+            nil), SQLITE_OK)
+        #endif
+        let titles = ["Restore the local service", "Investigate connectivity", "# Files mentioned by the user:"]
+        var projects: [CostUsageProjectBreakdown] = []
+        var sessions: [CostUsageSessionBreakdown] = []
+        for (index, id) in ids.enumerated() {
+            let path = "/Users/example/Documents/Codex/2026-01-01/generated-chat-\(index)"
+            let daily = [Self.entry(
+                day: now,
+                calendar: calendar,
+                cost: Double(index + 1),
+                tokens: 1000,
+                model: "example-coder")]
+            projects.append(CostUsageProjectBreakdown(
+                name: "generated-chat-\(index)",
+                path: path,
+                totalTokens: 1000,
+                totalCostUSD: Double(index + 1),
+                daily: daily,
+                modelBreakdowns: nil,
+                sources: [
+                    CostUsageProjectSourceBreakdown(
+                        name: "generated-chat-\(index)",
+                        path: path,
+                        totalTokens: 1000,
+                        totalCostUSD: Double(index + 1),
+                        daily: daily,
+                        modelBreakdowns: nil,
+                        sessionIDs: [id]),
+                ]))
+            var session = CostUsageSessionBreakdown(
+                sessionID: id,
+                lastActivity: now,
+                inputTokens: 900,
+                cachedInputTokens: 500,
+                outputTokens: 100,
+                totalTokens: 1000,
+                requestCount: 1,
+                costUSD: Double(index + 1),
+                modelBreakdowns: [],
+                projectPath: path,
+                projectName: "generated-chat-\(index)",
+                title: titles[index])
+            session.workingDirectory = path
+            sessions.append(session)
+        }
+        let annotated = CostUsageFetcher.codexBreakdownsWithMetadata(
+            sessions, projects: projects, sessionsRoot: home.appendingPathComponent("sessions"), environment: [:])
+        XCTAssertEqual(annotated.projects.filter(\.isProjectless).count, 3)
+        XCTAssertEqual(annotated.projects.map(\.totalCostUSD), projects.map(\.totalCostUSD))
+        return [SpendDashboardModel.ProviderInput(
+            provider: .codex,
+            displayName: "Codex",
+            snapshot: Self.snapshot(
+                entries: annotated.projects.flatMap(\.daily),
+                now: now,
+                projects: annotated.projects,
+                sessions: annotated.sessions))]
     }
 
     private static func syntheticInputs(

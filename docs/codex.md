@@ -430,6 +430,13 @@ Duplicate project labels show their paths for disambiguation. **Hide personal in
 with numbered projects and hides those paths, including tooltips. Dashboard-v1 and widget cost summaries contain
 aggregate values only, with no project names or directory paths.
 
+Independent desktop chats appear in a separate **Independent chats** section, using saved thread titles or a
+neutral chat label instead of generated workspace folder names. Classification requires an explicit chat marker
+from the selected Codex home's bounded desktop state; current or legacy project assignments veto stale markers.
+Mixed ownership, missing metadata, and unregistered CLI folders keep the existing project fallback. This display
+metadata does not change source/path identities, token counts, costs, or cached accounting. Privacy mode uses
+numbered chat labels and hides their paths.
+
 Codex session rows show the local thread title when available, with the project, model, and last-activity date
 beneath it. Untitled sessions use a shortened session ID. Titles come from `session_index.jsonl`, with the local
 thread database as a fallback; relative `CODEX_SQLITE_HOME` paths resolve against each rollout's original working

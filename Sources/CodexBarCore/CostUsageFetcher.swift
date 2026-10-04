@@ -1024,9 +1024,29 @@ public struct CostUsageFetcher: Sendable {
         }
         let indexedNames = CodexThreadMetadataReader.indexedThreadNames(
             codexHomeDirectory: home, sessionIDs: Set(sessions.map(\.sessionID)))
+        let projectlessMetadata = CodexProjectlessWorkspaceMetadata.load(codexHomeDirectory: home)
+        var assignedSessionIDs: Set<String> = []
+        var memberIDsByDatabase: [URL: Set<String>] = [:]
+        for project in projects {
+            for source in project.sources {
+                guard let path = source.path, let memberIDs = source.sessionIDs else { continue }
+                memberIDsByDatabase[database(for: path), default: []].formUnion(memberIDs)
+            }
+        }
         for (database, indices) in sessionGroups {
-            let metadata = CodexThreadMetadataReader(databaseURL: database).metadata(
-                for: Set(indices.map { sessions[$0].sessionID }), indexedNames: indexedNames)
+            memberIDsByDatabase[database, default: []].formUnion(indices.map { sessions[$0].sessionID })
+        }
+        for (database, sessionIDs) in memberIDsByDatabase {
+            let candidates = sessionIDs.intersection(projectlessMetadata?.threadIDs ?? [])
+            guard !candidates.isEmpty else { continue }
+            let lookup = CodexThreadMetadataReader(databaseURL: database).assignedProjectSessionIDs(for: candidates)
+            // Unknown ownership must veto the legacy marker just like a known assignment.
+            assignedSessionIDs.formUnion(lookup ?? candidates)
+        }
+        for (database, indices) in sessionGroups {
+            let reader = CodexThreadMetadataReader(databaseURL: database)
+            let sessionIDs = Set(indices.map { sessions[$0].sessionID })
+            let metadata = reader.metadata(for: sessionIDs, indexedNames: indexedNames)
             for index in indices {
                 let session = sessions[index]
                 if let title = metadata[session.sessionID]?.title {
@@ -1037,7 +1057,13 @@ public struct CostUsageFetcher: Sendable {
                 }
             }
         }
-        return result
+        guard let projectlessMetadata else { return result }
+        return Self.codexBreakdownsWithProjectlessMetadata(
+            projects: result.projects,
+            sessions: result.sessions,
+            codexHomeDirectory: home,
+            assignedSessionIDs: assignedSessionIDs,
+            metadata: projectlessMetadata)
     }
 
     private static func codexReportView(
@@ -1841,11 +1867,17 @@ public struct CostUsageFetcher: Sendable {
     {
         var dailyByPath: [String: [CostUsageDailyReport]] = [:]
         var namesByPath: [String: String] = [:]
+        var projectlessByPath: [String: Bool] = [:]
         var sourceDailyByProjectPath: [String: [String: [CostUsageDailyReport]]] = [:]
         var sourceNamesByProjectPath: [String: [String: String]] = [:]
+        var sourceSessionIDsByProjectPath: [String: [String: Set<String>]] = [:]
+        var unprovenSourcesByProjectPath: [String: Set<String>] = [:]
         for project in projects {
             let key = project.path ?? ""
-            namesByPath[key] = project.name
+            if namesByPath[key] == nil || projectlessByPath[key] != false || !project.isProjectless {
+                namesByPath[key] = project.name
+            }
+            projectlessByPath[key] = (projectlessByPath[key] ?? true) && project.isProjectless
             dailyByPath[key, default: []].append(CostUsageDailyReport(data: project.daily, summary: nil))
             let sources = project.sources.isEmpty
                 ? [
@@ -1861,6 +1893,11 @@ public struct CostUsageFetcher: Sendable {
             for source in sources {
                 let sourceKey = source.path ?? ""
                 sourceNamesByProjectPath[key, default: [:]][sourceKey] = source.name
+                if let sessionIDs = source.sessionIDs {
+                    sourceSessionIDsByProjectPath[key, default: [:]][sourceKey, default: []].formUnion(sessionIDs)
+                } else {
+                    unprovenSourcesByProjectPath[key, default: []].insert(sourceKey)
+                }
                 sourceDailyByProjectPath[key, default: [:]][sourceKey, default: []]
                     .append(CostUsageDailyReport(data: source.daily, summary: nil))
             }
@@ -1876,7 +1913,10 @@ public struct CostUsageFetcher: Sendable {
                 modelBreakdowns: Self.projectModelBreakdowns(from: merged.data),
                 sources: Self.mergedProjectSources(
                     sourceDailyByPath: sourceDailyByProjectPath[key] ?? [:],
-                    sourceNamesByPath: sourceNamesByProjectPath[key] ?? [:]))
+                    sourceNamesByPath: sourceNamesByProjectPath[key] ?? [:],
+                    sourceSessionIDsByPath: sourceSessionIDsByProjectPath[key] ?? [:],
+                    unprovenSourcePaths: unprovenSourcesByProjectPath[key] ?? []),
+                isProjectless: projectlessByPath[key] == true)
         }
         .sorted { lhs, rhs in
             let lhsCost = lhs.totalCostUSD ?? -1
@@ -1895,7 +1935,9 @@ public struct CostUsageFetcher: Sendable {
 
     private static func mergedProjectSources(
         sourceDailyByPath: [String: [CostUsageDailyReport]],
-        sourceNamesByPath: [String: String]) -> [CostUsageProjectSourceBreakdown]
+        sourceNamesByPath: [String: String],
+        sourceSessionIDsByPath: [String: Set<String>],
+        unprovenSourcePaths: Set<String>) -> [CostUsageProjectSourceBreakdown]
     {
         sourceDailyByPath.map { key, reports in
             let merged = CostUsageDailyReport.merged(reports)
@@ -1905,7 +1947,8 @@ public struct CostUsageFetcher: Sendable {
                 totalTokens: merged.summary?.totalTokens,
                 totalCostUSD: merged.summary?.totalCostUSD,
                 daily: merged.data,
-                modelBreakdowns: Self.projectModelBreakdowns(from: merged.data))
+                modelBreakdowns: Self.projectModelBreakdowns(from: merged.data),
+                sessionIDs: unprovenSourcePaths.contains(key) ? nil : sourceSessionIDsByPath[key])
         }
         .sorted { lhs, rhs in
             let lhsCost = lhs.totalCostUSD ?? -1

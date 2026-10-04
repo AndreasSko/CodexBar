@@ -1639,3 +1639,7 @@
 "antigravity_quota_window_note" = "Il costo della finestra copre tutti i modelli · la finestra mostrata è la famiglia più vincolata";
 "antigravity_no_priced_token_history" = "Nessuna cronologia di token Antigravity con prezzo disponibile.";
 "Supported browsers: %@. Use Manual for other browsers." = "Browser supportati: %@. Usa Manuale per gli altri browser.";
+
+"Independent chat" = "Chat indipendente";
+"Independent chats" = "Chat indipendenti";
+"Chat %d" = "Conversazione %d";

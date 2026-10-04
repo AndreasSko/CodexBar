@@ -151,8 +151,43 @@ struct CostUsageStoreReadView: Sendable {
     }
 
     func projects(range: CostUsageScanner.CostUsageDayRange, cacheRoot: URL?) -> [CostUsageProjectBreakdown] {
-        CostUsageScanner.buildCodexProjectBreakdownsFromCache(
+        let projects = CostUsageScanner.buildCodexProjectBreakdownsFromCache(
             cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
+        // Session rows keep only the latest file for each thread. Directory ownership must include
+        // older files too, including a thread that subsequently continued in another directory.
+        // Use a conservative superset of all files the report builder can consider in this window.
+        // This read-only annotation leaves the parser fingerprint and warmed ledger unchanged.
+        var sessionIDsByPath: [String: Set<String>] = [:]
+        for (filePath, usage) in self.cache.files {
+            guard let path = usage.projectPath,
+                  usage.touchesCodexScanWindow(
+                      sinceKey: range.scanSinceKey,
+                      untilKey: range.scanUntilKey,
+                      calendar: range.calendar) else { continue }
+            let id = usage.sessionId ?? URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
+            sessionIDsByPath[path, default: []].insert(id)
+        }
+        return projects.map { project in
+            let sources = project.sources.map { source in
+                CostUsageProjectSourceBreakdown(
+                    name: source.name,
+                    path: source.path,
+                    totalTokens: source.totalTokens,
+                    totalCostUSD: source.totalCostUSD,
+                    daily: source.daily,
+                    modelBreakdowns: source.modelBreakdowns,
+                    sessionIDs: source.path.flatMap { sessionIDsByPath[$0] })
+            }
+            return CostUsageProjectBreakdown(
+                name: project.name,
+                path: project.path,
+                totalTokens: project.totalTokens,
+                totalCostUSD: project.totalCostUSD,
+                daily: project.daily,
+                modelBreakdowns: project.modelBreakdowns,
+                sources: sources,
+                isProjectless: project.isProjectless)
+        }
     }
 
     func sessions(

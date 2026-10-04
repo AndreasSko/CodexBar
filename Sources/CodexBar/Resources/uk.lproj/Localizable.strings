@@ -1636,3 +1636,7 @@
 "antigravity_quota_window_note" = "Вартість вікна охоплює всі моделі · показано вікно найбільш обмеженої родини";
 "antigravity_no_priced_token_history" = "Немає оціненої історії токенів Antigravity.";
 "Supported browsers: %@. Use Manual for other browsers." = "Підтримувані браузери: %@. Для інших браузерів використовуйте ручний режим.";
+
+"Independent chat" = "Окремий чат";
+"Independent chats" = "Окремі чати";
+"Chat %d" = "Чат %d";

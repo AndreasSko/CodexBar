@@ -1667,3 +1667,7 @@
 "antigravity_quota_window_note" = "視窗費用涵蓋所有模型 · 所示視窗為最受限的模型系列";
 "antigravity_no_priced_token_history" = "沒有可計價的 Antigravity 權杖歷史記錄。";
 "Supported browsers: %@. Use Manual for other browsers." = "支援的瀏覽器：%@。其他瀏覽器請使用「手動」模式。";
+
+"Independent chat" = "獨立聊天";
+"Independent chats" = "獨立聊天";
+"Chat %d" = "聊天 %d";

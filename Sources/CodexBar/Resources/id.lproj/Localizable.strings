@@ -1639,3 +1639,7 @@
 "antigravity_quota_window_note" = "Biaya jendela mencakup semua model · jendela yang ditampilkan adalah keluarga paling terbatas";
 "antigravity_no_priced_token_history" = "Tidak ada riwayat token Antigravity berharga yang tersedia.";
 "Supported browsers: %@. Use Manual for other browsers." = "Browser yang didukung: %@. Gunakan Manual untuk browser lain.";
+
+"Independent chat" = "Obrolan mandiri";
+"Independent chats" = "Obrolan mandiri";
+"Chat %d" = "Obrolan %d";

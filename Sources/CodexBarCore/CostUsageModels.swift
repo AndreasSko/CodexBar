@@ -418,6 +418,8 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
     public static let unknownProjectName = "Unknown project"
 
     public internal(set) var name: String
+    /// Explicit desktop chat ownership is display metadata, never an accounting key.
+    public internal(set) var isProjectless: Bool
     public let path: String?
     public let totalTokens: Int?
     public let totalCostUSD: Double?
@@ -432,7 +434,8 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
         totalCostUSD: Double?,
         daily: [CostUsageDailyReport.Entry],
         modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?,
-        sources: [CostUsageProjectSourceBreakdown] = [])
+        sources: [CostUsageProjectSourceBreakdown] = [],
+        isProjectless: Bool = false)
     {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.unknownProjectName
@@ -444,34 +447,7 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
         self.daily = daily
         self.modelBreakdowns = modelBreakdowns
         self.sources = sources
-    }
-}
-
-public struct CostUsageProjectSourceBreakdown: Sendable, Equatable {
-    public let name: String
-    public let path: String?
-    public let totalTokens: Int?
-    public let totalCostUSD: Double?
-    public let daily: [CostUsageDailyReport.Entry]
-    public let modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?
-
-    public init(
-        name: String,
-        path: String?,
-        totalTokens: Int?,
-        totalCostUSD: Double?,
-        daily: [CostUsageDailyReport.Entry],
-        modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?)
-    {
-        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? CostUsageProjectBreakdown.unknownProjectName
-            : name
-        let cleanPath = path?.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.path = cleanPath?.isEmpty == true ? nil : cleanPath
-        self.totalTokens = totalTokens
-        self.totalCostUSD = totalCostUSD
-        self.daily = daily
-        self.modelBreakdowns = modelBreakdowns
+        self.isProjectless = isProjectless
     }
 }
 
