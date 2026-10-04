@@ -190,9 +190,19 @@ class TestGroupTests(unittest.TestCase):
                 for group in groups:
                     if any(item.suite_name in ISOLATED_SUITES for item in group):
                         self.assertEqual(len(group), 1)
-                sharded = [item for shard in range(2)
-                           for group in shard_groups(groups, shard, 2) for item in group]
-                self.assertCountEqual(sharded, selections)
+                for count in [2, 3]:
+                    sharded = [item for shard in range(count)
+                               for group in shard_groups(groups, shard, count) for item in group]
+                    self.assertCountEqual(sharded, selections)
+
+    def test_three_shards_balance_groups_and_preserve_each_selection_once(self):
+        for group_count in [0, 1, 2, 3, 4, 140, 201, 202]:
+            with self.subTest(group_count=group_count):
+                groups = [[TestSelection(f"Fixture{i}", f"^Fixture{i}/")] for i in range(group_count)]
+                shards = [shard_groups(groups, index, 3) for index in range(3)]
+                counts = [len(shard) for shard in shards]
+                self.assertLessEqual(max(counts) - min(counts), 1)
+                self.assertCountEqual([group for shard in shards for group in shard], groups)
 
 
 if __name__ == "__main__":
