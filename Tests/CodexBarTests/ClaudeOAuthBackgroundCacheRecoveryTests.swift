@@ -9,14 +9,16 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
     enum CacheScenario: CaseIterable {
         case available, writeRejected, writeRejectedWithoutExpiry, temporarilyUnavailable, memoryOlderThanThirtyMinutes
         case expiredFile, expiredMemory, invalidated, neverPrompt, pendingInvalidation, profileChanged
+        case writeRejectedOlderThanThirtyMinutes, writeRejectedExpiredMemory
 
         var rejectsWrite: Bool {
             self == .writeRejected || self == .writeRejectedWithoutExpiry
+                || self == .writeRejectedOlderThanThirtyMinutes || self == .writeRejectedExpiredMemory
         }
 
         var expectsRecovery: Bool {
             switch self {
-            case .available, .writeRejected, .temporarilyUnavailable,
+            case .available, .writeRejected, .writeRejectedOlderThanThirtyMinutes, .temporarilyUnavailable,
                  .memoryOlderThanThirtyMinutes, .expiredFile: true
             default: false
             }
@@ -109,10 +111,12 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
                     #expect(memory.record?.credentials.accessToken == "synthetic-manual-token")
                 }
             }
-            if scenario != .available, scenario != .temporarilyUnavailable, !scenario.rejectsWrite {
+            if scenario == .writeRejectedOlderThanThirtyMinutes || scenario == .writeRejectedExpiredMemory
+                || (scenario != .available && scenario != .temporarilyUnavailable && !scenario.rejectsWrite)
+            {
                 memory.timestamp = Date(timeIntervalSinceNow: -1860)
             }
-            if scenario == .expiredMemory {
+            if scenario == .expiredMemory || scenario == .writeRejectedExpiredMemory {
                 memory.record = try ClaudeOAuthCredentialRecord(
                     credentials: ClaudeOAuthCredentials.parse(data: self.credentialsData(expiresIn: -60)),
                     owner: .claudeCLI,

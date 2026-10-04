@@ -320,6 +320,9 @@ public enum ClaudeOAuthCredentialsStore {
                 var lastError: Error?
                 var expiredRecord: ClaudeOAuthCredentialRecord?
                 var cacheTemporarilyUnavailable = false
+                var cacheCleanupRetainsMemory = false
+                let cacheHadPendingClear = ClaudeOAuthCredentialsStore.hasPendingCodexBarOAuthKeychainCacheClear(
+                    profileIdentifier: profileIdentifier)
 
                 switch ClaudeOAuthCredentialsStore.loadCodexBarOAuthKeychainCache(
                     profileIdentifier: profileIdentifier)
@@ -368,7 +371,10 @@ public enum ClaudeOAuthCredentialsStore {
                     cacheTemporarilyUnavailable = true
                     lastError = ClaudeOAuthCredentialsError.readFailed("CodexBar cache is temporarily unavailable.")
                 case .missing:
-                    break
+                    // A rejected write leaves a tombstone. After successful cleanup there is no
+                    // persistent entry, but an unexpired credential already read with consent can
+                    // repopulate our cache even after the ordinary memory freshness window.
+                    cacheCleanupRetainsMemory = cacheHadPendingClear
                 }
 
                 // A cache outage does not expire a token already read with consent. Retry persistent storage
@@ -377,7 +383,7 @@ public enum ClaudeOAuthCredentialsStore {
                 if let record = self.memoryCredentialRecord(
                     environment: environment,
                     profileIdentifier: profileIdentifier,
-                    requireFreshTimestamp: !cacheTemporarilyUnavailable)
+                    requireFreshTimestamp: !cacheTemporarilyUnavailable && !cacheCleanupRetainsMemory)
                 {
                     ClaudeOAuthCredentialsStore.saveCredentialsToCache(
                         record.credentials,
