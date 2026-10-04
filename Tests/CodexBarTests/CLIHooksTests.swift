@@ -1,9 +1,43 @@
 import CodexBarCore
+import Commander
 import Foundation
 import Testing
 @testable import CodexBarCLI
 
 struct CLIHooksTests {
+    @Test
+    func `watch provider option accepts all both and deduplicates concrete names`() throws {
+        let allResult = CodexBarCLI.decodeHooksWatchProviderNames(
+            from: ParsedValues(positional: [], options: ["provider": ["all"]], flags: []))
+        #expect(try allResult.get() == ProviderDescriptorRegistry.all.map(\.id))
+
+        let bothResult = CodexBarCLI.decodeHooksWatchProviderNames(
+            from: ParsedValues(positional: [], options: ["provider": ["both", "codex", "codex"]], flags: []))
+        let both = try #require(try bothResult.get())
+        #expect(both == [.codex, .claude])
+
+        guard case .failure = CodexBarCLI.decodeHooksWatchProviderNames(
+            from: ParsedValues(positional: [], options: ["provider": ["bogus"]], flags: []))
+        else {
+            Issue.record("Expected an unknown provider to fail")
+            return
+        }
+    }
+
+    @Test(arguments: ["all", "both", "bogus"])
+    func `test provider option accepts only a concrete provider`(name: String) throws {
+        let result = CodexBarCLI.decodeHooksTestProviderName(
+            from: ParsedValues(positional: [], options: ["provider": [name]], flags: []))
+        guard case .failure = result else {
+            Issue.record("Expected \(name) to fail")
+            return
+        }
+
+        let concrete = CodexBarCLI.decodeHooksTestProviderName(
+            from: ParsedValues(positional: [], options: ["provider": ["codex"]], flags: []))
+        #expect(try concrete.get() == .codex)
+    }
+
     @Test
     func `watch privacy keeps account routing private and skips synthetic lanes`() {
         let usage = UsageSnapshot(

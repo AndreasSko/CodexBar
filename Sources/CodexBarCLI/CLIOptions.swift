@@ -33,7 +33,7 @@ struct GuardOptions: CommanderParsable {
     @OptionGroup
     var logging: CLILoggingOptions
 
-    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    @Option(name: .long("provider"), help: ProviderHelp.concreteOptionHelp)
     var provider: ProviderSelection?
 
     @Option(name: .long("min-remaining"), help: "Minimum remaining quota required, as a percent (default 10)")
@@ -116,12 +116,23 @@ enum OutputFormat: String, ExpressibleFromArgument {
 
 enum ProviderHelp {
     static var list: String {
-        let names = ProviderDescriptorRegistry.all.map(\ .cli.name)
-        return (names + ["both", "all"]).joined(separator: "|")
+        (self.concreteNames + ["both", "all"]).joined(separator: "|")
+    }
+
+    static var concreteList: String {
+        self.concreteNames.joined(separator: "|")
     }
 
     static var optionHelp: String {
         "Provider to query: \(self.list)"
+    }
+
+    static var concreteOptionHelp: String {
+        "Provider to query: \(self.concreteList)"
+    }
+
+    private static var concreteNames: [String] {
+        ProviderDescriptorRegistry.all.map(\ .cli.name)
     }
 }
 

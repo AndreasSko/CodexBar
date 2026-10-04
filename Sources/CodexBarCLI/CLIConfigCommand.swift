@@ -384,7 +384,7 @@ struct ConfigSetAPIKeyOptions: CommanderParsable {
     @OptionGroup
     var common: CLICommonOptions
 
-    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    @Option(name: .long("provider"), help: ProviderHelp.concreteOptionHelp)
     var provider: String?
 
     @Option(name: .long("api-key"), help: "API key to store")
@@ -413,7 +413,7 @@ struct ConfigProviderToggleOptions: CommanderParsable {
     @OptionGroup
     var common: CLICommonOptions
 
-    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    @Option(name: .long("provider"), help: ProviderHelp.concreteOptionHelp)
     var provider: String?
 }
 
