@@ -108,6 +108,36 @@ struct SpendDashboardPartialCostTests {
     }
 
     @Test
+    func `Antigravity zero token request without a model adds no unknown row and keeps models complete`() throws {
+        // The reader counts the request on the entry but emits no breakdown for it, at zero cost.
+        let entry = CostUsageDailyReport.Entry(
+            date: "2026-07-15",
+            inputTokens: nil,
+            outputTokens: nil,
+            totalTokens: 60,
+            requestCount: 2,
+            costUSD: 2,
+            modelsUsed: nil,
+            modelBreakdowns: [.init(modelName: "gemini-3.8-flash", costUSD: 2, totalTokens: 60, requestCount: 1)],
+            unpricedRequestCount: 0,
+            estimatedRequestCount: 2)
+        let snapshot = Self.snapshot(
+            entries: [entry],
+            last30DaysTokens: 60,
+            last30DaysCostUSD: 2,
+            costProvenance: .listPriceEstimate)
+        let group = try Self.group(inputs: [
+            .init(provider: .antigravity, displayName: "Antigravity", snapshot: snapshot),
+        ])
+
+        #expect(group.totalCost == 2)
+        #expect(!group.hasPartialCost)
+        #expect(group.modelHistoryCompleteness == .complete)
+        #expect(group.incompleteModelProviders.isEmpty)
+        #expect(group.models.map(\.modelName) == ["gemini-3.8-flash"])
+    }
+
+    @Test
     func `a truncated Antigravity scan marks cost and tokens as lower bounds`() throws {
         let entry = CostUsageDailyReport.Entry(
             date: "2026-07-15",

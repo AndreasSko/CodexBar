@@ -271,6 +271,26 @@ enum AntigravityLocalReader {
         let inherited = label.flatMap { conflicts.contains($0) ? nil : models[$0] }
         let model = self.normalizeModelID(event.turn.model ?? inherited ?? "unknown")
         let date = Date(timeIntervalSince1970: Double(timestamp) / 1000)
+        let day = CostUsageLocalDay.key(from: date, calendar: calendar)
+        if total == 0, model == "unknown" {
+            // A request with no tokens and no model still counts, but it has nothing to attribute: zero
+            // tokens cost nothing at any rate, and an empty `unknown` row would only read as unpriced.
+            let cost: Double? = pricing == nil ? nil : 0
+            return .init(
+                date: day,
+                inputTokens: input,
+                outputTokens: usage.output,
+                cacheReadTokens: usage.cacheRead,
+                cacheCreationTokens: event.cacheWrite,
+                reasoningTokens: usage.reasoning,
+                totalTokens: total,
+                requestCount: 1,
+                costUSD: cost,
+                modelsUsed: nil,
+                modelBreakdowns: [],
+                unpricedRequestCount: cost == nil ? 1 : 0,
+                estimatedRequestCount: cost == nil ? 0 : 1)
+        }
         let cost = pricing.flatMap {
             self.costUSD(
                 pricing: $0,
@@ -279,7 +299,6 @@ enum AntigravityLocalReader {
                 usage: usage,
                 cacheWrite: event.cacheWrite)
         }
-        let day = CostUsageLocalDay.key(from: date, calendar: calendar)
         return .init(
             date: day,
             inputTokens: input,
