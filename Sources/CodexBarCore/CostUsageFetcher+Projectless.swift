@@ -4,22 +4,18 @@ extension CostUsageFetcher {
     static func codexBreakdownsWithProjectlessMetadata(
         projects: [CostUsageProjectBreakdown],
         sessions: [CostUsageSessionBreakdown],
-        codexHomeDirectory: URL,
-        assignedSessionIDs: Set<String>,
-        metadata: CodexProjectlessWorkspaceMetadata? = nil)
+        projectSessionIDs: [String: Set<String>],
+        metadata: CodexProjectlessWorkspaceMetadata?,
+        assignedSessionIDs: Set<String>)
         -> (projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown])
     {
-        guard let metadata = metadata
-            ?? CodexProjectlessWorkspaceMetadata.load(codexHomeDirectory: codexHomeDirectory)
-        else {
-            return (projects, sessions)
-        }
+        guard let metadata else { return (projects, sessions) }
         var result = (projects: projects, sessions: sessions)
         for index in projects.indices {
-            let project = projects[index]
-            guard !project.sources.isEmpty,
-                  project.sources.allSatisfy({ $0.path != nil && $0.sessionIDs?.isEmpty == false }) else { continue }
-            let sessionIDs = project.sources.reduce(into: Set<String>()) { $0.formUnion($1.sessionIDs ?? []) }
+            let memberships = projects[index].sources.compactMap { $0.path.flatMap { projectSessionIDs[$0] } }
+            guard !memberships.isEmpty, memberships.count == projects[index].sources.count,
+                  memberships.allSatisfy({ !$0.isEmpty }) else { continue }
+            let sessionIDs = memberships.reduce(into: Set<String>()) { $0.formUnion($1) }
             guard sessionIDs.allSatisfy({ metadata.contains($0, assignedSessionIDs: assignedSessionIDs) })
             else { continue }
             result.projects[index].isProjectless = true

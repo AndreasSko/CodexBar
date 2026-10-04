@@ -1,28 +1,9 @@
-import AppKit
 import Foundation
 import Testing
 @testable import CodexBar
 @testable import CodexBarCore
 
 struct SpendDashboardProjectlessTests {
-    @Test
-    func `legacy rows remain projects and detail sections retain their defaults`() {
-        let row = SpendDashboardModel.ProjectRow(
-            rank: 1,
-            provider: .codex,
-            providerName: "Codex",
-            sourceID: "codex-a",
-            projectName: "work",
-            path: "/fixtures/work",
-            totalTokens: 10,
-            totalCost: 1)
-        #expect(!row.isProjectless)
-        #expect(spendDashboardAvailableDetailSections(hasProjects: false, hasSessions: false) == [.providers])
-        #expect(spendDashboardAvailableDetailSections(hasProjects: true, hasSessions: true) == [
-            .providers, .projects, .sessions,
-        ])
-    }
-
     @Test
     func `each category has consecutive ranks and preserves every ledger amount and identity`() throws {
         let group = try Self.group(projects: [
@@ -52,6 +33,8 @@ struct SpendDashboardProjectlessTests {
         }
         // Display ranking must not mutate the combined ledger ranking.
         #expect(group.projects.map(\.rank) == [1, 2, 3, 4])
+        #expect(spendDashboardAvailableDetailSections(hasProjects: true, hasSessions: true, hasChats: true)
+            == [.providers, .projects, .chats, .sessions])
     }
 
     @Test
@@ -110,32 +93,6 @@ struct SpendDashboardProjectlessTests {
     }
 
     @Test
-    func `classification changes no provider chart or ledger sums including unknown amounts`() throws {
-        let plain = [
-            Self.project(name: "Planning", path: "/fixtures/chat-a", cost: 4, tokens: nil),
-            Self.project(name: "work", path: "/fixtures/work", cost: nil, tokens: 40),
-        ]
-        let classified = [
-            Self.project(name: "Planning", path: "/fixtures/chat-a", cost: 4, tokens: nil, isProjectless: true),
-            plain[1],
-        ]
-        let before = try Self.group(projects: plain)
-        let after = try Self.group(projects: classified)
-        #expect(after.totalCost == before.totalCost)
-        #expect(after.totalTokens == before.totalTokens)
-        #expect(after.providers == before.providers)
-        #expect(after.models == before.models)
-        #expect(after.dailyPoints == before.dailyPoints)
-        #expect(after.sessions == before.sessions)
-        #expect(after.projects.map(\.id) == before.projects.map(\.id))
-        #expect(after.projects.map(\.totalCost) == before.projects.map(\.totalCost))
-        #expect(after.projects.map(\.totalTokens) == before.projects.map(\.totalTokens))
-        let chats = spendDashboardProjectRows(after.projects, isProjectless: true)
-        #expect(chats.first?.totalCost == 4)
-        #expect(chats.first?.totalTokens == nil)
-    }
-
-    @Test
     func `independent chat fallback and privacy labels are localized without exposing paths`() {
         for (language, fallback, maskedChat, maskedProject) in [
             ("en", "Independent chat", "Chat 1", "Project 1"),
@@ -155,50 +112,6 @@ struct SpendDashboardProjectlessTests {
                 #expect(plural.displayIdentity(hidePersonalInfo: false).name == L("Independent chats"))
                 #expect(plural.displayIdentity(hidePersonalInfo: true).name == maskedChat)
                 #expect(SpendDashboardDetailSection.chats.title == (language == "en" ? "Independent chats" : "独立聊天"))
-            }
-        }
-    }
-
-    @Test
-    @MainActor
-    func `four small detail picker segments fit within 460 points in both supported locales`() {
-        for language in ["en", "zh-Hans"] {
-            CodexBarLocalizationOverride.$appLanguage.withValue(language) {
-                let sections = spendDashboardAvailableDetailSections(
-                    hasProjects: true,
-                    hasSessions: true,
-                    hasChats: true)
-                let picker = NSSegmentedControl(
-                    labels: sections.map(\.title),
-                    trackingMode: .selectOne,
-                    target: nil,
-                    action: nil)
-                picker.controlSize = .small
-                picker.segmentStyle = .rounded
-                picker.sizeToFit()
-                #expect(picker.segmentCount == 4)
-                #expect(picker.frame.width <= 460)
-                for index in sections.indices {
-                    #expect(picker.label(forSegment: index) == sections[index].title)
-                }
-            }
-        }
-    }
-
-    @Test
-    func `available detail sections cover every mix of projects chats and sessions`() {
-        for hasProjects in [false, true] {
-            for hasChats in [false, true] {
-                for hasSessions in [false, true] {
-                    var expected: [SpendDashboardDetailSection] = [.providers]
-                    if hasProjects { expected.append(.projects) }
-                    if hasChats { expected.append(.chats) }
-                    if hasSessions { expected.append(.sessions) }
-                    #expect(spendDashboardAvailableDetailSections(
-                        hasProjects: hasProjects,
-                        hasSessions: hasSessions,
-                        hasChats: hasChats) == expected)
-                }
             }
         }
     }

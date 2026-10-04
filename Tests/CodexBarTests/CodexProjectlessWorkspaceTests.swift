@@ -9,6 +9,23 @@ import CSQLite3
 
 struct CodexProjectlessWorkspaceTests {
     @Test
+    func `assignment migration flags do not hide unrelated independent chats`() throws {
+        try Self.withHome { home in
+            try Data(#"""
+            {"projectless-thread-ids":["chat","assigned"],"thread-project-assignments":{
+                "assigned":{"projectId":"real-project","projectKind":"local","pendingCoreUpdate":false}}}
+            """#.utf8)
+                .write(to: home.appendingPathComponent(".codex-global-state.json"))
+            let result = Self.overlay(
+                home,
+                projects: [Self.project("/chat"), Self.project("/assigned")],
+                sessions: [Self.session("chat", path: "/chat"), Self.session("assigned", path: "/assigned")])
+            #expect(result.projects.map(\.isProjectless) == [true, false])
+            #expect(result.sessions.map(\.projectName) == [nil, "assigned"])
+        }
+    }
+
+    @Test
     func `explicit chats use saved titles without changing ledger values or CLI folders`() throws {
         try Self.withHome { home in
             try Self.writeState(home, ids: ["chat", "attachment"])
@@ -38,7 +55,7 @@ struct CodexProjectlessWorkspaceTests {
     func `mixed directory ownership and unproven worktree sources keep project classification`() throws {
         try Self.withHome { home in
             try Self.writeState(home, ids: ["chat", "second"])
-            let shared = Self.project("/shared", sessionIDs: ["chat", "cli"])
+            let shared = Self.project("/shared")
             let worktree = Self.project("/canonical", sources: ["/chat", "/missing"])
             let sessions = [
                 Self.session("chat", path: "/shared"), Self.session("cli", path: "/shared"),
@@ -54,7 +71,7 @@ struct CodexProjectlessWorkspaceTests {
     func `multiple independent sessions in one directory keep a neutral label and their accounting`() throws {
         try Self.withHome { home in
             try Self.writeState(home, ids: ["first", "second"])
-            let project = Self.project("/shared", sessionIDs: ["first", "second"])
+            let project = Self.project("/shared")
             let result = Self.overlay(home, projects: [project], sessions: [
                 Self.session("first", path: "/shared", title: "First topic"),
                 Self.session("second", path: "/shared", title: "Second topic"),
@@ -86,27 +103,6 @@ struct CodexProjectlessWorkspaceTests {
     }
 
     @Test
-    func `current and legacy project assignments veto stale independent chat markers`() throws {
-        try Self.withHome { home in
-            try Self.writeState(home, ids: ["legacy", "current", "chat"], assignments: [
-                "legacy": ["projectKind": "local", "projectId": "saved-project"],
-            ])
-            let projects = [Self.project("/legacy"), Self.project("/current"), Self.project("/chat")]
-            let sessions = [
-                Self.session("legacy", path: "/legacy"), Self.session("current", path: "/current"),
-                Self.session("chat", path: "/chat"),
-            ]
-            let result = CostUsageFetcher.codexBreakdownsWithProjectlessMetadata(
-                projects: projects,
-                sessions: sessions,
-                codexHomeDirectory: home,
-                assignedSessionIDs: ["current"])
-            #expect(result.projects.map(\.isProjectless) == [false, false, true])
-            #expect(result.sessions.map(\.projectName) == ["legacy", "current", nil])
-        }
-    }
-
-    @Test
     func `merged project copies preserve classification conservatively without changing totals`() throws {
         var chat = Self.project("/shared")
         chat.isProjectless = true
@@ -125,31 +121,152 @@ struct CodexProjectlessWorkspaceTests {
     }
 
     #if canImport(SQLite3) || canImport(CSQLite3)
+    @Test(arguments: [false, true])
+    func `a null project id in an unregistered CLI folder still requires an explicit marker`(_ marked: Bool) throws {
+        try Self.withHome { home in
+            try Self.writeState(home, ids: marked ? ["chat"] : [])
+            try Self.execute(home.appendingPathComponent("state_5.sqlite"), """
+            CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, project_id TEXT);
+            INSERT INTO threads VALUES ('chat', 'Saved title', NULL);
+            """)
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [Self.session("chat", path: "/cli")],
+                projects: [Self.project("/cli")],
+                projectSessionIDs: ["/cli": ["chat"]],
+                sessionsRoot: home.appendingPathComponent("sessions"),
+                environment: [:])
+            #expect(result.projects[0].isProjectless == marked)
+            #expect(result.projects[0].name == (marked ? "Saved title" : "cli"))
+        }
+    }
+
+    @Test(arguments: [4096, 4097])
+    func `candidate budget never classifies a partial ownership lookup`(_ count: Int) throws {
+        try Self.withHome { home in
+            let ids = Set((0..<count).map { "thread-\($0)" })
+            try Self.writeState(home, ids: Array(ids))
+            try Self.execute(
+                home.appendingPathComponent("state_5.sqlite"),
+                "CREATE TABLE threads (id TEXT PRIMARY KEY, project_id TEXT)")
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [],
+                projects: [Self.project("/chat")],
+                projectSessionIDs: ["/chat": ids],
+                sessionsRoot: home.appendingPathComponent("sessions"),
+                environment: [:])
+            #expect(result.projects[0].isProjectless == (count <= 4096))
+        }
+    }
+
+    @Test(arguments: [
+        "CREATE TABLE projects (id TEXT, name TEXT);",
+        """
+        CREATE TABLE projects (id TEXT, name TEXT);
+        CREATE TABLE project_roots (project_id TEXT, path TEXT);
+        INSERT INTO project_roots VALUES ('missing', 'relative/path');
+        """,
+        """
+        CREATE TABLE projects (id TEXT, name TEXT);
+        CREATE TABLE project_roots (project_id TEXT, path TEXT);
+        WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<1025)
+        INSERT INTO project_roots SELECT 'missing', '/work/' || x FROM n;
+        """,
+    ])
+    func `incomplete malformed or over budget roots cannot establish independent ownership`(_ schema: String) throws {
+        try Self.withHome { home in
+            try Self.writeState(home, ids: ["chat"])
+            try Self.execute(
+                home.appendingPathComponent("state_5.sqlite"),
+                "CREATE TABLE threads (id TEXT, project_id TEXT);" + schema)
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [],
+                projects: [Self.project("/chat")],
+                projectSessionIDs: ["/chat": ["chat"]],
+                sessionsRoot: home.appendingPathComponent("sessions"),
+                environment: [:])
+            #expect(!result.projects[0].isProjectless)
+        }
+    }
+
+    @Test(arguments: ["('chat', '')", "('chat', '  ')", "('chat', NULL), ('chat', 'project')"])
+    func `malformed or conflicting current assignments cannot establish independent ownership`(_ rows: String) throws {
+        try Self.withHome { home in
+            try Self.writeState(home, ids: ["chat"])
+            try Self.execute(home.appendingPathComponent("state_5.sqlite"), """
+            CREATE TABLE threads (id TEXT, project_id TEXT);
+            INSERT INTO threads VALUES \(rows);
+            """)
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [],
+                projects: [Self.project("/chat")],
+                projectSessionIDs: ["/chat": ["chat"]],
+                sessionsRoot: home.appendingPathComponent("sessions"),
+                environment: [:])
+            #expect(!result.projects[0].isProjectless)
+        }
+    }
+
+    @Test
+    func `registered project roots veto stale chat markers even without a thread assignment`() throws {
+        try Self.withHome { home in
+            try Self.writeState(home, ids: ["chat", "blank", "conflict"])
+            try Self.execute(home.appendingPathComponent("state_5.sqlite"), """
+            CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, project_id TEXT);
+            INSERT INTO threads VALUES ('chat', 'Saved chat title', NULL);
+            CREATE TABLE projects (id TEXT, name TEXT);
+            CREATE TABLE project_roots (project_id TEXT, path TEXT);
+            INSERT INTO projects VALUES ('a', 'Real project'), ('b', '  '), ('c', 'Other project');
+            INSERT INTO project_roots VALUES ('a', '/chat'), ('b', '/blank'),
+                ('a', '/conflict'), ('c', '/conflict');
+            """)
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [Self.session("chat", path: "/chat/src")],
+                projects: [
+                    Self.project("/chat/src"),
+                    Self.project("/blank"),
+                    Self.project("/conflict"),
+                ],
+                projectSessionIDs: ["/chat/src": ["chat"], "/blank": ["blank"], "/conflict": ["conflict"]],
+                sessionsRoot: home.appendingPathComponent("sessions"),
+                environment: [:])
+            #expect(result.projects.map(\.isProjectless) == [false, false, false])
+            #expect(result.projects.map(\.name) == ["Real project", "blank", "conflict"])
+            #expect(result.sessions[0].projectName == "Real project")
+        }
+    }
+
+    @Test(arguments: [["projectKind": "local"], ["projectId": "saved-project"], [:]])
+    func `legacy assignments veto chat markers even when incomplete`(_ assignment: [String: String]) throws {
+        try Self.withHome { home in
+            try Self.writeState(home, ids: ["chat"], assignments: ["chat": assignment])
+            let projects = [Self.project("/chat")]
+            #expect(Self.overlay(home, projects: projects, sessions: [Self.session("chat", path: "/chat")])
+                .projects == projects)
+        }
+    }
+
     @Test
     func `missing corrupt locked and unsupported databases preserve project presentation`() throws {
         try Self.withHome { home in
             try Self.writeState(home, ids: ["chat"])
             let database = home.appendingPathComponent("state_5.sqlite")
-            let reader = CodexThreadMetadataReader(databaseURL: database)
             let project = Self.project("/chat")
             let session = Self.session("chat", path: "/chat")
             func remainsProject() -> Bool {
                 let result = CostUsageFetcher.codexBreakdownsWithMetadata(
                     [session],
                     projects: [project],
+                    projectSessionIDs: ["/chat": ["chat"]],
                     sessionsRoot: home.appendingPathComponent("sessions"),
                     environment: [:])
                 return result.projects[0].isProjectless == false && result.sessions[0].projectName == "chat"
             }
-            #expect(reader.assignedProjectSessionIDs(for: ["chat"]) == nil)
             #expect(remainsProject())
             #expect(!FileManager.default.fileExists(atPath: database.path))
             try Data("invalid database".utf8).write(to: database)
-            #expect(reader.assignedProjectSessionIDs(for: ["chat"]) == nil)
             #expect(remainsProject())
             try FileManager.default.removeItem(at: database)
             try Self.execute(database, "CREATE TABLE unrelated (id TEXT)")
-            #expect(reader.assignedProjectSessionIDs(for: ["chat"]) == nil)
             #expect(remainsProject())
             try Self.execute(database, "CREATE TABLE threads (id TEXT, title TEXT, agent_path TEXT, project_id TEXT)")
             var handle: OpaquePointer?
@@ -158,7 +275,6 @@ struct CodexProjectlessWorkspaceTests {
             defer { sqlite3_close(locked) }
             #expect(sqlite3_exec(locked, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK)
             defer { sqlite3_exec(locked, "ROLLBACK", nil, nil, nil) }
-            #expect(reader.assignedProjectSessionIDs(for: ["chat"]) == nil)
             #expect(remainsProject())
         }
     }
@@ -169,10 +285,10 @@ struct CodexProjectlessWorkspaceTests {
             try Self.writeState(home, ids: ["chat"])
             let database = home.appendingPathComponent("state_5.sqlite")
             try Self.execute(database, "CREATE TABLE threads (id TEXT, title TEXT, agent_path TEXT)")
-            #expect(CodexThreadMetadataReader(databaseURL: database).assignedProjectSessionIDs(for: ["chat"]) == [])
             let result = CostUsageFetcher.codexBreakdownsWithMetadata(
                 [Self.session("chat", path: "/chat")],
                 projects: [Self.project("/chat")],
+                projectSessionIDs: ["/chat": ["chat"]],
                 sessionsRoot: home.appendingPathComponent("sessions"),
                 environment: [:])
             #expect(result.projects[0].isProjectless)
@@ -202,17 +318,17 @@ struct CodexProjectlessWorkspaceTests {
                 usage.canonicalProjectPath = path
                 cache.files["/synthetic/sessions/\(filename).jsonl"] = usage
             }
-            let projects = CostUsageStoreReadView(cache: cache, purpose: .report).projects(
-                range: range,
-                cacheRoot: home)
+            let view = CostUsageStoreReadView(cache: cache, purpose: .report)
+            let projects = view.projects(range: range, cacheRoot: home)
+            let memberships = view.projectSessionIDs(range: range)
             let sessions = CostUsageScanner.buildCodexSessionBreakdownsFromCache(
                 cache: cache, range: range, modelsDevCatalog: ModelsDevCatalog(providers: [:]))
             #expect(sessions.count == 2)
             #expect(sessions.first { $0.sessionID == "cli" }?.workingDirectory == "/elsewhere")
             let shared = try #require(projects.first { $0.path == "/shared" })
-            #expect(shared.sources.first?.sessionIDs == ["chat", "cli"])
+            #expect(memberships["/shared"] == ["chat", "cli"])
             #expect(shared.totalTokens == 26)
-            let result = Self.overlay(home, projects: projects, sessions: sessions)
+            let result = Self.overlay(home, projects: projects, sessions: sessions, projectSessionIDs: memberships)
             #expect(result.projects == projects)
         }
     }
@@ -229,29 +345,39 @@ struct CodexProjectlessWorkspaceTests {
             """)
             let projects = [Self.project("/chat"), Self.project("/assigned")]
             let sessions = [Self.session("chat", path: "/chat"), Self.session("assigned", path: "/assigned")]
+            var lookupCount = 0
             func overlay() -> (projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown]) {
                 CostUsageFetcher.codexBreakdownsWithMetadata(
                     sessions,
                     projects: projects,
+                    projectSessionIDs: ["/chat": ["chat"], "/assigned": ["assigned"]],
                     sessionsRoot: home.appendingPathComponent("sessions"),
-                    environment: [:])
+                    environment: [:],
+                    projectMetadataLookup: { database, paths, ids in
+                        lookupCount += 1
+                        #expect(paths == ["/chat", "/assigned"])
+                        #expect(ids == ["chat", "assigned"])
+                        return CodexThreadMetadataReader(databaseURL: database).projectMetadata(
+                            for: paths,
+                            sessionIDs: ids)
+                    })
             }
             let index = home.appendingPathComponent("session_index.jsonl")
             try Data("{\"id\":\"chat\",\"thread_name\":\"Saved title\",\"updated_at\":\"2026-01-01T00:00:00Z\"}\n".utf8)
                 .write(to: index)
             let first = overlay()
+            #expect(lookupCount == 1)
             #expect(first.projects.map(\.isProjectless) == [true, false])
             #expect(first.projects[0].name == "Saved title")
             try Data("{\"id\":\"chat\",\"thread_name\":\"Renamed title\",\"updated_at\":\"2026-01-02T00:00:00Z\"}\n"
                 .utf8)
                 .write(to: index)
             let renamed = overlay()
+            #expect(lookupCount == 2)
             #expect(renamed.projects[0].name == "Renamed title")
             #expect(renamed.projects[0].path == first.projects[0].path)
             #expect(renamed.projects[0].daily == first.projects[0].daily)
             #expect(renamed.projects[0].sources == first.projects[0].sources)
-            #expect(CodexThreadMetadataReader(databaseURL: database).assignedProjectSessionIDs(
-                for: ["chat", "assigned", "missing"]) == ["assigned"])
         }
     }
 
@@ -280,11 +406,20 @@ struct CodexProjectlessWorkspaceTests {
     }
 
     private static func overlay(
-        _ home: URL, projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown])
+        _ home: URL,
+        projects: [CostUsageProjectBreakdown],
+        sessions: [CostUsageSessionBreakdown],
+        projectSessionIDs: [String: Set<String>]? = nil)
         -> (projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown])
     {
-        CostUsageFetcher.codexBreakdownsWithProjectlessMetadata(
-            projects: projects, sessions: sessions, codexHomeDirectory: home, assignedSessionIDs: [])
+        let memberships = projectSessionIDs ?? Dictionary(grouping: sessions, by: { $0.workingDirectory ?? "" })
+            .mapValues { Set($0.map(\.sessionID)) }
+        return CostUsageFetcher.codexBreakdownsWithProjectlessMetadata(
+            projects: projects,
+            sessions: sessions,
+            projectSessionIDs: memberships,
+            metadata: CodexProjectlessWorkspaceMetadata.load(codexHomeDirectory: home),
+            assignedSessionIDs: [])
     }
 
     private static func session(
@@ -308,7 +443,7 @@ struct CodexProjectlessWorkspaceTests {
     }
 
     private static func project(
-        _ path: String, sources: [String]? = nil, sessionIDs: Set<String>? = nil) -> CostUsageProjectBreakdown
+        _ path: String, sources: [String]? = nil) -> CostUsageProjectBreakdown
     {
         let daily = [CostUsageDailyReport.Entry(
             date: "2026-01-01",
@@ -332,8 +467,7 @@ struct CodexProjectlessWorkspaceTests {
                     totalTokens: 13,
                     totalCostUSD: 1,
                     daily: daily,
-                    modelBreakdowns: [],
-                    sessionIDs: sessionIDs ?? [URL(fileURLWithPath: $0).lastPathComponent])
+                    modelBreakdowns: [])
             })
     }
 }

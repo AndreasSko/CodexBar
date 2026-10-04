@@ -3,12 +3,12 @@ import Foundation
 /// Only explicit desktop ownership can classify a working directory as an independent chat.
 /// A missing project id, an unregistered root, or a generated-looking name is not evidence.
 struct CodexProjectlessWorkspaceMetadata: Decodable {
-    struct Assignment: Decodable {
+    private struct Assignment: Decodable {
         let projectId: String?
     }
 
     let threadIDs: Set<String>
-    let assignments: [String: Assignment]
+    let assignedThreadIDs: Set<String>
 
     private enum CodingKeys: String, CodingKey {
         case threadIDs = "projectless-thread-ids"
@@ -18,7 +18,8 @@ struct CodexProjectlessWorkspaceMetadata: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.threadIDs = try Set(container.decodeIfPresent([String].self, forKey: .threadIDs) ?? [])
-        self.assignments = try container.decodeIfPresent([String: Assignment].self, forKey: .assignments) ?? [:]
+        let assignments = try container.decodeIfPresent([String: Assignment].self, forKey: .assignments) ?? [:]
+        self.assignedThreadIDs = Set(assignments.keys)
     }
 
     static func load(codexHomeDirectory: URL) -> Self? {
@@ -31,9 +32,8 @@ struct CodexProjectlessWorkspaceMetadata: Decodable {
     }
 
     func contains(_ sessionID: String, assignedSessionIDs: Set<String>) -> Bool {
-        let assignment = self.assignments[sessionID]?.projectId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return self.threadIDs.contains(sessionID)
-            && (assignment?.isEmpty != false)
+        self.threadIDs.contains(sessionID)
+            && !self.assignedThreadIDs.contains(sessionID)
             && !assignedSessionIDs.contains(sessionID)
     }
 }

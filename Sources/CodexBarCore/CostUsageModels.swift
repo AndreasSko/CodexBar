@@ -451,6 +451,34 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
     }
 }
 
+public struct CostUsageProjectSourceBreakdown: Sendable, Equatable {
+    public let name: String
+    public let path: String?
+    public let totalTokens: Int?
+    public let totalCostUSD: Double?
+    public let daily: [CostUsageDailyReport.Entry]
+    public let modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?
+
+    public init(
+        name: String,
+        path: String?,
+        totalTokens: Int?,
+        totalCostUSD: Double?,
+        daily: [CostUsageDailyReport.Entry],
+        modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?)
+    {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? CostUsageProjectBreakdown.unknownProjectName
+            : name
+        let cleanPath = path?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.path = cleanPath?.isEmpty == true ? nil : cleanPath
+        self.totalTokens = totalTokens
+        self.totalCostUSD = totalCostUSD
+        self.daily = daily
+        self.modelBreakdowns = modelBreakdowns
+    }
+}
+
 public struct CostUsageDailyReport: Sendable, Codable {
     public struct ModelBreakdown: Sendable, Codable, Equatable {
         public let modelName: String

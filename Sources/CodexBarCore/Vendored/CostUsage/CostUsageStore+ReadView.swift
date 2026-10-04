@@ -151,12 +151,13 @@ struct CostUsageStoreReadView: Sendable {
     }
 
     func projects(range: CostUsageScanner.CostUsageDayRange, cacheRoot: URL?) -> [CostUsageProjectBreakdown] {
-        let projects = CostUsageScanner.buildCodexProjectBreakdownsFromCache(
+        CostUsageScanner.buildCodexProjectBreakdownsFromCache(
             cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
-        // Session rows keep only the latest file for each thread. Directory ownership must include
-        // older files too, including a thread that subsequently continued in another directory.
-        // Use a conservative superset of all files the report builder can consider in this window.
-        // This read-only annotation leaves the parser fingerprint and warmed ledger unchanged.
+    }
+
+    func projectSessionIDs(range: CostUsageScanner.CostUsageDayRange) -> [String: Set<String>] {
+        // Session rows deduplicate to the latest file. Ownership must include older files too,
+        // even after a thread moves directories. This conservative superset is refresh-only.
         var sessionIDsByPath: [String: Set<String>] = [:]
         for (filePath, usage) in self.cache.files {
             guard let path = usage.projectPath,
@@ -167,27 +168,7 @@ struct CostUsageStoreReadView: Sendable {
             let id = usage.sessionId ?? URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
             sessionIDsByPath[path, default: []].insert(id)
         }
-        return projects.map { project in
-            let sources = project.sources.map { source in
-                CostUsageProjectSourceBreakdown(
-                    name: source.name,
-                    path: source.path,
-                    totalTokens: source.totalTokens,
-                    totalCostUSD: source.totalCostUSD,
-                    daily: source.daily,
-                    modelBreakdowns: source.modelBreakdowns,
-                    sessionIDs: source.path.flatMap { sessionIDsByPath[$0] })
-            }
-            return CostUsageProjectBreakdown(
-                name: project.name,
-                path: project.path,
-                totalTokens: project.totalTokens,
-                totalCostUSD: project.totalCostUSD,
-                daily: project.daily,
-                modelBreakdowns: project.modelBreakdowns,
-                sources: sources,
-                isProjectless: project.isProjectless)
-        }
+        return sessionIDsByPath
     }
 
     func sessions(

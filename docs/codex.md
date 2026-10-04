@@ -431,11 +431,14 @@ with numbered projects and hides those paths, including tooltips. Dashboard-v1 a
 aggregate values only, with no project names or directory paths.
 
 Independent desktop chats appear in a separate **Independent chats** section, using saved thread titles or a
-neutral chat label instead of generated workspace folder names. Classification requires an explicit chat marker
-from the selected Codex home's bounded desktop state; current or legacy project assignments veto stale markers.
-Mixed ownership, missing metadata, and unregistered CLI folders keep the existing project fallback. This display
-metadata does not change source/path identities, token counts, costs, or cached accounting. Privacy mode uses
-numbered chat labels and hides their paths.
+neutral chat label instead of generated workspace folder names. Every contributing thread, including older files
+from moved threads, must have an explicit marker in the selected Codex home's desktop state. Registered project
+roots and current or legacy assignments veto stale markers; missing, malformed, or conflicting ownership keeps
+the Projects fallback. A null project ID or an unregistered CLI folder alone never establishes chat ownership.
+Project names and ownership share a bounded SQLite snapshot per database per refresh (1,024 roots and 4,096
+candidate threads); desktop state reads are capped at 8 MiB. This leaves identities, totals, caches, and dashboard
+and widget schemas unchanged. Privacy mode uses numbered chat labels and hides titles and paths through the
+existing display identity projection.
 
 Codex session rows show the local thread title when available, with the project, model, and last-activity date
 beneath it. Untitled sessions use a shortened session ID. Titles come from `session_index.jsonl`, with the local
