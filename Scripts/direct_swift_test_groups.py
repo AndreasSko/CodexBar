@@ -134,6 +134,20 @@ def run_worker(manifest: dict, index: int) -> int:
         return 0
 
 
+def pool_timeout(groups: list[list[dict]], timeout: int, retry_non_timeout_failures: bool, product_count: int) -> int:
+    # Sum the serial worst case even for a parallel pool. Each product may launch both
+    # frameworks; allow bounded descendant drain plus fresh worker startup per attempt.
+    attempt_budget = timeout + 30 + 10 * max(1, 2 * product_count)
+    attempts = 0
+    for group in groups:
+        attempts += 1
+        if len(group) > 1:
+            attempts += len(group)
+            if retry_non_timeout_failures:
+                attempts += 1
+    return 30 + attempts * attempt_budget
+
+
 def run_pool(manifest_path: Path) -> int:
     manifest = json.loads(manifest_path.read_text())
     script = Path(__file__).resolve()
@@ -144,6 +158,7 @@ def run_pool(manifest_path: Path) -> int:
                                     stdout=output, stderr=subprocess.STDOUT)
         code = result.returncode
         first_code = code
+        timed_out = code == 124
         full_retries = 0
         isolated_retries = 0
         if code != 0 and code != 124 and manifest["retry_non_timeout_failures"] and len(manifest["groups"][index]) > 1:
@@ -153,6 +168,7 @@ def run_pool(manifest_path: Path) -> int:
                 output.flush()
                 code = subprocess.run([sys.executable, str(script), "--worker", str(manifest_path), str(index)],
                                       stdout=output, stderr=subprocess.STDOUT).returncode
+            timed_out |= code == 124
         if code == 124 and len(manifest["groups"][index]) > 1:
             for selection in manifest["groups"][index]:
                 isolated_retries += 1
@@ -163,11 +179,12 @@ def run_pool(manifest_path: Path) -> int:
                 with log.open("a") as output:
                     code = subprocess.run([sys.executable, str(script), "--worker", str(retry_manifest), "0"],
                                           stdout=output, stderr=subprocess.STDOUT).returncode
+                timed_out |= code == 124
                 if code != 0:
                     break
         return {"code": code, "first_code": first_code, "full_retries": full_retries,
-                "isolated_retries": isolated_retries}
-    failed = False
+                "isolated_retries": isolated_retries, "timed_out": timed_out}
+    failure_code = 0
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=manifest["workers"]) as pool:
         futures = {pool.submit(launch, index): index for index in range(len(manifest["groups"]))}
@@ -179,9 +196,10 @@ def run_pool(manifest_path: Path) -> int:
             print(f"::group::Direct Swift test group {index + 1}/{len(futures)}", flush=True)
             print((manifest_path.parent / f"group-{index}.log").read_text(), flush=True)
             print("::endgroup::", flush=True)
-            failed |= code != 0
+            if failure_code == 0 and code != 0:
+                failure_code = code
     (manifest_path.parent / "results.json").write_text(json.dumps(results))
-    return 1 if failed else 0
+    return failure_code
 
 
 if __name__ == "__main__":

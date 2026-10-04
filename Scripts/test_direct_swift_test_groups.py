@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+import json
 import os
 from pathlib import Path
 import tempfile
+import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from direct_swift_test_groups import prepare_runtime, run_worker, runtime_environment, selected_tests, xctest_inventory
+from direct_swift_test_groups import pool_timeout, prepare_runtime, run_pool, run_worker, runtime_environment, selected_tests, xctest_inventory
 
 
 class DirectSwiftTestGroupsTests(unittest.TestCase):
@@ -100,6 +103,71 @@ class DirectSwiftTestGroupsTests(unittest.TestCase):
                     patch("direct_swift_test_groups.checked", side_effect=probe):
                 with self.assertRaisesRegex(ValueError, "inventory differs"):
                     prepare_runtime(["swift"], [], ["ExampleTests/original()"], root)
+
+    def run_mock_pool(self, codes, group_size=1, retry=True):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"groups": [[{"name": str(index)} for index in range(group_size)]],
+                "timeout": 180, "workers": 1, "retry_non_timeout_failures": retry, "runtime": {"products": [{}]}}))
+            with patch("direct_swift_test_groups.subprocess.run",
+                       side_effect=[SimpleNamespace(returncode=code) for code in codes]) as execute, \
+                    patch("builtins.print"):
+                result = run_pool(manifest)
+            return result, json.loads((root / "results.json").read_text()), execute.call_count
+
+    def test_pool_preserves_singleton_timeout_and_arbitrary_failure_codes(self):
+        for code in [124, 42]:
+            with self.subTest(code=code):
+                result, records, calls = self.run_mock_pool([code])
+                self.assertEqual(result, code)
+                self.assertEqual(records[0]["code"], code)
+                self.assertEqual(calls, 1)
+
+    def test_pool_retains_first_failure_while_draining_other_workers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"groups": [[{"name": "first"}], [{"name": "second"}]],
+                "workers": 2, "retry_non_timeout_failures": False}))
+            release = threading.Event()
+            drained = threading.Event()
+            def execute(command, **kwargs):
+                if command[-1] == "0":
+                    return SimpleNamespace(returncode=42)
+                self.assertTrue(release.wait(5))
+                drained.set()
+                return SimpleNamespace(returncode=124)
+            def output(message, **kwargs):
+                if message == "::endgroup::":
+                    release.set()
+            with patch("direct_swift_test_groups.subprocess.run", side_effect=execute), \
+                    patch("builtins.print", side_effect=output):
+                result = run_pool(manifest)
+            self.assertEqual(result, 42)
+            self.assertTrue(drained.is_set())
+            self.assertEqual(len(json.loads((root / "results.json").read_text())), 2)
+
+    def test_pool_budget_covers_all_isolated_recovery_attempts_and_cleanup(self):
+        group = [{"name": str(index)} for index in range(12)]
+        result, records, calls = self.run_mock_pool([124] + [0] * 12, group_size=12)
+        self.assertEqual(result, 0)
+        self.assertEqual(records[0]["isolated_retries"], 12)
+        self.assertEqual(calls, 13)
+        # Reporter's initial 180s timeout + twelve 150s successes exceeds the old 1620s budget.
+        self.assertGreater(pool_timeout([group], 180, True, 5), 180 + 12 * 150)
+        self.assertGreater(pool_timeout([group], 180, True, 5), 14 * 180)
+        self.assertGreater(pool_timeout([group], 180, True, 5), pool_timeout([group], 180, False, 5))
+        self.assertGreater(pool_timeout([group], 180, True, 5), pool_timeout([group], 180, True, 1))
+
+    def test_pool_records_timeout_during_full_retry_even_when_recovery_succeeds(self):
+        result, records, calls = self.run_mock_pool([1, 124, 0, 0], group_size=2)
+        self.assertEqual(result, 0)
+        self.assertEqual(records[0]["first_code"], 1)
+        self.assertTrue(records[0]["timed_out"])
+        self.assertEqual(records[0]["full_retries"], 1)
+        self.assertEqual(records[0]["isolated_retries"], 2)
+        self.assertEqual(calls, 4)
 
     def test_hosted_ci_and_non_default_toolchain_fall_back_before_probes(self):
         with tempfile.TemporaryDirectory() as directory:

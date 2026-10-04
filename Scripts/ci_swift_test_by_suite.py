@@ -788,7 +788,7 @@ def main() -> int:
             return 0
 
         if args.direct_workers is not None:
-            from direct_swift_test_groups import prepare_runtime
+            from direct_swift_test_groups import pool_timeout, prepare_runtime
             with tempfile.TemporaryDirectory(prefix="codexbar-direct-run-") as directory:
                 root = Path(directory)
                 groups = [[asdict(selection) for selection in group] for group in suite_groups]
@@ -803,7 +803,9 @@ def main() -> int:
                         "retry_non_timeout_failures": args.retry_non_timeout_failures}))
                     execution_started = time.monotonic()
                     result = run_command([sys.executable, str(Path(__file__).with_name("direct_swift_test_groups.py")),
-                                          str(manifest)], timeout=args.timeout * (len(groups) + 2) * 3)
+                                          str(manifest)], timeout=pool_timeout(
+                                              groups, args.timeout, args.retry_non_timeout_failures,
+                                              len(runtime["products"])))
                     report = root / "results.json"
                     if report.is_file():
                         records = json.loads(report.read_text())
@@ -811,7 +813,7 @@ def main() -> int:
                         stats.first_pass_failed_groups = sum(record["first_code"] != 0 for record in records)
                         stats.full_group_retries = sum(record["full_retries"] for record in records)
                         stats.isolated_selection_retries = sum(record["isolated_retries"] for record in records)
-                        stats.timed_out_groups = sum(record["first_code"] == 124 for record in records)
+                        stats.timed_out_groups = sum(record["timed_out"] for record in records)
                         stats.recovered_groups = sum(record["first_code"] != 0 and record["code"] == 0 for record in records)
                     return result
 
