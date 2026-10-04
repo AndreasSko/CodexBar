@@ -978,7 +978,26 @@ extension AntigravityLocalReaderTests {
         #expect(entry.requestCount == 1)
         #expect(entry.totalTokens == 0)
         #expect(entry.modelBreakdowns?.isEmpty == true)
-        #expect(entry.modelBreakdowns?.contains { $0.modelName == "unknown" } != true)
+        #expect(entry.costUSD == nil)
+        #expect(entry.unpricedRequestCount == 1)
+        #expect(entry.estimatedRequestCount == 0)
+    }
+
+    @Test
+    func `zero token request with a named unpriced model keeps its row`() async throws {
+        let fixture = try Fixture()
+        try fixture.database(blobs: [
+            Fixture.blob(model: "fixture-unpriced", label: nil, input: 0, output: 0, cacheRead: 0, reasoning: 0),
+        ])
+        let snapshot = try await fixture.snapshot()
+        let entry = try #require(snapshot.daily.first)
+        #expect(snapshot.historyCoverageIsEstablished)
+        #expect(entry.requestCount == 1)
+        #expect(entry.totalTokens == 0)
+        #expect(entry.modelBreakdowns?.map(\.modelName) == ["fixture-unpriced"])
+        #expect(entry.costUSD == nil)
+        #expect(entry.unpricedRequestCount == 1)
+        #expect(entry.estimatedRequestCount == 0)
     }
 
     @Test(arguments: [false, true])
@@ -1044,6 +1063,7 @@ extension AntigravityLocalReaderTests {
         #expect(zeroDay.unpricedRequestCount == 0)
         #expect(zeroDay.estimatedRequestCount == 1)
         #expect(zeroDay.modelBreakdowns?.isEmpty == true)
+        #expect(snapshot.historyCoverageIsEstablished)
         #expect(snapshot.summary(forLastDays: 30, calendar: Fixture.calendar).coverage
             == CostUsageCoverageCounts(estimated: 3))
     }

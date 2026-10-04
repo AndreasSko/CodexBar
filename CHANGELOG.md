@@ -10,6 +10,7 @@
 ### Fixed
 
 - Antigravity: discover matching Google OAuth client credentials from Antigravity 2.19.1 and explain how to recover when Google rejects the client (#4229). Thanks @mvicari!
+- Usage & Spend: hide empty Antigravity unknown-model rows while preserving request counts, token totals, and complete coverage (#4246). Thanks @urda!
 - Codex: recover resumed-session usage after counter resets using owned request records, without double-counting legacy mirrors or copied child history; preserve saved prices through bounded cache upgrades (#3303, #4195). Thanks @Yuxin-Qiao!
 - Browser cookies: let explicit refreshes retry Keychain permission across plugin providers, explain suppressed imports, and recognize successful nonpersistent sessions (#4231). Thanks @apoorvdarshan!
 - Codex: continue bounded local-history discovery before sleeping so validated current-day tokens can publish promptly during catch-up, while preserving power limits and complete-window checks (#3508). Thanks @kernnel!
