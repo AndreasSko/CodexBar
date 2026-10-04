@@ -24,6 +24,9 @@ private enum CodexCostCatchUpPublicationError: LocalizedError {
 extension UsageStore {
     func startCodexCostCatchUpIfNeeded(afterRefreshing provider: UsageProvider) {
         guard provider == .codex else { return }
+        let explicitResume = ProviderInteractionContext.current == .userInitiated
+            || !self.codexCostCatchUpRequiresExplicitResume
+        guard !self.codexCostCatchUpStopRequested, explicitResume else { return }
         self.startCodexCostCatchUpIfNeeded(mode: .automatic)
     }
 
@@ -75,12 +78,23 @@ extension UsageStore {
                     self.codexCostCatchUpScopeSignature = nil
                     let restartRequested = self.codexCostCatchUpRestartRequested
                     self.codexCostCatchUpRestartRequested = false
-                    if restartRequested, self.codexCostCatchUpActivity?.phase != .paused {
+                    if restartRequested, !self.codexCostCatchUpRequiresExplicitResume {
                         self.startCodexCostCatchUpIfNeeded(mode: self.codexCostCatchUpMode)
                     }
                 }
             }
             await self.runCodexCostCatchUp(context: context)
+        }
+    }
+
+    private var codexCostCatchUpRequiresExplicitResume: Bool {
+        guard let activity = self.codexCostCatchUpActivity,
+              activity.phase == .paused else { return false }
+        switch activity.pauseReason {
+        case .user, .noProgress, .error:
+            return true
+        case .lowPower, .thermal, .none:
+            return false
         }
     }
 
