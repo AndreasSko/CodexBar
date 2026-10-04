@@ -30,20 +30,12 @@ extension CodexBarCLI {
         #if os(macOS)
         do {
             let store = FileManagedCodexAccountStore()
-            let accounts = try store.loadAccounts().accounts
             let liveHome = CodexHomeScope.ambientHomeURL(env: ProcessInfo.processInfo.environment)
-            let liveData = try DefaultCodexAuthMaterialReader().readAuthData(homeURL: liveHome)
-            let live = try liveData.map { try PreparedPromotionContextBuilder.runtimeAccount(from: $0) }
             if path == ["codex-accounts", "list"] {
-                let reader = DefaultCodexAuthMaterialReader()
-                var runtimeAccounts: [UUID: CodexAuthBackedAccount] = [:]
-                for account in accounts {
-                    let home = URL(fileURLWithPath: account.managedHomePath, isDirectory: true)
-                    if let data = try reader.readAuthData(homeURL: home) {
-                        runtimeAccounts[account.id] = try PreparedPromotionContextBuilder.runtimeAccount(from: data)
-                    }
-                }
-                let rows = Self.codexAccountRows(accounts: accounts, live: live, runtimeAccounts: runtimeAccounts)
+                let rows = try Self.codexAccountRows(
+                    accounts: store.loadAccounts().accounts,
+                    liveHome: liveHome,
+                    reader: DefaultCodexAuthMaterialReader())
                 if output.format == .json { Self.printJSON(rows, pretty: output.pretty) } else { for row in rows {
                     print("\(row.isSystemAccount ? "*" : " ") \(row.id) \(row.email)")
                 } }
@@ -52,7 +44,6 @@ extension CodexBarCLI {
             guard path == ["codex-accounts", "promote"], let selector = values.positional.first else {
                 throw CodexAccountCLIError.missingSelector
             }
-            let target = try Self.resolveCodexAccount(selector: selector, accounts: accounts)
             let transaction = CodexAccountPromotionTransaction(
                 store: store,
                 homeFactory: CLICodexManagedHomeFactory(),
@@ -61,12 +52,16 @@ extension CodexBarCLI {
                 authMaterialReader: DefaultCodexAuthMaterialReader(),
                 liveAuthSwapper: DefaultCodexLiveAuthSwapper(),
                 baseEnvironment: ProcessInfo.processInfo.environment)
-            let result = try await transaction.promoteManagedAccount(id: target.id)
+            let result = try await transaction.promoteManagedAccount(resolveTargetID: { accounts in
+                try Self.resolveCodexAccount(selector: selector, accounts: accounts).id
+            })
             let receipt = CodexAccountPromotionReceipt(
-                id: target.id.uuidString, changedSystemAuth: result.didMutateLiveAuth)
+                id: result.targetManagedAccountID.uuidString, changedSystemAuth: result.didMutateLiveAuth)
             if output.format == .json { Self.printJSON(receipt, pretty: output.pretty) } else {
                 let action = result.didMutateLiveAuth ? "Promoted" : "Already system account:"
-                print("\(action) \(target.id.uuidString). Existing Codex processes may retain their current account.")
+                print(
+                    "\(action) \(result.targetManagedAccountID.uuidString). "
+                        + "Existing Codex processes may retain their current account.")
             }
         } catch {
             Self.exit(code: .failure, message: error.localizedDescription, output: output, kind: .runtime)
@@ -90,6 +85,23 @@ extension CodexBarCLI {
             throw matches.isEmpty ? CodexAccountCLIError.unknownAccount : CodexAccountCLIError.ambiguousAccount
         }
         return account
+    }
+
+    @MainActor
+    static func codexAccountRows(
+        accounts: [ManagedCodexAccount],
+        liveHome: URL,
+        reader: any CodexAuthMaterialReading) -> [CodexAccountListRow]
+    {
+        func inspect(_ home: URL) -> CodexAuthBackedAccount? {
+            guard let data = try? reader.readAuthData(homeURL: home) else { return nil }
+            return try? PreparedPromotionContextBuilder.runtimeAccount(from: data)
+        }
+        var runtimeAccounts: [UUID: CodexAuthBackedAccount] = [:]
+        for account in accounts {
+            runtimeAccounts[account.id] = inspect(URL(fileURLWithPath: account.managedHomePath, isDirectory: true))
+        }
+        return Self.codexAccountRows(accounts: accounts, live: inspect(liveHome), runtimeAccounts: runtimeAccounts)
     }
 
     static func codexAccountRows(

@@ -124,6 +124,15 @@ package final class CodexAccountPromotionTransaction {
         }
     }
 
+    package func promoteManagedAccount(
+        resolveTargetID: ([ManagedCodexAccount]) throws -> UUID) async throws -> CodexAccountPromotionResult
+    {
+        try await ManagedCodexAccountLock.withLock(at: self.store.lockURL) {
+            let targetID = try resolveTargetID(self.store.loadAccounts().accounts)
+            return try await self.promoteLocked(id: targetID)
+        }
+    }
+
     private func promoteLocked(id: UUID) async throws -> CodexAccountPromotionResult {
         let contextBuilder = PreparedPromotionContextBuilder(
             store: self.store,
