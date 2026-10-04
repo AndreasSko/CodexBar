@@ -320,6 +320,10 @@ unless explicitly exported and imported. Import does not modify `config.json` or
 
 ### Menu bar controls
 
+**Surprise me** is disabled while brand icons are selected, and static brand layouts do not run the blink timer.
+Your animation preference is kept for switching back to critters. If a brand image is unavailable and the legacy
+layout falls back to a critter, that visible critter can still animate; stored layouts remain static.
+
 In **Settings → Menu Bar**, inactive combined-icon controls use dimmed labels. Their titles and explanations remain readable and available to VoiceOver; label styling follows each control's enabled state, including stacked-icon restrictions. The layout size and gap controls remain independent of Merge Icons.
 
 The open menu's persistent **Refresh** row uses a text label aligned with the other actions, without a decorative icon. Click the row, press **⌘R**, or use its VoiceOver button action to refresh.
