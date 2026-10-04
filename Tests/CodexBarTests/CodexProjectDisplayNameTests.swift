@@ -20,11 +20,11 @@ struct CodexProjectDisplayNameTests {
             """)
             let paths: Set = ["/work", "/work/sub", "/work/nested/src", "/worker", "/ambiguous", "/blank"]
             let reader = CodexThreadMetadataReader(databaseURL: url)
-            #expect(reader.projectNames(for: paths) == [
+            #expect(reader.projectMetadata(for: paths).names == [
                 "/work": "My Workspace", "/work/sub": "My Workspace", "/work/nested/src": "Nested Project",
             ])
             try Self.execute(url, "UPDATE projects SET name = 'Renamed' WHERE id = 'outer'")
-            #expect(reader.projectNames(for: ["/work"])["/work"] == "Renamed")
+            #expect(reader.projectMetadata(for: ["/work"]).names["/work"] == "Renamed")
         }
     }
 
@@ -57,10 +57,12 @@ struct CodexProjectDisplayNameTests {
                 projects: projects,
                 sessionsRoot: sessionsRoot,
                 environment: [:],
-                projectNameLookup: { database, paths in
+                projectMetadataLookup: { database, paths, sessionIDs in
                     #expect(lookups[database] == nil)
                     lookups[database] = paths
-                    return CodexThreadMetadataReader(databaseURL: database).projectNames(for: paths)
+                    return CodexThreadMetadataReader(databaseURL: database).projectMetadata(
+                        for: paths,
+                        sessionIDs: sessionIDs)
                 })
             var expectedProject = projects[0]
             expectedProject.name = "Workspace Label"
@@ -134,9 +136,9 @@ struct CodexProjectDisplayNameTests {
     func `missing and legacy databases preserve labels and never create state files`() throws {
         try Self.withDatabase { url in
             try Self.execute(url, "DROP TABLE project_roots; DROP TABLE projects;")
-            #expect(CodexThreadMetadataReader(databaseURL: url).projectNames(for: ["/work"]).isEmpty)
+            #expect(CodexThreadMetadataReader(databaseURL: url).projectMetadata(for: ["/work"]).names.isEmpty)
             let missing = url.deletingLastPathComponent().appendingPathComponent("missing.sqlite")
-            #expect(CodexThreadMetadataReader(databaseURL: missing).projectNames(for: ["/work"]).isEmpty)
+            #expect(CodexThreadMetadataReader(databaseURL: missing).projectMetadata(for: ["/work"]).names.isEmpty)
             #expect(!FileManager.default.fileExists(atPath: missing.path))
         }
     }
