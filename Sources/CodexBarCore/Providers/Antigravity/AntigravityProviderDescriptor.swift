@@ -529,11 +529,13 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         } else {
             nil
         }
+        let versionResolver = AgyVersionResolver()
         #if os(macOS)
         let scopedReportFetch: (@Sendable () async throws -> ProviderFetchResult)? = {
             try await self.fetchScopedPrintUsage(
                 binary: binary,
                 environment: context.env,
+                versionResolver: versionResolver,
                 credentialsUpdateHandler: { credentials in
                     guard let accountID = context.selectedTokenAccountID,
                           let updater = context.tokenAccountTokenUpdater
@@ -557,13 +559,17 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
                     expectedAccountEmail: expectedAccountEmail,
                     warmDependencies: warmDependencies,
                     spawnFetch: { binary, idleWindow, resetAfterFetch in
-                        let version = try await Self.agyVersion(binary: binary, environment: context.env)
+                        let version = try await Self.agyVersion(
+                            binary: binary, environment: context.env, resolver: versionResolver)
                         return try await Self.fetchBySpawningIfReachable(version: version) {
                             try await spawnFetch(binary, idleWindow, resetAfterFetch, expectedAccountEmail)
                         }
                     })
             },
-            reportFetch: { try await self.fetchPrintUsage(binary: binary, environment: context.env) },
+            reportFetch: {
+                try await self.fetchPrintUsage(
+                    binary: binary, environment: context.env, versionResolver: versionResolver)
+            },
             scopedReportFetch: scopedReportFetch)
     }
 
@@ -604,7 +610,8 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
     func fetchPrintUsage(
         binary: String,
         environment: [String: String],
-        timeout: TimeInterval = 90) async throws -> ProviderFetchResult
+        timeout: TimeInterval = 90,
+        versionResolver: AgyVersionResolver = AgyVersionResolver()) async throws -> ProviderFetchResult
     {
         let environment = Self.childEnvironment(environment)
         let directory = FileManager.default.temporaryDirectory
@@ -613,7 +620,11 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
             at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: directory) }
         let snapshot = try await Self.runPrintUsage(
-            binary: binary, environment: environment, directory: directory, timeout: timeout)
+            binary: binary,
+            environment: environment,
+            directory: directory,
+            timeout: timeout,
+            versionResolver: versionResolver)
         return try self.makeResult(usage: snapshot.toUsageSnapshot(), sourceLabel: Self.sourceLabel)
     }
 
@@ -621,7 +632,8 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         binary: String,
         environment: [String: String],
         directory: URL,
-        timeout: TimeInterval) async throws -> AntigravityStatusSnapshot
+        timeout: TimeInterval,
+        versionResolver: AgyVersionResolver = AgyVersionResolver()) async throws -> AntigravityStatusSnapshot
     {
         try Task.checkCancellation()
         func run(
@@ -642,7 +654,9 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         }
         let result: SubprocessResult
         do {
-            let version = try await Self.parseVersion(run(["--version"], timeout: min(timeout, 3)).stdout)
+            let version = try await versionResolver.resolve {
+                try await Self.parseVersion(run(["--version"], timeout: min(timeout, 3)).stdout)
+            }
             // Earlier print implementations could turn unsupported slash commands into model prompts.
             guard let version, version >= (1, 1, 11)
             else { throw AntigravityStatusProbeError.parseFailed("CLI usage reports require agy 1.1.11 or later") }
@@ -694,22 +708,48 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         return try await spawn()
     }
 
-    static func agyVersion(binary: String, environment: [String: String]) async throws -> (UInt, UInt, UInt)? {
-        let result: SubprocessResult
+    /// Resolves the agy version once per fetch. Each `agy` invocation boots a full language server, so the
+    /// legacy CSRF gate and the print report share one `--version` run instead of spawning it twice.
+    actor AgyVersionResolver {
+        private var outcome: Result<(UInt, UInt, UInt)?, Error>?
+
+        /// Runs `probe` on the first call and replays its outcome, including a failure, afterwards.
+        /// Cancellation is never recorded, so a cancelled probe cannot poison a later caller.
+        func resolve(_ probe: () async throws -> (UInt, UInt, UInt)?) async throws -> (UInt, UInt, UInt)? {
+            if let outcome = self.outcome { return try outcome.get() }
+            do {
+                let version = try await probe()
+                self.outcome = .success(version)
+                return version
+            } catch {
+                if !(error is CancellationError) { self.outcome = .failure(error) }
+                throw error
+            }
+        }
+    }
+
+    /// `nil` means unknown: spawn failures and unparseable output keep the legacy spawn path.
+    static func agyVersion(
+        binary: String,
+        environment: [String: String],
+        resolver: AgyVersionResolver = AgyVersionResolver()) async throws -> (UInt, UInt, UInt)?
+    {
         do {
-            result = try await SubprocessRunner.run(
-                binary: binary,
-                arguments: ["--version"],
-                environment: Self.childEnvironment(environment),
-                timeout: 3,
-                maxOutputBytes: 4096,
-                standardInput: FileHandle.nullDevice,
-                label: "antigravity-cli-version")
+            return try await resolver.resolve {
+                let result = try await SubprocessRunner.run(
+                    binary: binary,
+                    arguments: ["--version"],
+                    environment: Self.childEnvironment(environment),
+                    timeout: 3,
+                    maxOutputBytes: 4096,
+                    standardInput: FileHandle.nullDevice,
+                    label: "antigravity-cli-version")
+                return Self.parseVersion(result.stdout)
+            }
         } catch {
             try Task.checkCancellation()
             return nil
         }
-        return Self.parseVersion(result.stdout)
     }
 
     private static func childEnvironment(_ environment: [String: String]) -> [String: String] {
