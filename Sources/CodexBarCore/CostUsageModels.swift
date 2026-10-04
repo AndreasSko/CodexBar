@@ -418,6 +418,8 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
     public static let unknownProjectName = "Unknown project"
 
     public internal(set) var name: String
+    /// Explicit desktop chat ownership is display metadata, never an accounting key.
+    public internal(set) var isProjectless: Bool
     public let path: String?
     public let totalTokens: Int?
     public let totalCostUSD: Double?
@@ -432,7 +434,8 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
         totalCostUSD: Double?,
         daily: [CostUsageDailyReport.Entry],
         modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]?,
-        sources: [CostUsageProjectSourceBreakdown] = [])
+        sources: [CostUsageProjectSourceBreakdown] = [],
+        isProjectless: Bool = false)
     {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.unknownProjectName
@@ -444,6 +447,7 @@ public struct CostUsageProjectBreakdown: Sendable, Equatable {
         self.daily = daily
         self.modelBreakdowns = modelBreakdowns
         self.sources = sources
+        self.isProjectless = isProjectless
     }
 }
 

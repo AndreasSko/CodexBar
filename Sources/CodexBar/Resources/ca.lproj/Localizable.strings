@@ -5,6 +5,10 @@
 "Conversations (%@)" = "Converses (%@)";
 "Fast" = "Ràpid";
 "iCloud Sync" = "Sincronització amb iCloud";
+
+"Independent chat" = "Xat independent";
+"Independent chats" = "Xats independents";
+"Chat %d" = "Xat %d";
 "Projects" = "Projectes";
 "Session %@" = "Sessió %@";
 "Std" = "Est.";
