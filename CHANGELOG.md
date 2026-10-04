@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Browser cookies: distinguish rejected sessions, permission failures, and provider outages in CLI refresh guidance without exposing cookie values (#4245). Thanks @sudoHG!
 - Claude: include saved limit-reset credits in OAuth usage while preserving quota and spending when the optional inventory query is rejected (#3895, #4232). Thanks @Yuxin-Qiao!
 - Antigravity: discover matching Google OAuth client credentials from Antigravity 2.19.1 and explain how to recover when Google rejects the client (#4229). Thanks @mvicari!
 - Usage & Spend: hide empty Antigravity unknown-model rows while preserving request counts, token totals, and complete coverage (#4246). Thanks @urda!
