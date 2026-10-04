@@ -7,18 +7,17 @@ import argparse
 import ctypes
 import errno
 import fcntl
-import os
 import json
-import tempfile
-from dataclasses import asdict
+import os
 from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -788,15 +787,20 @@ def main() -> int:
             return 0
 
         if args.direct_workers is not None:
-            from direct_swift_test_groups import pool_timeout, prepare_runtime
+            from direct_swift_test_groups import InventoryMismatch, pool_timeout, prepare_runtime
             with tempfile.TemporaryDirectory(prefix="codexbar-direct-run-") as directory:
                 root = Path(directory)
                 groups = [[asdict(selection) for selection in group] for group in suite_groups]
                 try:
                     runtime = prepare_runtime(swift_command, groups, inventory, root)
+                except InventoryMismatch as error:
+                    print(f"Direct mode refused: {error}", file=sys.stderr, flush=True)
+                    result = 2
+                    return result
                 except (ValueError, OSError, subprocess.SubprocessError) as error:
                     print(f"Direct mode unavailable: {error} Falling back to serial SwiftPM.", flush=True)
                 else:
+                    print(f"Direct runtime verified {len(inventory)} test methods; using {args.direct_workers} workers.", flush=True)
                     manifest = root / "manifest.json"
                     manifest.write_text(json.dumps({"runtime": runtime, "groups": groups,
                         "timeout": args.timeout, "workers": args.direct_workers,

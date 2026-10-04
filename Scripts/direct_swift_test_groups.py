@@ -14,9 +14,14 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 from ci_swift_test_by_suite import TestSelection, filter_for, run_command
+
+
+class InventoryMismatch(ValueError):
+    """Discovery succeeded, but direct execution cannot prove identical coverage."""
 
 
 def runtime_environment(developer: Path, home: Path) -> dict[str, str]:
@@ -26,6 +31,7 @@ def runtime_environment(developer: Path, home: Path) -> dict[str, str]:
                            ("DYLD_LIBRARY_PATH", platform / "usr/lib")]:
         environment[key] = str(directory) + (":" + environment[key] if environment.get(key) else "")
     environment["CFFIXED_USER_HOME"] = str(home)
+    environment["HOME"] = str(home)
     environment["CODEXBAR_TEST_CODEX_FILE_ISOLATION"] = "1"
     environment["CODEXBAR_TEST_SESSION_FILE_ISOLATION"] = "1"
     environment["CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS"] = "1"
@@ -61,10 +67,15 @@ def selected_tests(inventory: list[str], selections: list[dict]) -> list[str]:
 def prepare_runtime(swift_command: list[str], groups: list[list[dict]], expected: list[str], directory: Path) -> dict:
     if sys.platform != "darwin" or os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
         raise ValueError("Direct test groups are an opt-in local macOS mode.")
-    if swift_command != ["swift"]:
-        raise ValueError("Direct launch requires the default selected Swift toolchain.")
+    if len(swift_command) != 1:
+        raise ValueError("Direct launch does not support Swift command prefix arguments.")
     developer = Path(checked(["xcode-select", "-p"], os.environ.copy()).strip())
     swift = Path(checked(["xcrun", "--find", "swift"], os.environ.copy()).strip())
+    # Build-option wrappers are supported only for the selected compiler/runtime.
+    selected_info = json.loads(checked([str(swift), "-print-target-info"], os.environ.copy()))
+    command_info = json.loads(checked([*swift_command, "-print-target-info"], os.environ.copy()))
+    if command_info != selected_info:
+        raise ValueError("Direct launch requires a wrapper using the selected Swift toolchain and target.")
     helper_root = swift.parent.parent / "libexec/swift/pm"
     testing_helper = helper_root / "swiftpm-testing-helper"
     xctest_helper = helper_root / "swiftpm-xctest-helper"
@@ -72,7 +83,7 @@ def prepare_runtime(swift_command: list[str], groups: list[list[dict]], expected
     frameworks = developer / "Platforms/MacOSX.platform/Developer/Library/Frameworks"
     if not all(path.exists() for path in [testing_helper, xctest_helper, xctest, frameworks]):
         raise ValueError("The selected toolchain lacks the direct macOS test runtime.")
-    bin_path = Path(checked(["swift", "build", "--show-bin-path"], os.environ.copy()).strip())
+    bin_path = Path(checked([*swift_command, "build", "--show-bin-path"], os.environ.copy()).strip())
     bundles = sorted(bin_path.glob("*.xctest"))
     if not bundles:
         raise ValueError("No prebuilt test bundles found.")
@@ -92,8 +103,9 @@ def prepare_runtime(swift_command: list[str], groups: list[list[dict]], expected
                                "--list-tests", "--testing-library", "swift-testing"], environment).splitlines()
         all_names.extend(xctests + swift_tests)
         products.append({"bundle": str(bundle), "binary": str(binary), "xctest": xctests, "swift": swift_tests})
-    if len(all_names) != len(set(all_names)) or set(all_names) != set(expected):
-        raise ValueError("Direct runtime inventory differs from SwiftPM discovery; using serial fallback.")
+    if (len(all_names) != len(set(all_names)) or len(expected) != len(set(expected))
+            or set(all_names) != set(expected)):
+        raise InventoryMismatch("Direct runtime inventory differs from SwiftPM discovery.")
     for group in groups:
         if not selected_tests(all_names, group):
             raise ValueError("A selected group is absent from direct runtime discovery.")
@@ -122,6 +134,7 @@ def run_worker(manifest: dict, index: int) -> int:
         if not commands:
             return 2
         started = time.monotonic()
+        failure = 0
         # The parent deadline bounds the whole group, including all test products and cleanup.
         for command in commands:
             remaining = timeout - (time.monotonic() - started)
@@ -129,9 +142,11 @@ def run_worker(manifest: dict, index: int) -> int:
                 return 124
             os.environ["SWIFT_TESTING_ENABLED"] = "0" if command[0] == runtime["xctest"] else "1"
             result = run_command(command, remaining)
-            if result != 0:
-                return result
-        return 0
+            if result == 124:
+                return 124
+            if failure == 0:
+                failure = result
+        return failure
 
 
 def pool_timeout(groups: list[list[dict]], timeout: int, retry_non_timeout_failures: bool, product_count: int) -> int:
@@ -151,7 +166,10 @@ def pool_timeout(groups: list[list[dict]], timeout: int, retry_non_timeout_failu
 def run_pool(manifest_path: Path) -> int:
     manifest = json.loads(manifest_path.read_text())
     script = Path(__file__).resolve()
-    def launch(index: int) -> dict:
+    stopped = threading.Event()
+    def launch(index: int) -> dict | None:
+        if stopped.is_set():
+            return None
         log = manifest_path.parent / f"group-{index}.log"
         with log.open("w") as output:
             result = subprocess.run([sys.executable, str(script), "--worker", str(manifest_path), str(index)],
@@ -182,6 +200,8 @@ def run_pool(manifest_path: Path) -> int:
                 timed_out |= code == 124
                 if code != 0:
                     break
+        if code != 0:
+            stopped.set()
         return {"code": code, "first_code": first_code, "full_retries": full_retries,
                 "isolated_retries": isolated_retries, "timed_out": timed_out}
     failure_code = 0
@@ -191,10 +211,12 @@ def run_pool(manifest_path: Path) -> int:
         for future in concurrent.futures.as_completed(futures):
             index = futures[future]
             record = future.result()
+            if record is None:
+                continue
             results.append(record)
             code = record["code"]
             print(f"::group::Direct Swift test group {index + 1}/{len(futures)}", flush=True)
-            print((manifest_path.parent / f"group-{index}.log").read_text(), flush=True)
+            print((manifest_path.parent / f"group-{index}.log").read_text(errors="replace"), flush=True)
             print("::endgroup::", flush=True)
             if failure_code == 0 and code != 0:
                 failure_code = code
