@@ -140,7 +140,9 @@ the cookie import.
   memory beyond the normal 30-minute cache window, ahead of a stale credentials file. Each refresh retries the
   persistent cache. Token expiry, profile changes, cache invalidation, and Never prompt still prevent reuse;
   after a rejected cache write, the next refresh first clears the stale persistent entry, then reuses and persists
-  a still-fresh in-memory credential once that cleanup succeeds.
+  an unexpired in-memory credential even after 30 minutes once that cleanup succeeds. Extended reuse requires
+  evidence of that exact failed write and its original consent; an unrelated invalidation cannot authorize it.
+  This does not discover an external login or enable additional background reads of Claude Code's Keychain item.
 - For the default CLI profile, expired cached or file credentials can adopt a fresh CLI Keychain token after file fallback, even when its fingerprint was already observed during an earlier repair. Existing direct-read consent, prompt policy, cooldown, one-minute freshness-check throttle, and noninteractive-read checks still apply. Custom profiles are not recovered from the unscoped global item, and CLI credentials are never rewritten by this synchronization. Background recovery still requires the Always allow prompts policy; the default Only on user action policy requires an explicit Refresh.
 - Credential selection does not rank unrelated sources by the largest `expiresAt`: expiry establishes validity,
   not account identity or issuance order. A valid profile file remains ahead of Keychain bootstrap. Keychain candidates
