@@ -943,6 +943,18 @@ extension CostUsagePricing {
                 self.lookup(model)
             }
         }
+
+        /// Prices tokens against one explicit models.dev entry. The caller names the provider, so no
+        /// model-name routing applies and the entry must exist in this resolver's catalog snapshot.
+        func costUSD(providerID: String, modelID: String, tokens: ClaudeCostTokens) -> Double? {
+            guard let lookup = CostUsagePricing.modelsDevLookup(
+                providerID: providerID,
+                model: modelID,
+                catalog: self.prepareCatalog(),
+                cacheRoot: nil)
+            else { return nil }
+            return CostUsagePricing.claudeCostUSD(pricing: lookup.pricing, tokens: tokens)
+        }
     }
 
     /// Bare Claude-routed IDs may match first-party models.dev vendors. Recognizable model families
