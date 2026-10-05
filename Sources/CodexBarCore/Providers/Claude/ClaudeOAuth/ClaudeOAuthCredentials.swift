@@ -249,20 +249,30 @@ public enum ClaudeOAuthCredentialsStore {
         self.memoryCacheLock.unlock()
     }
 
-    /// Retains an armed cache-write recovery alongside the existing memory record so a later load can
+    /// Retains an armed cache-write recovery alongside the matching memory record so a later load can
     /// match it against the tombstone generation it clears. A nil result means the write was never
-    /// attempted, so any already armed recovery stays valid.
-    private static func updateMemoryRejectedWrite(_ rejectedWrite: CacheWriteRecovery?) {
+    /// attempted, and a record that no longer matches means a newer credential owns the slot — either
+    /// way an already armed recovery stays valid.
+    private static func updateMemoryRejectedWrite(
+        _ rejectedWrite: CacheWriteRecovery?,
+        for credentials: ClaudeOAuthCredentials)
+    {
         guard let rejectedWrite else { return }
         #if DEBUG
         if let store = self.taskMemoryCacheStoreOverride {
+            guard store.profileIdentifier == rejectedWrite.entry.profileIdentifier,
+                  store.record?.credentials.accessToken == credentials.accessToken
+            else { return }
             store.rejectedWrite = rejectedWrite
             return
         }
         #endif
         self.memoryCacheLock.lock()
+        defer { self.memoryCacheLock.unlock() }
+        guard self.cachedProfileIdentifier == rejectedWrite.entry.profileIdentifier,
+              self.cachedCredentialRecord?.credentials.accessToken == credentials.accessToken
+        else { return }
         self.cachedRejectedWrite = rejectedWrite
-        self.memoryCacheLock.unlock()
     }
 
     private struct CollaboratorContext {
@@ -426,7 +436,8 @@ public enum ClaudeOAuthCredentialsStore {
                                 ClaudeOAuthCredentialsStore.saveToCacheKeychain(
                                     fileData,
                                     owner: .claudeCLI,
-                                    profileIdentifier: profileIdentifier))
+                                    profileIdentifier: profileIdentifier),
+                                for: creds)
                         }
                         return record
                     }
@@ -503,7 +514,8 @@ public enum ClaudeOAuthCredentialsStore {
                     record.credentials,
                     historyOwnerIdentifier: record.historyOwnerIdentifier,
                     profileIdentifier: profileIdentifier,
-                    owner: record.owner))
+                    owner: record.owner),
+                for: record.credentials)
         }
 
         private func immediateCredentialRecord(environment: [String: String]) throws -> ClaudeOAuthCredentialRecord? {
@@ -1131,7 +1143,8 @@ public enum ClaudeOAuthCredentialsStore {
                     ClaudeOAuthCredentialsStore.saveToCacheKeychain(
                         data,
                         owner: .claudeCLI,
-                        profileIdentifier: self.profileIdentifier))
+                        profileIdentifier: self.profileIdentifier),
+                    for: keychainCreds)
                 return synced
             } catch let error as ClaudeOAuthCredentialsError {
                 if case let .keychainError(status) = error,
@@ -1202,7 +1215,8 @@ public enum ClaudeOAuthCredentialsStore {
                             ClaudeOAuthCredentialsStore.saveToCacheKeychain(
                                 securityData,
                                 owner: .claudeCLI,
-                                profileIdentifier: self.profileIdentifier))
+                                profileIdentifier: self.profileIdentifier),
+                            for: creds)
                     }
 
                     ClaudeOAuthCredentialsStore.log.info(
@@ -1245,7 +1259,8 @@ public enum ClaudeOAuthCredentialsStore {
                         ClaudeOAuthCredentialsStore.saveToCacheKeychain(
                             data,
                             owner: .claudeCLI,
-                            profileIdentifier: self.profileIdentifier))
+                            profileIdentifier: self.profileIdentifier),
+                        for: creds)
                 }
 
                 ClaudeOAuthCredentialsStore.log.info(
@@ -1285,7 +1300,8 @@ public enum ClaudeOAuthCredentialsStore {
                 ClaudeOAuthCredentialsStore.saveToCacheKeychain(
                     data,
                     owner: .claudeCLI,
-                    profileIdentifier: self.profileIdentifier))
+                    profileIdentifier: self.profileIdentifier),
+                for: credentials)
         }
 
         @discardableResult

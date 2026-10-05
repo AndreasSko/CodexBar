@@ -354,6 +354,119 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         }
     }
 
+    @Test(ClaudeOAuthDefaultsFixtures())
+    func `an older rejected write cannot replace a newer credential's recovery`() async throws {
+        // While write A's tombstone commits, a concurrent write installs credential B with recovery B.
+        // A's recovery must not overwrite B's; otherwise the next aged load clears B's tombstone
+        // without a matching recovery and strands the newer credential.
+        let memory = ClaudeOAuthCredentialsStore.MemoryCacheStore()
+        let pending = InterposingPendingStore()
+        let memoryContext = ClaudeOAuthCredentialsStore.$taskMemoryCacheStoreOverride
+        let service = "com.steipete.codexbar.cache.stale-recovery-tests.\(UUID().uuidString)"
+        let profileIdentifier = "synthetic-stale-recovery-profile"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let environment = ["HOME": root.path, "CLAUDE_CONFIG_DIR": root.path]
+        let credentialsURL = root.appendingPathComponent(".credentials.json")
+        try self.credentialsData(accessToken: "synthetic-older-token").write(to: credentialsURL)
+
+        let newerData = self.credentialsData(accessToken: "synthetic-newer-token")
+        let newerCredentials = try ClaudeOAuthCredentials.parse(data: newerData)
+        let newerRecovery = ClaudeOAuthCredentialsStore.CacheWriteRecovery(
+            entry: .init(
+                data: newerData,
+                storedAt: Date(),
+                owner: .claudeCLI,
+                profileIdentifier: profileIdentifier))
+        pending.onTombstoneArmed = {
+            memory.record = ClaudeOAuthCredentialRecord(
+                credentials: newerCredentials,
+                owner: .claudeCLI,
+                source: .memoryCache)
+            memory.timestamp = Date()
+            memory.profileIdentifier = profileIdentifier
+            memory.rejectedWrite = newerRecovery
+        }
+
+        let load = {
+            try ClaudeOAuthCredentialsStore.loadRecord(
+                environment: environment,
+                allowKeychainPrompt: false,
+                respectKeychainPromptCooldown: true,
+                allowClaudeKeychainRepairWithoutPrompt: false)
+        }
+        try await KeychainCacheStore.withServiceOverrideForTesting(service) {
+            KeychainCacheStore.setTestStoreForTesting(true)
+            defer { KeychainCacheStore.setTestStoreForTesting(false) }
+            try await KeychainAccessGate.withTaskOverrideForTesting(false) {
+                try await ClaudeOAuthDirectKeychainReadConsent.withTaskOverrideForTesting(true) {
+                    try await ClaudeOAuthKeychainPromptPreference
+                        .withTaskOverrideForTesting(.onlyOnUserAction) {
+                            try await ClaudeOAuthCredentialsStore
+                                .withPendingCacheClearStoreOverrideForTesting(pending) {
+                                    try await ClaudeOAuthCredentialsStore
+                                        .withIsolatedCredentialsFileTrackingForTesting {
+                                            try await ClaudeOAuthCredentialsStore
+                                                .withCredentialsURLOverrideForTesting(credentialsURL) {
+                                                    try await ClaudeOAuthCredentialsStore
+                                                        .withCredentialsProfileIdentifierOverrideAsyncForTesting(
+                                                            profileIdentifier)
+                                                        {
+                                                            try memoryContext.withValue(memory) {
+                                                                try KeychainCacheStore
+                                                                    .withStoreFailureStatusOverrideForTesting(
+                                                                        errSecInteractionNotAllowed)
+                                                                    {
+                                                                        let loaded = try load()
+                                                                        #expect(
+                                                                            loaded.credentials.accessToken
+                                                                                == "synthetic-older-token")
+                                                                    }
+                                                            }
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+                }
+            }
+        }
+
+        #expect(memory.record?.credentials.accessToken == "synthetic-newer-token")
+        #expect(memory.rejectedWrite?.id == newerRecovery.id)
+    }
+
+    private final class InterposingPendingStore: ClaudeOAuthPendingCacheClearStore, @unchecked Sendable {
+        let base = ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore()
+        var onTombstoneArmed: (() -> Void)?
+
+        var isPending: Bool {
+            self.base.isPending
+        }
+
+        func isPending(profileIdentifier: String) -> Bool { self.base.isPending(profileIdentifier: profileIdentifier) }
+        func markPending(profileIdentifier: String) { self.base.markPending(profileIdentifier: profileIdentifier) }
+
+        @discardableResult
+        func withCacheTransaction(
+            profileIdentifier: String,
+            includingGeneration operation: (inout Bool, inout Bool, inout Bool, inout String?) -> Void) -> Bool
+        {
+            var armed = false
+            let committed = self.base.withCacheTransaction(
+                profileIdentifier: profileIdentifier,
+                includingGeneration: { profilePending, cleanup, recheck, generation in
+                    operation(&profilePending, &cleanup, &recheck, &generation)
+                    armed = profilePending && generation != nil
+                })
+            if committed, armed {
+                self.onTombstoneArmed?()
+            }
+            return committed
+        }
+    }
+
     private final class GenerationRaceStore: ClaudeOAuthPendingCacheClearStore, @unchecked Sendable {
         let base = ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore()
         var invalidateAfterOperation = false
@@ -386,11 +499,14 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         }
     }
 
-    private func credentialsData(expiresIn: TimeInterval? = 7200) -> Data {
+    private func credentialsData(
+        accessToken: String = "synthetic-manual-token",
+        expiresIn: TimeInterval? = 7200) -> Data
+    {
         let expiry = expiresIn.map { Int(Date(timeIntervalSinceNow: $0).timeIntervalSince1970 * 1000) }
         let expiryField = expiry.map { "\"expiresAt\":\($0)," } ?? ""
         return Data("""
-        {"claudeAiOauth":{"accessToken":"synthetic-manual-token",
+        {"claudeAiOauth":{"accessToken":"\(accessToken)",
         \(expiryField)
         "scopes":["user:profile"]}}
         """.utf8)
