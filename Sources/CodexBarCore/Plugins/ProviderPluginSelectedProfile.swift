@@ -103,8 +103,10 @@ final class ProviderPluginSelectedProfile {
             let records = try self.read(false)
             self.requestedOwner = try self.owner(records)
             return ProviderPluginCookieSession(
-                header: "", source: "Selected browser profile",
-                origin: "https://\(domain)", records: records)
+                header: "",
+                source: "Selected browser profile",
+                origin: "https://\(domain)",
+                records: records)
         } catch {
             // Preserve native permission classification even when a bridge converts the thrown error to text.
             self.importFailure = error
@@ -133,7 +135,8 @@ final class ProviderPluginSelectedProfile {
             }
             return ProviderPluginResult(
                 usage: result.usage.replacing(browserSessionOwner: .value(current)),
-                sourceLabel: result.sourceLabel, persist: [:])
+                sourceLabel: result.sourceLabel,
+                persist: [:])
         } catch {
             throw ProviderBrowserSessionFailure(owner: verified, underlyingError: error)
         }
@@ -161,7 +164,10 @@ extension ProviderPluginRuntime {
         let result: Result<ProviderPluginResult, Error>
         do {
             result = try await .success(self.fetchResult(
-                settings: settings, secrets: secrets, now: now, sourceMode: sourceMode,
+                settings: settings,
+                secrets: secrets,
+                now: now,
+                sourceMode: sourceMode,
                 cookieSource: cookies.cookieSource,
                 cookieInvalidator: { cookies.rejectCookie(domain: $0) },
                 cookieSessionResolver: { try cookies.nextSession(domain: $0, cachedOnly: $1) },

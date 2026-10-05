@@ -26,7 +26,8 @@ extension PluginCookieProviderImplementation {
                 title: L("Unavailable profile: %@", URL(fileURLWithPath: saved).lastPathComponent)))
         }
         return ProviderSettingsPickerDescriptor(
-            id: "browser-profile", title: L("Browser profile"),
+            id: "browser-profile",
+            title: L("Browser profile"),
             subtitle: L(
                 "Read only the selected %@ profile. Accounts are never selected automatically.",
                 browser?.displayName ?? "browser"),
@@ -38,7 +39,8 @@ extension PluginCookieProviderImplementation {
                         $0.browserProfileID = value.isEmpty ? nil : value
                     }
                 }),
-            options: options, isVisible: nil,
+            options: options,
+            isVisible: nil,
             onChange: nil,
             trailingActions: [ProviderCookieRefreshAction.descriptor(
                 provider: self.id, cookieSource: { .auto }, context: context)])

@@ -6,6 +6,24 @@ import Testing
 @testable import CodexBarCore
 
 struct ProviderBrowserSessionTests {
+    @Test(arguments: [
+        ProviderFetchClassifiedError.Kind.authenticationExpired, .permissionDenied, .parseFailure, .apiFailure,
+    ])
+    func `classified failures cannot retain or suppress usage through misleading error text`(
+        kind: ProviderFetchClassifiedError.Kind) async throws
+    {
+        let prior = try await LangdockPluginTests.fetch(LangdockPluginTests.body(LangdockPluginTests.plan))
+        let error = ProviderBrowserSessionFailure(
+            owner: prior.browserSessionOwner,
+            underlyingError: ProviderFetchClassifiedError(kind: kind, message: "Session cancelled after a timeout"))
+        #expect(!UsageStore.shouldPreservePriorSnapshot(after: error, hadPriorData: true, priorSnapshot: prior))
+        #expect(!UsageStore.shouldSuppressProviderCancellation(error, priorSnapshot: prior))
+        let timeout = ProviderBrowserSessionFailure(
+            owner: prior.browserSessionOwner,
+            underlyingError: ProviderPluginError.timedOut)
+        #expect(UsageStore.shouldPreservePriorSnapshot(after: timeout, hadPriorData: true, priorSnapshot: prior))
+    }
+
     @Test(arguments: BundledPluginTestSupport.engines, ["success", "http", "network", "cancelled"])
     func `same profile login changes discard success errors and cancellation`(
         engine: ProviderPluginEngineKind, outcome: String) async throws
@@ -181,15 +199,20 @@ struct ProviderBrowserSessionTests {
         source: String = ProviderPluginSelectedProfileTests.source,
         afterRequest: @escaping @Sendable () -> Void = {}) throws -> ProviderPluginRuntime
     {
-        try ProviderPluginRuntime(source: source, transport: ProviderHTTPTransportHandler { request in
-            #expect(request.value(forHTTPHeaderField: "Cookie") == "auth_token=synthetic-account-a")
-            afterRequest()
-            if outcome == "network" { throw URLError(.timedOut) }
-            if outcome == "cancelled" { throw URLError(.cancelled) }
-            let url = try #require(request.url)
-            return try (Data(#"{"percent":42}"#.utf8), #require(HTTPURLResponse(
-                url: url, statusCode: outcome == "http" ? 503 : 200, httpVersion: nil,
-                headerFields: nil)))
-        }, engine: engine)
+        try ProviderPluginRuntime(
+            source: source,
+            transport: ProviderHTTPTransportHandler { request in
+                #expect(request.value(forHTTPHeaderField: "Cookie") == "auth_token=synthetic-account-a")
+                afterRequest()
+                if outcome == "network" { throw URLError(.timedOut) }
+                if outcome == "cancelled" { throw URLError(.cancelled) }
+                let url = try #require(request.url)
+                return try (Data(#"{"percent":42}"#.utf8), #require(HTTPURLResponse(
+                    url: url,
+                    statusCode: outcome == "http" ? 503 : 200,
+                    httpVersion: nil,
+                    headerFields: nil)))
+            },
+            engine: engine)
     }
 }

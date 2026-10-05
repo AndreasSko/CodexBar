@@ -4,7 +4,11 @@ import Testing
 
 struct LangdockPluginTests {
     static let profile = ProviderBrowserProfile(browserID: "edge", profileID: "/synthetic/Edge/Profile 2")
-    static let plan = #"{"sessionUsageLimitsEnabled":true,"sessionUsagePercent":12.5,"sessionResetsAt":"2026-09-25T12:00:00.123Z","weeklyUsagePercent":104.2,"weeklyResetsAt":"2026-09-28T12:00:00Z"}"#
+    static let plan = """
+    {"sessionUsageLimitsEnabled":true,"sessionUsagePercent":12.5,
+     "sessionResetsAt":"2026-09-25T12:00:00.123Z","weeklyUsagePercent":104.2,
+     "weeklyResetsAt":"2026-09-28T12:00:00Z"}
+    """
 
     static func body(_ plan: String) -> String {
         "[{\"result\":{\"data\":{\"json\":{\"hasIncludedUsageLimits\":true,\"planUsage\":\(plan)}}}}]"
@@ -30,10 +34,13 @@ struct LangdockPluginTests {
         var settings = CookieProviderSettings()
         settings.selectedBrowserProfile = profile
         return ProviderPluginCookieBroker(
-            provider: .langdock, domains: runtime.manifest.cookieDomains, settings: settings,
+            provider: .langdock,
+            domains: runtime.manifest.cookieDomains,
+            settings: settings,
             batches: { _, _ in Issue.record("Must not import another profile or cached header"); return nil },
             jarImporter: { Issue.record("Must not enumerate other profiles"); return [] },
-            policy: runtime.manifest.cookiePolicy, profileReader: reader)
+            policy: runtime.manifest.cookiePolicy,
+            profileReader: reader)
     }
 
     static func fetch(
@@ -44,7 +51,8 @@ struct LangdockPluginTests {
         async throws -> UsageSnapshot
     {
         let runtime = try BundledPluginTestSupport.runtime(
-            "langdock", engine: engine,
+            "langdock",
+            engine: engine,
             transport: ProviderHTTPTransportHandler { request in
                 let url = try #require(request.url)
                 #expect(url.host == "app.langdock.com")

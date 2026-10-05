@@ -43,7 +43,8 @@ public struct ProviderBrowserProfile: Sendable, Equatable {
             store = try Self.selectedStore(selection, from: client.codexBarStores(for: browser))
         } catch {
             if BrowserDetection.selectedChromiumProfileAccessIssue(
-                profileID: selection.profileID, browser: browser,
+                profileID: selection.profileID,
+                browser: browser,
                 homeDirectories: client.configuration.homeDirectories) == .accessDenied
             {
                 throw ProviderFetchClassifiedError(

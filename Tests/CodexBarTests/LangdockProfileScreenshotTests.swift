@@ -13,7 +13,8 @@ struct LangdockProfileScreenshotTests {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: #function)
         fixture.settings.updateProviderConfig(provider: .langdock) { $0.browserProfileID = "/synthetic/Edge/Profile 2" }
         let picker = PluginCookieProviderImplementation(spec: LangdockProviderDescriptor.spec).browserProfilePicker(
-            browser: "edge", context: fixture.settingsContext(provider: .langdock),
+            browser: "edge",
+            context: fixture.settingsContext(provider: .langdock),
             profiles: [.init(id: "/synthetic/Edge/Profile 2", name: "Personal (synthetic)")])
         let output = URL(fileURLWithPath: path)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
@@ -24,11 +25,15 @@ struct LangdockProfileScreenshotTests {
                     Section("Connection") {
                         if before {
                             ProviderSettingsFieldRowView(field: .init(
-                                id: "langdock-edge-profile-id", title: "Edge profile ID",
+                                id: "langdock-edge-profile-id",
+                                title: "Edge profile ID",
                                 subtitle: "Enter the Edge profile directory path for your Langdock account. " +
                                     "CodexBar reads only that profile and never switches accounts automatically.",
-                                kind: .plain, placeholder: "/synthetic/Edge/Profile 2",
-                                binding: .constant("/synthetic/Edge/Profile 2"), actions: [], isVisible: nil))
+                                kind: .plain,
+                                placeholder: "/synthetic/Edge/Profile 2",
+                                binding: .constant("/synthetic/Edge/Profile 2"),
+                                actions: [],
+                                isVisible: nil))
                         } else {
                             ProviderSettingsPickerRowView(picker: picker)
                         }

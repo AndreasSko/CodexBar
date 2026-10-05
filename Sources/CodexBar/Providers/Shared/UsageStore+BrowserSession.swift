@@ -60,8 +60,9 @@ enum BrowserSessionFailurePolicy {
     }
 
     static func isTransient(_ error: Error) -> Bool {
-        guard let failure = error as? ProviderBrowserSessionFailure,
-              let classified = failure.underlyingError as? ProviderFetchClassifiedError else { return false }
+        guard let failure = error as? ProviderBrowserSessionFailure else { return false }
+        if failure.underlyingError as? ProviderPluginError == .timedOut { return true }
+        guard let classified = failure.underlyingError as? ProviderFetchClassifiedError else { return false }
         return [.rateLimited, .providerUnavailable, .networkFailure].contains(classified.kind)
     }
 }

@@ -151,8 +151,11 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
         self.policy = policy
         self.selectedProfile = policy.flatMap {
             $0.selectedProfile ? ProviderPluginSelectedProfile(
-                provider: provider, profile: settings.selectedBrowserProfile, policy: $0,
-                domains: domains, reader: profileReader) : nil
+                provider: provider,
+                profile: settings.selectedBrowserProfile,
+                policy: $0,
+                domains: domains,
+                reader: profileReader) : nil
         }
         self.persistent = policy.flatMap {
             $0.cache == .validatedSingleEntry

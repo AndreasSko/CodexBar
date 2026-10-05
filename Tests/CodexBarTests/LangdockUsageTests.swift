@@ -12,7 +12,10 @@ struct LangdockUsageTests {
     func `unknown resets never revive previous dates and weekly only CLI has one real metric`() async throws {
         let previous = try await LangdockPluginTests.fetch(LangdockPluginTests.body(LangdockPluginTests.plan))
         let current = try await LangdockPluginTests.fetch(LangdockPluginTests.body(
-            #"{"sessionUsageLimitsEnabled":true,"sessionUsagePercent":0,"sessionResetsAt":null,"weeklyUsagePercent":0,"weeklyResetsAt":null}"#))
+            """
+            {"sessionUsageLimitsEnabled":true,"sessionUsagePercent":0,"sessionResetsAt":null,
+             "weeklyUsagePercent":0,"weeklyResetsAt":null}
+            """))
             .backfillingResetTimesForProvider(.langdock, from: previous)
         #expect(current.primary?.usedPercent == 0)
         #expect(current.primary?.resetsAt == nil)
@@ -20,8 +23,16 @@ struct LangdockUsageTests {
         let weekly = try await LangdockPluginTests.fetch(LangdockPluginTests.body(
             #"{"sessionUsageLimitsEnabled":false,"weeklyUsagePercent":0}"#))
         let card = CLICardsRenderer.makeCard(.init(
-            provider: .langdock, snapshot: weekly, credits: nil, source: "synthetic", status: nil, notes: [],
-            useColor: false, resetStyle: .countdown, weeklyWorkDays: nil, now: Self.now))
+            provider: .langdock,
+            snapshot: weekly,
+            credits: nil,
+            source: "synthetic",
+            status: nil,
+            notes: [],
+            useColor: false,
+            resetStyle: .countdown,
+            weeklyWorkDays: nil,
+            now: Self.now))
         #expect(card.metrics.map(\.label) == ["Weekly"])
         #expect(card.metrics.first?.remainingPercent == 100)
     }
@@ -101,8 +112,12 @@ struct LangdockUsageTests {
             let missing = try await LangdockPluginTests.fetch(LangdockPluginTests.body("null"), now: Self.now)
             store._test_providerFetchOutcomeOverride = { _ in
                 ProviderFetchOutcome(result: .success(ProviderFetchResult(
-                    usage: missing, credits: nil, dashboard: nil, sourceLabel: "synthetic",
-                    strategyID: "langdock.js", strategyKind: .web)), attempts: [])
+                    usage: missing,
+                    credits: nil,
+                    dashboard: nil,
+                    sourceLabel: "synthetic",
+                    strategyID: "langdock.js",
+                    strategyKind: .web)), attempts: [])
             }
             await store.refreshProvider(.langdock, allowDisabled: true)
             #expect(store.snapshot(for: .langdock)?.primary == nil)

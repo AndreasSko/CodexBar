@@ -69,6 +69,7 @@ extension UsageStore {
         if let urlError = transportError as? URLError, urlError.code == .cancelled {
             return true
         }
+        if error is ProviderBrowserSessionFailure { return false }
         let message = transportError.localizedDescription
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
@@ -111,6 +112,7 @@ extension UsageStore {
         if self.isPreservableNetworkTransportError(error) || BrowserSessionFailurePolicy.isTransient(error) {
             return true
         }
+        if error is ProviderBrowserSessionFailure { return false }
 
         let message = error.localizedDescription.lowercased()
         return message.contains("timed out") ||

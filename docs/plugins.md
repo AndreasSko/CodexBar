@@ -559,6 +559,8 @@ success, failure, or cancellation it reads that same profile again under the bac
 Only matching, unambiguous live ownership authorizes publication or transient-error retention. Cookie values and
 the digest stay in Swift; neither is exposed to the script, logs, or serialized usage. Preference cookies do not
 change ownership. Changes are detected on refresh, not continuously. Unreadable or changed sessions fail closed.
+Selected-profile responses omit `Cookie`, `Set-Cookie`, and `Set-Cookie2` headers from the script-facing response;
+ordinary headers remain available. Response cookies are neither applied to the browser nor persisted by the host.
 
 Providers without stable account identity can set `history: .unavailable` and `burnDownWidgetSelectable: false`
 on the spec. Langdock uses these capabilities and does not backfill missing reset dates from prior sessions.
