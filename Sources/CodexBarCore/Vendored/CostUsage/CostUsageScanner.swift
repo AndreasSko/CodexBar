@@ -400,6 +400,9 @@ enum CostUsageScanner {
         /// Learned from the latest paired observations; a token_count written after a long tool run still pairs when
         /// its counters keep this offset.
         var mirrorCounterOffset: CodexCounterOffset?
+        /// Set when bare usage is counted while an earlier subagent observation is still buffered. The buffer is
+        /// processed later without that separator, so the rest of the file keeps exact pairing only.
+        var nearMirrorsDisabled: Bool?
         var countedUsage: CostUsageCodexTotals?
 
         mutating func clearPendingMirrors(when shouldClear: Bool = true) {
@@ -4179,7 +4182,8 @@ enum CostUsageScanner {
             total: CostUsageCodexTotals?,
             timestamp: String) -> CodexNearMirror?
         {
-            guard let timestampMs = unixMilliseconds(from: timestamp) else { return nil }
+            guard requestLedger.nearMirrorsDisabled != true,
+                  let timestampMs = unixMilliseconds(from: timestamp) else { return nil }
             let key = [turnID ?? "", String(usage.input), String(usage.cached), String(usage.output)]
                 .joined(separator: "\u{1F}")
             return CodexNearMirror(key: key, timestampMs: timestampMs, total: total)
@@ -4225,8 +4229,9 @@ enum CostUsageScanner {
             let near = nearMirror(turnID: turnID, usage: usage, total: record.threadTotal, timestamp: timestamp)
             // A token_count written before its ledger record pairs only inside the window; the distinct-request
             // protection for equal sizes depends on that order.
+            // A replay is already counted, so it never claims a different request by size and time alone.
             let adjacentIndex = requestLedger.pendingLegacyMirrors?.isDisjoint(with: adjacentKeys) == false
-                || near?.isWithinWindow(of: requestLedger.pendingLegacyNearMirror) == true
+                || (!isReplay && near?.isWithinWindow(of: requestLedger.pendingLegacyNearMirror) == true)
                 ? requestLedger.pendingLegacyRowIndex : nil
             if adjacentIndex != nil,
                let offset = CodexNearMirror.counterOffset(ledger: near, legacy: requestLedger.pendingLegacyNearMirror)
@@ -4239,7 +4244,7 @@ enum CostUsageScanner {
             requestLedger.pendingLegacyNearMirror = nil
             requestLedger.pendingLedgerMirrors = mirrorIndex == nil ? adjacentKeys : nil
             requestLedger.pendingLedgerResponseID = mirrorIndex == nil ? responseID : nil
-            requestLedger.pendingLedgerNearMirror = mirrorIndex == nil ? near : nil
+            requestLedger.pendingLedgerNearMirror = mirrorIndex == nil && !isReplay ? near : nil
             let legacyRow = mirrorIndex.flatMap { index in
                 rows.first(where: { $0.eventIndex == index }) ?? retainedRows[index]
             }
@@ -4811,6 +4816,16 @@ enum CostUsageScanner {
             }
         }
 
+        func isUsageObservation(_ line: CodexFastLine) -> Bool {
+            switch line {
+            case .tokenCount, .tokenUsageRecord: true
+            default: false
+            }
+        }
+        // Bare usage is counted when read, but buffered subagent observations are processed later in their own
+        // order. Unresolved-fork lines are processed when read; their later reprocessing only replays counted records.
+        var hasBufferedObservation = (pendingSubagentLines ?? []).contains { isUsageObservation($0.line) }
+
         func routeFastLine(
             _ fastLine: CodexFastLine,
             lineIndex: Int,
@@ -4831,6 +4846,7 @@ enum CostUsageScanner {
             }
             if pendingSubagentLines != nil {
                 pendingSubagentLines?.append(bufferedLine)
+                hasBufferedObservation = hasBufferedObservation || isUsageObservation(fastLine)
             } else {
                 try processFastLine(fastLine, sourceEndOffset: endOffset)
                 if hasUnresolvedForkBaseline {
@@ -4916,6 +4932,9 @@ enum CostUsageScanner {
                                   obj["type"] == nil,
                                   let bare = Self.codexBareUsage(from: obj)
                             else { return }
+                            if hasBufferedObservation {
+                                requestLedger.nearMirrorsDisabled = true
+                            }
                             handleBareUsage(
                                 totals: bare.totals,
                                 modelEvidence: bare.model,
@@ -5243,7 +5262,7 @@ enum CostUsageScanner {
             forkAccountingState: forkAccountingState,
             requestLedgerState: requestLedger.responseIDs.isEmpty && requestLedger.legacyRowIndices.isEmpty
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
-                && requestLedger.sessionID == sessionId
+                && requestLedger.sessionID == sessionId && requestLedger.nearMirrorsDisabled != true
                 ? nil : requestLedger,
             replacedLegacyRowIndices: replacedLegacyRowIndices)
     }

@@ -312,6 +312,204 @@ extension CostUsageCodexRequestLedgerTests {
         #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220 + bareTokens)
     }
 
+    /// A replayed response is already counted; it must not claim a different legacy request of equal size nearby.
+    @Test(arguments: [false, true])
+    func `a replay does not pair with a different legacy request inside the mirror window`(replayFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let usage = [100, 20, 10, 4]
+        let replay = try Self.record(
+            id: "one",
+            timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: replayFirst ? 4000 : 4500),
+            usage: usage,
+            total: [1100, 220, 110, 44],
+            turnTotal: [500, 100, 50, 20])
+        let laterRequest = try Self.realLegacy(
+            timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: replayFirst ? 4500 : 4000),
+            usage: usage,
+            total: [960, 192, 96, 38])
+        let result = try Self.parse(Self.header() + [
+            Self.taskStarted("synthetic-turn"),
+            Self.record(id: "one", usage: usage, total: [1100, 220, 110, 44], turnTotal: [500, 100, 50, 20]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2),
+                usage: usage,
+                total: [860, 172, 86, 34]),
+        ] + (replayFirst ? [replay, laterRequest] : [laterRequest, replay]), env: env)
+        #expect(result.rows.count == 2)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220)
+    }
+
+    /// Subagent observations are buffered and replayed in order, but a bare usage line is counted when it is read.
+    /// Once a file has counted bare usage, only exact mirror keys pair, as before the near-mirror rules.
+    @Test
+    func `bare usage keeps buffered subagent observations distinct`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        header[0]["payload"] = [
+            "id": "synthetic-thread", "session_id": "execution-session",
+            "source": ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]],
+        ]
+        var ledger = Self.record(id: "one", usage: [100, 20, 10, 4], total: [1100, 220, 110, 44])
+        var payload = try #require(ledger["payload"] as? [String: Any])
+        payload["session_id"] = "execution-session"
+        ledger["payload"] = payload
+        let result = try Self.parse(header + [
+            ledger,
+            [
+                "timestamp": Self.timestamp(Self.timestampA, plusMilliseconds: 1000),
+                "usage": ["prompt_tokens": 10, "completion_tokens": 1],
+            ],
+            Self.legacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2000),
+                usage: [100, 20, 10, 4],
+                total: [860, 172, 86, 34]),
+        ], env: env)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 231)
+    }
+
+    /// A bounded pass that stops after a bare usage line resumes with the same pairing rule as a full parse. In a
+    /// subagent file the ledger record is still buffered, so the state saved after the bare line is otherwise empty.
+    @Test(arguments: [true, false])
+    func `bare usage gives the same pairing across a bounded pass`(subagent: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        let bare: [String: Any] = try [
+            "timestamp": Self.timestamp(Self.timestampA, plusMilliseconds: 1000),
+            "usage": ["prompt_tokens": 10, "completion_tokens": 1],
+        ]
+        let usage = [100, 20, 10, 4]
+        let legacy = try Self.legacy(
+            timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2000),
+            usage: usage,
+            total: [860, 172, 86, 34])
+        let prefix: String
+        let suffix: String
+        if subagent {
+            header[0]["payload"] = [
+                "id": "synthetic-thread",
+                "source": ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]],
+            ]
+            prefix = try env.jsonl(header + [Self.record(id: "one", usage: usage, total: [1100, 220, 110, 44]), bare])
+            suffix = try env.jsonl([legacy])
+        } else {
+            // Read in order, the bare line precedes both observations and does not separate them.
+            prefix = try env.jsonl(header + [bare])
+            suffix = try env.jsonl([
+                Self.record(
+                    id: "one",
+                    timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 1998),
+                    usage: usage,
+                    total: [1100, 220, 110, 44]),
+                legacy,
+            ])
+        }
+        let file = env.root.appendingPathComponent("bounded-bare.jsonl")
+        try (prefix + suffix).write(to: file, atomically: false, encoding: .utf8)
+        let day = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+        let range = CostUsageScanner.CostUsageDayRange(since: day, until: day, calendar: calendar)
+        let partial = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file, range: range, maxBytesToRead: Int64(prefix.utf8.count))
+        let resumed = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file,
+            range: range,
+            startOffset: partial.parsedBytes,
+            initialSessionID: partial.sessionId,
+            initialCodexUsageRowIndex: partial.nextUsageRowIndex,
+            initialBufferedSubagentLines: partial.bufferedSubagentLines,
+            initialJSONLResumeState: partial.jsonlResumeState,
+            initialRequestLedgerState: partial.requestLedgerState,
+            initialRequestLedgerRows: partial.rows)
+        let cold = try CostUsageScanner.parseCodexFileCancellable(fileURL: file, range: range)
+        let expected = subagent ? 231 : 121
+        #expect((partial.rows + resumed.rows).reduce(0) { $0 + $1.input + $1.output } == expected)
+        #expect(cold.rows.reduce(0) { $0 + $1.input + $1.output } == expected)
+    }
+
+    /// A fork processes lines when read even while its parent is unresolved, so a bare line there separates the first
+    /// observations without disabling near pairing. A parse that resolves the parent later matches a cold parse.
+    @Test
+    func `fork bare usage keeps later drifted pairs when the parent resolves late`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        header[0]["payload"] = ["id": "synthetic-thread", "forked_from_id": "parent", "timestamp": Self.timestampA]
+        let body: [[String: Any]] = try [
+            Self.record(
+                id: "one",
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 1000),
+                usage: [100, 20, 10, 4],
+                total: [1100, 220, 110, 44],
+                turnTotal: [500, 100, 50, 20]),
+            [
+                "timestamp": Self.timestamp(Self.timestampA, plusMilliseconds: 1500),
+                "usage": ["prompt_tokens": 10, "completion_tokens": 1],
+            ],
+            Self.legacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2000),
+                usage: [100, 20, 10, 4],
+                total: [860, 172, 86, 34]),
+            Self.record(
+                id: "two",
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 10000),
+                usage: [60, 20, 6, 3],
+                total: [1160, 240, 116, 47],
+                turnTotal: [560, 120, 56, 23]),
+            Self.legacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 10002),
+                usage: [60, 20, 6, 3],
+                total: [920, 192, 92, 37]),
+        ]
+        let file = env.root.appendingPathComponent("fork-late.jsonl")
+        try env.jsonl(header + body).write(to: file, atomically: false, encoding: .utf8)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let start = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let end = try #require(ISO8601DateFormatter().date(from: Self.timestampC))
+        let range = CostUsageScanner.CostUsageDayRange(since: start, until: end, calendar: calendar)
+        // The parent prefix ends where the first token_count counter continues.
+        let inherited = CostUsageCodexTotals(input: 760, cached: 152, output: 76)
+        let resolved: (String, String) throws -> CostUsageScanner.CodexForkBaseline = { _, _ in .resolved(inherited) }
+        let unresolved: (String, String) throws -> CostUsageScanner.CodexForkBaseline = { _, _ in .unresolved }
+        func tokens(_ rows: [CostUsageScanner.CodexUsageRow]) -> Int {
+            rows.reduce(0) { $0 + $1.input + $1.output }
+        }
+        let cold = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file, range: range, inheritedTotalsResolver: resolved)
+        let pass1 = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file, range: range, inheritedTotalsResolver: unresolved)
+        let pass2 = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file,
+            range: range,
+            startOffset: pass1.parsedBytes,
+            initialModel: pass1.lastModel,
+            initialSessionID: pass1.sessionId,
+            initialTotals: pass1.lastCountedTotals,
+            initialRawTotalsBaseline: pass1.lastRawTotalsBaseline,
+            initialRawTotalsWatermark: pass1.lastRawTotalsWatermark,
+            initialSeenRawTotals: pass1.seenRawTotals,
+            initialHasDivergentTotals: pass1.hasDivergentTotals,
+            initialHasInterleavedTotals: pass1.hasInterleavedTotals,
+            initialCodexTurnID: pass1.lastCodexTurnID,
+            initialCodexUsageRowIndex: pass1.nextUsageRowIndex,
+            initialBufferedSubagentLines: pass1.bufferedSubagentLines,
+            initialBufferedUnresolvedForkLines: pass1.bufferedUnresolvedForkLines,
+            initialJSONLResumeState: pass1.jsonlResumeState,
+            initialRequestLedgerState: pass1.requestLedgerState,
+            initialRequestLedgerRows: pass1.rows,
+            inheritedTotalsResolver: resolved)
+        let kept = pass1.rows.filter { row in
+            row.eventIndex.map { !pass2.replacedLegacyRowIndices.contains($0) } ?? true
+        }
+        #expect(pass1.bufferedUnresolvedForkLines?.isEmpty == false)
+        #expect(tokens(cold.rows) == 297)
+        #expect(tokens(kept + pass2.rows) == 297)
+    }
+
     static func taskStarted(_ turnID: String) -> [String: Any] {
         ["type": "event_msg", "timestamp": self.timestampA, "payload": ["type": "task_started", "turn_id": turnID]]
     }

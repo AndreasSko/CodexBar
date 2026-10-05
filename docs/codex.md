@@ -395,7 +395,10 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   after a resume, adjacent observations from the same turn with identical input, cached, and output tokens at most
   five seconds apart are one request. A ledger record whose token_count follows a long tool run also pairs when both
   counters keep the offset learned from the previous pair; a token_count written before its ledger record pairs only
-  inside the window. A resumed session or a counted bare usage line between two observations keeps them distinct.
+  inside the window. A resumed session between two observations keeps them distinct, and a replayed response never
+  pairs this way. Bare usage lines are counted when read, so one read while earlier subagent observations are still
+  buffered leaves the rest of that file with exact pairing only. When a fork's parent resolves only in a later scan
+  pass, a drifted pair not already paired before that pass can remain two rows, as before revision 9.
   Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices.
   Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
