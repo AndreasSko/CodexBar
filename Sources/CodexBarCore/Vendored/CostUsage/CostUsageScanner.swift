@@ -3446,6 +3446,7 @@ enum CostUsageScanner {
         case sessionMeta(CodexSessionMetadata)
         case turnContext(CodexTurnContextMetadata)
         case interAgentCommunication(triggerTurn: Bool)
+        case threadSettingsApplied(serviceTier: String)
         case taskStarted(turnID: String?)
         case tokenCount(CodexTokenCountRecord)
         case tokenUsageRecord(CodexRequestUsageRecord)
@@ -3468,7 +3469,8 @@ enum CostUsageScanner {
             switch self {
             case .sessionMeta:
                 false
-            case .turnContext, .interAgentCommunication, .taskStarted, .tokenCount, .tokenUsageRecord:
+            case .turnContext, .interAgentCommunication, .threadSettingsApplied, .taskStarted, .tokenCount,
+                 .tokenUsageRecord:
                 true
             }
         }
@@ -3515,6 +3517,11 @@ enum CostUsageScanner {
     static func codexModelEvidence(_ raw: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
         return trimmed
+    }
+
+    private static func codexServiceTier(_ raw: String?) -> String? {
+        guard let tier = codexModelEvidence(raw), tier == "default" || tier == "priority" else { return nil }
+        return tier
     }
 
     static func codexTurnContextModel(
@@ -3646,6 +3653,11 @@ enum CostUsageScanner {
                 guard let payload, let payloadType = string(Self.codexJSONFieldType, in: payload)
                 else { return nil }
                 let turnID = Self.codexTurnID(from: buffer, in: payload)
+                if payloadType == "thread_settings_applied" {
+                    guard let decoded = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any]
+                    else { return nil }
+                    return Self.codexLine(from: decoded)
+                }
                 if payloadType == "task_started" { return .taskStarted(turnID: turnID) }
                 guard payloadType == "token_count", let timestamp, let info else { return nil }
                 return .tokenCount(CodexTokenCountRecord(
@@ -3689,6 +3701,12 @@ enum CostUsageScanner {
                 title: payload["title"] as? String ?? payload["name"] as? String,
                 turnID: Self.codexTurnID(from: payload)))
         case "event_msg":
+            if payload["type"] as? String == "thread_settings_applied",
+               let settings = payload["thread_settings"] as? [String: Any],
+               let serviceTier = Self.codexServiceTier(settings["service_tier"] as? String)
+            {
+                return .threadSettingsApplied(serviceTier: serviceTier)
+            }
             if payload["type"] as? String == "task_started" {
                 return .taskStarted(turnID: Self.codexTurnID(from: payload))
             }
@@ -4076,6 +4094,9 @@ enum CostUsageScanner {
         var forkBaselineResolved = initialForkAccountingState != nil
         var hasUnresolvedForkBaseline = false
         var currentTurnID = initialCodexTurnID
+        var pendingServiceTier: String?
+        var currentServiceTier: String?
+        var turnServiceTiers: [String: String] = [:]
         var codexUsageRowIndex = initialCodexUsageRowIndex
         var rawTotalsBaseline = initialRawTotalsBaseline ?? initialTotals
         var sawDivergentTotals = initialHasDivergentTotals
@@ -4095,6 +4116,11 @@ enum CostUsageScanner {
         let retainedRows = Dictionary(initialRequestLedgerRows.compactMap { row in
             row.eventIndex.map { ($0, row) }
         }, uniquingKeysWith: { first, _ in first })
+
+        func sessionPricingMode(for turnID: String?) -> String? {
+            if let turnID, let mode = turnServiceTiers[turnID] { return mode }
+            return currentServiceTier
+        }
 
         func mirrorKey(
             turnID: String?,
@@ -4219,6 +4245,7 @@ enum CostUsageScanner {
                 responseID: responseID,
                 mirrorKeys: keys,
                 retainedPricing: legacyRow,
+                pricingMode: sessionPricingMode(for: turnID),
                 endOffset: endOffset)
             observeTimestamp(timestamp)
             lastAcceptedTokenTimestamp = timestamp
@@ -4248,6 +4275,7 @@ enum CostUsageScanner {
             responseID: String? = nil,
             mirrorKeys: [String]? = nil,
             retainedPricing: CodexUsageRow? = nil,
+            pricingMode: String? = nil,
             endOffset: Int64? = nil) -> Int
         {
             let index = codexUsageRowIndex
@@ -4272,7 +4300,7 @@ enum CostUsageScanner {
                 knownCostNanos: pricing?.knownCostNanos,
                 unpricedTokens: pricing?.unpricedTokens,
                 pricingModel: pricing?.pricingModel,
-                pricingMode: pricing?.pricingMode,
+                pricingMode: pricing?.pricingMode ?? pricingMode,
                 responseID: responseID,
                 requestMirrorKeys: mirrorKeys))
             rowSourceEndOffsets[index] = endOffset
@@ -4311,6 +4339,7 @@ enum CostUsageScanner {
                 model: model,
                 timestamp: resolvedTimestamp,
                 turnID: currentTurnID,
+                pricingMode: sessionPricingMode(for: currentTurnID),
                 endOffset: sourceEndOffset)
             if let resolvedTimestamp {
                 lastAcceptedTokenTimestamp = resolvedTimestamp
@@ -4663,6 +4692,7 @@ enum CostUsageScanner {
                 timestamp: record.timestamp,
                 turnID: record.turnID ?? currentTurnID,
                 mirrorKeys: mirror.map { [$0.snapshot] },
+                pricingMode: sessionPricingMode(for: record.turnID ?? currentTurnID),
                 endOffset: sourceEndOffset)
             if let key = mirror?.snapshot { requestLedger.legacyRowIndices[key] = eventIndex }
             requestLedger.pendingLegacyMirrors = mirror?.adjacent
@@ -4690,9 +4720,16 @@ enum CostUsageScanner {
                 }
             case .interAgentCommunication:
                 break
+            case let .threadSettingsApplied(serviceTier):
+                pendingServiceTier = serviceTier
             case let .taskStarted(turnID):
                 requestLedger.clearPendingMirrors()
                 currentTurnID = turnID
+                currentServiceTier = pendingServiceTier
+                pendingServiceTier = nil
+                if let turnID, let currentServiceTier {
+                    turnServiceTiers[turnID] = currentServiceTier
+                }
             case let .tokenCount(record):
                 try handleTokenCount(record, sourceEndOffset: sourceEndOffset)
             case let .tokenUsageRecord(record):
@@ -4864,7 +4901,8 @@ enum CostUsageScanner {
 
                     if line.bytes.containsAscii(#""type":"event_msg""#),
                        !line.bytes.containsAscii(#""token_count""#),
-                       !line.bytes.containsAscii(#""task_started""#)
+                       !line.bytes.containsAscii(#""task_started""#),
+                       !line.bytes.containsAscii(#""thread_settings_applied""#)
                     {
                         return
                     }
@@ -4963,6 +5001,8 @@ enum CostUsageScanner {
                         kind = .turnContext
                     case let .interAgentCommunication(triggerTurn):
                         kind = .interAgentCommunication(triggerTurn: triggerTurn)
+                    case .threadSettingsApplied:
+                        return nil
                     case .tokenCount, .tokenUsageRecord:
                         guard let record = buffered.line.boundaryTokenCount else { return nil }
                         kind = .tokenCount(total: record.total, last: record.last)
