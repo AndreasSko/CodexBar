@@ -367,7 +367,7 @@ struct CostUsageFileUsage: Codable, Equatable {
     var codexScanTargetSize: Int64?
     var codexScanComplete: Bool?
     var codexJSONLResumeState: CostUsageJsonl.ResumeState?
-    var codexServiceTierState: CostUsageScanner.CodexServiceTierState? = nil
+    var codexServiceTierState: CostUsageScanner.CodexServiceTierState?
     var codexForkAccountingState: CostUsageScanner.CodexForkAccountingState?
     var codexRequestLedgerState: CostUsageScanner.CodexRequestLedgerState?
     var codexBufferedSubagentLines: [CostUsageScanner.CodexBufferedFastLine]?

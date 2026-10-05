@@ -1087,6 +1087,7 @@ extension CostUsageScanner {
         return true
     }
 
+    // swiftlint:disable:next function_body_length
     static func rescanCodexFile(
         input: CodexFileScanInput,
         context: CodexFileScanContext,
