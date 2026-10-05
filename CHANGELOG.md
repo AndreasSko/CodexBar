@@ -2,6 +2,10 @@
 
 ## 0.72.1 — Unreleased
 
+### Added
+
+- Codex: list managed accounts and explicitly promote one from the macOS CLI, preserving displaced credentials with shared app/CLI locking, private atomic writes, and rejection of changed auth or managed-home destinations (#3191, #4234). Thanks @Yuxin-Qiao!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
