@@ -228,6 +228,132 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         }
     }
 
+    @Test(ClaudeOAuthDefaultsFixtures())
+    func `a rejected cache write during token refresh retains an in-memory recovery`() async throws {
+        let memory = ClaudeOAuthCredentialsStore.MemoryCacheStore()
+        let pending = ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore()
+        let memoryContext = ClaudeOAuthCredentialsStore.$taskMemoryCacheStoreOverride
+        let service = "com.steipete.codexbar.cache.refresh-recovery-tests.\(UUID().uuidString)"
+        let profileIdentifier = "synthetic-refresh-recovery-profile"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let environment = ["HOME": root.path, "CLAUDE_CONFIG_DIR": root.path]
+
+        ClaudeOAuthRefreshRecoveryStubURLProtocol.reset()
+        let registered = URLProtocol.registerClass(ClaudeOAuthRefreshRecoveryStubURLProtocol.self)
+        defer {
+            URLProtocol.unregisterClass(ClaudeOAuthRefreshRecoveryStubURLProtocol.self)
+            ClaudeOAuthRefreshRecoveryStubURLProtocol.reset()
+        }
+        try #require(registered)
+        ClaudeOAuthRefreshRecoveryStubURLProtocol.handler = { request in
+            guard let url = request.url,
+                  let response = HTTPURLResponse(
+                      url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+            else { throw URLError(.badServerResponse) }
+            return (response, Data("""
+            {"access_token":"synthetic-refreshed-token","refresh_token":"synthetic-rotated-refresh",
+            "expires_in":7200,"token_type":"Bearer"}
+            """.utf8))
+        }
+
+        try await KeychainCacheStore.withServiceOverrideForTesting(service) {
+            KeychainCacheStore.setTestStoreForTesting(true)
+            defer { KeychainCacheStore.setTestStoreForTesting(false) }
+            try await KeychainAccessGate.withTaskOverrideForTesting(false) {
+                try await ClaudeOAuthDirectKeychainReadConsent.withTaskOverrideForTesting(true) {
+                    try await ClaudeOAuthKeychainPromptPreference
+                        .withTaskOverrideForTesting(.onlyOnUserAction) {
+                            try await ClaudeOAuthCredentialsStore
+                                .withPendingCacheClearStoreOverrideForTesting(pending) {
+                                    try await ClaudeOAuthCredentialsStore
+                                        .withIsolatedCredentialsFileTrackingForTesting {
+                                            try await ClaudeOAuthCredentialsStore
+                                                .withCredentialsURLOverrideForTesting(
+                                                    root.appendingPathComponent(".credentials.json"))
+                                                {
+                                                    try await ClaudeOAuthCredentialsStore
+                                                        .withCredentialsProfileIdentifierOverrideAsyncForTesting(
+                                                            profileIdentifier)
+                                                        {
+                                                            try await memoryContext.withValue(memory) {
+                                                                try await self
+                                                                    .verifyRefreshRecovery(
+                                                                        environment: environment,
+                                                                        profileIdentifier: profileIdentifier,
+                                                                        memory: memory,
+                                                                        pending: pending)
+                                                            }
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+                }
+            }
+        }
+    }
+
+    private func verifyRefreshRecovery(
+        environment: [String: String],
+        profileIdentifier: String,
+        memory: ClaudeOAuthCredentialsStore.MemoryCacheStore,
+        pending: ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore) async throws
+    {
+        try await ClaudeOAuthRefreshFailureGate.$shouldAttemptOverride.withValue(true) {
+            // The refresh completes even when the persistent cache rejects the write; the armed
+            // tombstone must keep a matching in-memory recovery or the next load drops the fresh
+            // credential.
+            try await KeychainCacheStore.withStoreFailureStatusOverrideForTesting(
+                errSecInteractionNotAllowed)
+            {
+                let refreshed = try await ClaudeOAuthCredentialsStore.refreshAccessToken(
+                    refreshToken: "synthetic-refresh-token",
+                    existingScopes: ["user:profile"],
+                    existingRateLimitTier: nil)
+                #expect(refreshed.accessToken == "synthetic-refreshed-token")
+                #expect(refreshed.refreshToken == "synthetic-rotated-refresh")
+            }
+            #expect(memory.record?.credentials.accessToken == "synthetic-refreshed-token")
+            let recovery = try #require(memory.rejectedWrite)
+            #expect(recovery.entry.profileIdentifier == profileIdentifier)
+            #expect(pending.isPending(profileIdentifier: profileIdentifier))
+
+            // Once the memory freshness window lapses, the next load must restore the recovered
+            // entry instead of degrading to missing credentials.
+            memory.timestamp = Date(timeIntervalSinceNow: -1860)
+            try KeychainAccessPreflight.withCheckGenericPasswordOverrideForTesting { _, _ in
+                Issue.record("Recovery must not probe the foreign Keychain item")
+                return .interactionRequired
+            } operation: {
+                let loaded = try ClaudeOAuthCredentialsStore.loadRecord(
+                    environment: environment,
+                    allowKeychainPrompt: false,
+                    respectKeychainPromptCooldown: true,
+                    allowClaudeKeychainRepairWithoutPrompt: false)
+                #expect(loaded.credentials.accessToken == "synthetic-refreshed-token")
+                #expect(loaded.source == .memoryCache)
+                #expect(loaded.owner == .codexbar)
+
+                #expect(!pending.isPending(profileIdentifier: profileIdentifier))
+                let key = ClaudeOAuthCredentialsStore.cacheKeyForTesting(profileIdentifier: profileIdentifier)
+                guard case let .found(entry) = KeychainCacheStore.load(
+                    key: key, as: ClaudeOAuthCredentialsStore.CacheEntry.self)
+                else {
+                    Issue.record("Recovered credentials must be persisted for subsequent refreshes")
+                    return
+                }
+                let persisted = try ClaudeOAuthCredentials.parse(data: entry.data)
+                #expect(persisted.accessToken == loaded.credentials.accessToken)
+                let persistedExpiry = try #require(persisted.expiresAt)
+                let loadedExpiry = try #require(loaded.credentials.expiresAt)
+                #expect(abs(persistedExpiry.timeIntervalSince(loadedExpiry)) < 0.01)
+                #expect(entry.owner == .codexbar)
+            }
+        }
+    }
+
     private final class GenerationRaceStore: ClaudeOAuthPendingCacheClearStore, @unchecked Sendable {
         let base = ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore()
         var invalidateAfterOperation = false
@@ -268,6 +394,66 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         \(expiryField)
         "scopes":["user:profile"]}}
         """.utf8)
+    }
+}
+
+private final class ClaudeOAuthRefreshRecoveryStubURLProtocol: URLProtocol {
+    private static let state = State()
+
+    static var handler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))? {
+        get { Self.state.handler }
+        set { Self.state.handler = newValue }
+    }
+
+    static func reset() {
+        self.state.reset()
+    }
+
+    override static func canInit(with request: URLRequest) -> Bool {
+        request.url?.host == "platform.claude.com" && request.url?.path == "/v1/oauth/token"
+    }
+
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let handler = Self.handler else {
+            self.client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        do {
+            let (response, data) = try handler(self.request)
+            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            self.client?.urlProtocol(self, didLoad: data)
+            self.client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            self.client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+
+    private final class State: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedHandler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?
+
+        var handler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))? {
+            get {
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                return self.storedHandler
+            }
+            set {
+                self.lock.lock()
+                self.storedHandler = newValue
+                self.lock.unlock()
+            }
+        }
+
+        func reset() {
+            self.handler = nil
+        }
     }
 }
 #endif
