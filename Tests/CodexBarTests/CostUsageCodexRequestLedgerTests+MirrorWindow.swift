@@ -526,6 +526,64 @@ extension CostUsageCodexRequestLedgerTests {
     }
 
     /// Near pairing needs the same known turn; files without turn evidence keep exact pairing only.
+    /// Two requests can share a saved-pricing key. If one was saved as unknown, the key cannot prove which request
+    /// its price belongs to, so the revision 9 reparse prices neither.
+    @Test(arguments: [false, true])
+    func `revision 8 reparse keeps a marker that shares its pricing key with a priced request`(bounded: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let start = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let end = try #require(ISO8601DateFormatter().date(from: Self.timestampC))
+        let usage = [1000, 200, 100, 40]
+        let file = try env.writeCodexSessionFile(
+            day: start,
+            filename: "colliding-keys.jsonl",
+            contents: env.jsonl(Self.header() + [
+                Self.record(id: "one", usage: usage, total: [1000, 200, 100, 40]),
+                Self.record(id: "two", usage: usage, total: [2000, 400, 200, 80]),
+            ]))
+        var options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"),
+            calendar: calendar)
+        options.refreshMinIntervalSeconds = 0
+        func report(_ now: Date) -> CostUsageDailyReport {
+            CostUsageScanner.loadDailyReport(provider: .codex, since: start, until: end, now: now, options: options)
+        }
+        #expect(report(end).summary?.totalTokens == 2200)
+
+        var stored = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot, calendar: calendar)
+        var usageFile = try #require(stored.files[file.path])
+        var rows = try #require(usageFile.codexRows)
+        try #require(rows.count == 2)
+        #expect(Set(rows.compactMap(CostUsageScanner.CodexSourcePricingKey.init)).count == 1)
+        rows[0].pricingMode = "priority"
+        rows[1].unpricedTokens = 1100
+        usageFile.codexRows = rows
+        usageFile.codexParserRevision = 8
+        stored.files[file.path] = usageFile
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: stored, calendar: calendar)
+            .catchUpRequired)
+        if bounded {
+            options.maxCodexScanBytesPerRefresh = usageFile.size / 2
+        }
+
+        var migrated: CostUsageFileUsage?
+        for pass in 1...20 {
+            _ = report(end.addingTimeInterval(Double(pass)))
+            migrated = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+                .files[file.path]
+            if migrated?.hasCurrentCodexParser == true, migrated?.codexScanComplete == true { break }
+        }
+        let migratedRows = try #require(migrated?.codexRows)
+        #expect(migrated?.hasCurrentCodexParser == true)
+        #expect(migratedRows.map(\.unpricedTokens) == [1100, 1100])
+        #expect(report(end.addingTimeInterval(30)).summary?.totalCostUSD == nil)
+    }
+
     @Test(arguments: [false, true])
     func `equal usage without a known turn remains distinct inside the mirror window`(ledgerFirst: Bool) throws {
         let env = try CostUsageTestEnvironment()
