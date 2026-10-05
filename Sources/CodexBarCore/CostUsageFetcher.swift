@@ -903,10 +903,23 @@ public struct CostUsageFetcher: Sendable {
                 {
                     staleSnapshotUpdatedAt = previous.updatedAt
                 } else {
-                    daily = view.dailyReport(range: range, cacheRoot: options.scanOptions.cacheRoot)
+                    let reportPreparation = view.codexReportPreparation(
+                        range: range,
+                        cacheRoot: options.scanOptions.cacheRoot)
+                    daily = view.dailyReport(
+                        range: range,
+                        cacheRoot: options.scanOptions.cacheRoot,
+                        reportPreparation: reportPreparation)
                     (projects, sessions) = Self.codexBreakdownsWithMetadata(
-                        view.sessions(range: range, cacheRoot: options.scanOptions.cacheRoot, roots: roots),
-                        projects: view.projects(range: range, cacheRoot: options.scanOptions.cacheRoot),
+                        view.sessions(
+                            range: range,
+                            cacheRoot: options.scanOptions.cacheRoot,
+                            roots: roots,
+                            reportPreparation: reportPreparation),
+                        projects: view.projects(
+                            range: range,
+                            cacheRoot: options.scanOptions.cacheRoot,
+                            reportPreparation: reportPreparation),
                         projectSessionIDs: view.projectSessionIDs(range: range),
                         sessionsRoot: roots.first,
                         environment: options.environment)

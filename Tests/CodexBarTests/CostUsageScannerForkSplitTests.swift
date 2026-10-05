@@ -610,6 +610,11 @@ struct CostUsageScannerForkSplitTests {
         #expect(project.modelBreakdowns?.first?.costUSD == nil)
         #expect(project.totalCostUSD == nil)
         #expect(project.totalTokens == 700_020)
+        let preparedProject = try #require(CostUsageScanner.buildCodexProjectBreakdownsFromCache(
+            cache: cache,
+            range: range,
+            reportPreparation: CostUsageScanner.CodexReportPreparation(cache: cache, range: range)).first)
+        #expect(preparedProject == project)
     }
 
     @Test

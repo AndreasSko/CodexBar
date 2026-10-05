@@ -3,6 +3,55 @@ import Testing
 @testable import CodexBarCore
 
 struct CostUsageCodexReportPricingWorkTests {
+    @Test
+    func `refresh projections reuse scoped report preparation`() throws {
+        let fixture = try Self.fixture(fileCount: 4, rowsPerFile: 16)
+        let catalog = ModelsDevCatalog(providers: [:])
+        let view = CostUsageStoreReadView(cache: fixture.cache, purpose: .report)
+        let roots = [URL(fileURLWithPath: "/synthetic", isDirectory: true)]
+        let preparation = CostUsageScanner.CodexReportPreparation(
+            cache: fixture.cache,
+            range: fixture.range,
+            modelsDevCatalog: catalog)
+
+        let daily = view.dailyReport(
+            range: fixture.range,
+            cacheRoot: nil,
+            reportPreparation: preparation)
+        let projects = view.projects(
+            range: fixture.range,
+            cacheRoot: nil,
+            reportPreparation: preparation)
+        let sessions = view.sessions(
+            range: fixture.range,
+            cacheRoot: nil,
+            roots: roots,
+            reportPreparation: preparation)
+
+        #expect(daily.summary?.totalTokens == 4 * 16 * 13)
+        #expect(projects.count == 1)
+        #expect(projects.first?.totalTokens == 4 * 16 * 13)
+        #expect(sessions.count == 4)
+        #expect(sessions.allSatisfy { $0.totalTokens == 16 * 13 })
+        let baselineDaily = CostUsageScanner.buildCodexReportFromCache(
+            cache: fixture.cache,
+            range: fixture.range,
+            modelsDevCatalog: catalog)
+        #expect(daily.data == baselineDaily.data)
+        #expect(daily.summary == baselineDaily.summary)
+        #expect(projects == CostUsageScanner.buildCodexProjectBreakdownsFromCache(
+            cache: fixture.cache,
+            range: fixture.range,
+            modelsDevCatalog: catalog))
+        #expect(sessions == CostUsageScanner.buildCodexSessionBreakdownsFromCache(
+            cache: fixture.cache,
+            range: fixture.range,
+            modelsDevCatalog: catalog,
+            sessionRoots: roots))
+        // One full report, one report per file, and one final report per project.
+        #expect(preparation.reportBuildCount == 1 + 4 + 1)
+    }
+
     @Test(arguments: [1, 16])
     func `report pricing work scales with models rather than rows or files`(fileCount: Int) throws {
         let fixture = try Self.fixture(fileCount: fileCount, rowsPerFile: 256)

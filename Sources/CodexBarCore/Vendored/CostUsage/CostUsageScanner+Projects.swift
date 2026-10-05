@@ -1,6 +1,67 @@
 import Foundation
 
 extension CostUsageScanner {
+    /// Shares report construction for the projections produced by one refresh.
+    ///
+    /// The cache key includes the projection scope because unknown pricing evidence and
+    /// fork reconciliation are scope-dependent. The detailed report history remains
+    /// refresh-local and is never persisted by this helper.
+    final class CodexReportPreparation: @unchecked Sendable {
+        enum Key: Hashable {
+            case full
+            case file(String)
+            case project(String)
+        }
+
+        private let range: CostUsageDayRange
+        private let modelsDevCatalog: ModelsDevCatalog
+        private let modelsDevCacheRoot: URL?
+        private let priorityTurns: [String: CodexPriorityTurnMetadata]
+        private let pricingResolver: CostUsagePricing.CodexResolver
+        private var reports: [Key: CostUsageDailyReport] = [:]
+
+        #if DEBUG
+        private(set) var reportBuildCount = 0
+        #endif
+
+        init(
+            cache: CostUsageCache,
+            range: CostUsageDayRange,
+            modelsDevCatalog: ModelsDevCatalog? = nil,
+            modelsDevCacheRoot: URL? = nil,
+            priorityTurns: [String: CodexPriorityTurnMetadata]? = nil,
+            modelsDevCatalogLoader: (URL?) -> ModelsDevCatalog? = {
+                CostUsagePricing.modelsDevCatalog(cacheRoot: $0)
+            })
+        {
+            self.range = range
+            self.modelsDevCacheRoot = modelsDevCacheRoot
+            self.priorityTurns = priorityTurns ?? cache.codexResolvedPriorityTurns ?? [:]
+            self.modelsDevCatalog = modelsDevCatalog
+                ?? modelsDevCatalogLoader(modelsDevCacheRoot)
+                ?? ModelsDevCatalog(providers: [:])
+            self.pricingResolver = CostUsagePricing.CodexResolver(catalog: self.modelsDevCatalog)
+        }
+
+        func report(key: Key, cache: CostUsageCache) -> CostUsageDailyReport {
+            if let report = self.reports[key] {
+                return report
+            }
+            let report = CostUsageScanner.buildCodexReportFromCache(
+                cache: cache,
+                range: self.range,
+                modelsDevCatalog: self.modelsDevCatalog,
+                modelsDevCacheRoot: self.modelsDevCacheRoot,
+                priorityTurns: self.priorityTurns,
+                pricingResolver: self.pricingResolver)
+            self.reports[key] = report
+            #if DEBUG
+            self.reportBuildCount += 1
+            #endif
+            return report
+        }
+    }
+
     static func codexCache(_ cache: CostUsageCache, scopedTo roots: [URL]) -> CostUsageCache {
         var scoped = cache
         scoped.files = cache.files.filter { filePath, _ in
@@ -20,15 +81,18 @@ extension CostUsageScanner {
         modelsDevCacheRoot: URL? = nil,
         sessionRoots: [URL]? = nil,
         priorityTurns: [String: CodexPriorityTurnMetadata]? = nil,
+        reportPreparation: CodexReportPreparation? = nil,
         modelsDevCatalogLoader: (URL?) -> ModelsDevCatalog? = {
             CostUsagePricing.modelsDevCatalog(cacheRoot: $0)
         }) -> [CostUsageSessionBreakdown]
     {
-        let priorityTurns = priorityTurns ?? cache.codexResolvedPriorityTurns ?? [:]
-        let resolvedModelsDevCatalog = modelsDevCatalog
-            ?? modelsDevCatalogLoader(modelsDevCacheRoot)
-            ?? ModelsDevCatalog(providers: [:])
-        let pricingResolver = CostUsagePricing.CodexResolver(catalog: resolvedModelsDevCatalog)
+        let preparation = reportPreparation ?? CodexReportPreparation(
+            cache: cache,
+            range: range,
+            modelsDevCatalog: modelsDevCatalog,
+            modelsDevCacheRoot: modelsDevCacheRoot,
+            priorityTurns: priorityTurns,
+            modelsDevCatalogLoader: modelsDevCatalogLoader)
         let projectPathResolver = CodexCanonicalProjectPathResolver()
         var latestFileBySessionID: [String: (path: String, usage: CostUsageFileUsage)] = [:]
 
@@ -57,12 +121,7 @@ extension CostUsageScanner {
             var fileCache = CostUsageCache()
             fileCache.files[file.path] = file.usage
             fileCache.days = file.usage.days
-            let report = Self.buildCodexReportFromCache(
-                cache: fileCache,
-                range: range,
-                modelsDevCatalog: resolvedModelsDevCatalog,
-                priorityTurns: priorityTurns,
-                pricingResolver: pricingResolver)
+            let report = preparation.report(key: .file(file.path), cache: fileCache)
             guard !report.data.isEmpty else { return nil }
 
             let summary = report.summary
@@ -100,17 +159,18 @@ extension CostUsageScanner {
         modelsDevCatalog: ModelsDevCatalog? = nil,
         modelsDevCacheRoot: URL? = nil,
         priorityTurns: [String: CodexPriorityTurnMetadata]? = nil,
+        reportPreparation: CodexReportPreparation? = nil,
         modelsDevCatalogLoader: (URL?) -> ModelsDevCatalog? = {
             CostUsagePricing.modelsDevCatalog(cacheRoot: $0)
         }) -> [CostUsageProjectBreakdown]
     {
-        let priorityTurns = priorityTurns ?? cache.codexResolvedPriorityTurns ?? [:]
-        // Project rollups build one report per cached session file. Resolve pricing once so every
-        // row does not fall back through ModelsDevCache.load and repeat filesystem metadata reads.
-        let resolvedModelsDevCatalog = modelsDevCatalog
-            ?? modelsDevCatalogLoader(modelsDevCacheRoot)
-            ?? ModelsDevCatalog(providers: [:])
-        let pricingResolver = CostUsagePricing.CodexResolver(catalog: resolvedModelsDevCatalog)
+        let preparation = reportPreparation ?? CodexReportPreparation(
+            cache: cache,
+            range: range,
+            modelsDevCatalog: modelsDevCatalog,
+            modelsDevCacheRoot: modelsDevCacheRoot,
+            priorityTurns: priorityTurns,
+            modelsDevCatalogLoader: modelsDevCatalogLoader)
         let projectPathResolver = CodexCanonicalProjectPathResolver()
         var accumulatorsByProjectPath: [String: CodexProjectBreakdownAccumulator] = [:]
         for (filePath, usage) in cache.files {
@@ -124,12 +184,7 @@ extension CostUsageScanner {
             var fileCache = CostUsageCache()
             fileCache.files[filePath] = usage
             fileCache.days = usage.days
-            let report = Self.buildCodexReportFromCache(
-                cache: fileCache,
-                range: range,
-                modelsDevCatalog: resolvedModelsDevCatalog,
-                priorityTurns: priorityTurns,
-                pricingResolver: pricingResolver)
+            let report = preparation.report(key: .file(filePath), cache: fileCache)
             guard !report.data.isEmpty else { continue }
             let projectKey = usage.canonicalProjectPath
                 ?? projectPathResolver.canonicalProjectPath(for: usage.projectPath)
@@ -147,12 +202,7 @@ extension CostUsageScanner {
             for usage in accumulator.files.values {
                 Self.applyFileDays(cache: &projectCache, fileDays: usage.days, sign: 1)
             }
-            let report = Self.buildCodexReportFromCache(
-                cache: projectCache,
-                range: range,
-                modelsDevCatalog: resolvedModelsDevCatalog,
-                priorityTurns: priorityTurns,
-                pricingResolver: pricingResolver)
+            let report = preparation.report(key: .project(projectPath), cache: projectCache)
             let resolvedPath = projectPath.isEmpty ? nil : projectPath
             return CostUsageProjectBreakdown(
                 name: Self.codexProjectName(path: resolvedPath),

@@ -51,6 +51,16 @@ struct CostUsageStoreReadView: Sendable {
         CostUsageScanner.requestedWindowExpandsCache(range: range, cache: self.cache)
     }
 
+    func codexReportPreparation(
+        range: CostUsageScanner.CostUsageDayRange,
+        cacheRoot: URL?) -> CostUsageScanner.CodexReportPreparation
+    {
+        CostUsageScanner.CodexReportPreparation(
+            cache: self.cache,
+            range: range,
+            modelsDevCacheRoot: cacheRoot)
+    }
+
     func historyCoverageIsEstablished(
         range: CostUsageScanner.CostUsageDayRange,
         rootsFingerprint: [String: Int64]) -> Bool
@@ -146,13 +156,28 @@ struct CostUsageStoreReadView: Sendable {
         return path.hasPrefix("/private/var/") ? String(path.dropFirst("/private".count)) : path
     }
 
-    func dailyReport(range: CostUsageScanner.CostUsageDayRange, cacheRoot: URL?) -> CostUsageDailyReport {
-        CostUsageScanner.buildCodexReportFromCache(cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
+    func dailyReport(
+        range: CostUsageScanner.CostUsageDayRange,
+        cacheRoot: URL?,
+        reportPreparation: CostUsageScanner.CodexReportPreparation? = nil) -> CostUsageDailyReport
+    {
+        if let reportPreparation {
+            return reportPreparation.report(key: .full, cache: self.cache)
+        }
+        return CostUsageScanner.buildCodexReportFromCache(
+            cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
     }
 
-    func projects(range: CostUsageScanner.CostUsageDayRange, cacheRoot: URL?) -> [CostUsageProjectBreakdown] {
+    func projects(
+        range: CostUsageScanner.CostUsageDayRange,
+        cacheRoot: URL?,
+        reportPreparation: CostUsageScanner.CodexReportPreparation? = nil) -> [CostUsageProjectBreakdown]
+    {
         CostUsageScanner.buildCodexProjectBreakdownsFromCache(
-            cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
+            cache: self.cache,
+            range: range,
+            modelsDevCacheRoot: cacheRoot,
+            reportPreparation: reportPreparation)
     }
 
     func projectSessionIDs(range: CostUsageScanner.CostUsageDayRange) -> [String: Set<String>] {
@@ -174,10 +199,15 @@ struct CostUsageStoreReadView: Sendable {
     func sessions(
         range: CostUsageScanner.CostUsageDayRange,
         cacheRoot: URL?,
-        roots: [URL]) -> [CostUsageSessionBreakdown]
+        roots: [URL],
+        reportPreparation: CostUsageScanner.CodexReportPreparation? = nil) -> [CostUsageSessionBreakdown]
     {
         CostUsageScanner.buildCodexSessionBreakdownsFromCache(
-            cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot, sessionRoots: roots)
+            cache: self.cache,
+            range: range,
+            modelsDevCacheRoot: cacheRoot,
+            sessionRoots: roots,
+            reportPreparation: reportPreparation)
     }
 
     func catchUpStatus(
