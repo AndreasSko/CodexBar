@@ -2,6 +2,10 @@
 
 ## 0.72.1 — Unreleased
 
+### Added
+
+- Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
