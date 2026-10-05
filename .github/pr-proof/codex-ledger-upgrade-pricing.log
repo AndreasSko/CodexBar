@@ -17,3 +17,7 @@ upgrade revision5->current ledgerFirst=true offsetMs=400: rows=3 markedUnpriced=
 upgrade revision5->current ledgerFirst=false offsetMs=400: rows=3 markedUnpriced=0 cleanScanCostUSD=0.732500 upgradedCostUSD=0.732500
 upgrade revision5->current ledgerFirst=true offsetMs=-350: rows=3 markedUnpriced=0 cleanScanCostUSD=0.732500 upgradedCostUSD=0.732500
 open 0.72.0 store (ed735dc27ffa70d9) with ledger markers, kept as unknown: rows=3 markedUnpriced=3 cleanScanCostUSD=0.732500 reportCostUSD=nil
+
+covered by: make test-fast FILTER='CostUsageRequestLedgerMigrationTests'
+  ('legacy upgrade keeps saved pricing when ledger and token count timestamps differ',
+   'adopting a 0_72_0 store keeps ledger only pricing markers through reopen')

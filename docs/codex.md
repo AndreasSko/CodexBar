@@ -357,7 +357,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     append-only log contract; identity changes, anchor mismatches, and unexplained same-size large-file edits invalidate pricing.
     Parser-revision upgrades use the same source validation to preserve matching historical prices when a file
     grows or a recovery scan is interrupted. Appended requests cannot borrow prices from the historical prefix,
-    and an invalidated pricing map remains invalid through subsequent upgrades. Native stores from 0.62.0's
+    and an invalidated pricing map remains invalid through subsequent upgrades. A saved unpriced request that shares
+    its pricing key with a priced request counts as conflicting saved pricing, so neither keeps an estimate. Native stores from 0.62.0's
     `865a444e01b818f1` fingerprint retain their history while individual files are reparsed with corrected accounting.
   - Fully read empty session fragments retain completion records even when another file contributes the same session.
     They contribute no usage and reparse from the start if they grow. Usage-bearing duplicates and incomplete fragments

@@ -237,9 +237,13 @@ extension CostUsageScanner {
         else { return nil }
 
         var pricing: [CodexSourcePricingKey: CodexPricingEvidence] = [:]
+        var unpricedKeys: Set<CodexSourcePricingKey> = []
         for row in rows where CostUsageDayRange.isInRange(
             dayKey: row.day, since: range.scanSinceKey, until: range.scanUntilKey)
         {
+            if row.unpricedTokens != nil, let key = CodexSourcePricingKey(row) {
+                unpricedKeys.insert(key)
+            }
             guard row.knownCostNanos == nil, row.unpricedTokens == nil,
                   let key = CodexSourcePricingKey(row),
                   let model = row.pricingModel, !model.isEmpty,
@@ -251,6 +255,9 @@ extension CostUsageScanner {
             }
             pricing[key] = evidence
         }
+        // A saved unknown price that shares a key with saved pricing cannot be told apart from it, so the
+        // evidence is conflicting rather than recoverable.
+        if !unpricedKeys.isDisjoint(with: pricing.keys) { return [:] }
         return pricing.isEmpty ? nil : pricing
     }
 
