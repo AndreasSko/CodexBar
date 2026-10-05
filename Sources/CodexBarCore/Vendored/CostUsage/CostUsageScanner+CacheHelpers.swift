@@ -94,6 +94,9 @@ extension CostUsageScanner {
         var hasUnstableTokenRows = false
         var hasTokenOverflow = false
         var hasIncompletePricing = false
+        /// Requests with tokens whose cost is known; marked or unresolvable requests are counted separately.
+        var pricedRequestCount = 0
+        var unpricedRequestCount = 0
 
         var optionalStandardCostUSD: Double? {
             self.sawStandardCost ? self.standardCostUSD : nil
@@ -120,13 +123,17 @@ extension CostUsageScanner {
             self.sawPriorityCost || self.priorityTokens > 0
         }
 
-        func isTrusted(canonicalTotalTokens: Int) -> Bool {
+        /// The rows account for exactly the group's billed tokens, so their per-request costs describe it.
+        func coversGroup(canonicalTotalTokens: Int) -> Bool {
             let (rowTokenTotal, overflow) = self.standardTokens.addingReportingOverflow(self.priorityTokens)
             return !self.hasUnstableTokenRows
                 && !self.hasTokenOverflow
-                && !self.hasIncompletePricing
                 && !overflow
                 && rowTokenTotal == canonicalTotalTokens
+        }
+
+        func isTrusted(canonicalTotalTokens: Int) -> Bool {
+            !self.hasIncompletePricing && self.coversGroup(canonicalTotalTokens: canonicalTotalTokens)
         }
     }
 
@@ -148,7 +155,8 @@ extension CostUsageScanner {
             if hasTokens, row.eventIndex == nil {
                 breakdown.hasUnstableTokenRows = true
             }
-            if (row.unpricedTokens ?? 0) > 0 {
+            let isMarkedUnpriced = (row.unpricedTokens ?? 0) > 0
+            if isMarkedUnpriced {
                 breakdown.hasIncompletePricing = true
             }
             let priorityMetadata = row.turnID.flatMap { priorityTurns[$0] }
@@ -162,7 +170,8 @@ extension CostUsageScanner {
                 breakdown.standardTokens = overflow ? breakdown.standardTokens : total
                 breakdown.hasTokenOverflow = breakdown.hasTokenOverflow || overflow
             }
-            guard let cost = self.codexResolvedCostUSD(
+            // Retained history without proven pricing stays unknown; current list prices are not its price.
+            guard !isMarkedUnpriced, let cost = self.codexResolvedCostUSD(
                 for: row,
                 priorityTurns: priorityTurns,
                 modelsDevCatalog: modelsDevCatalog,
@@ -171,8 +180,10 @@ extension CostUsageScanner {
                 pricingResolver: pricingResolver)
             else {
                 breakdown.hasIncompletePricing = breakdown.hasIncompletePricing || hasTokens
+                if hasTokens { breakdown.unpricedRequestCount += 1 }
                 continue
             }
+            if hasTokens { breakdown.pricedRequestCount += 1 }
             if isPriority {
                 breakdown.priorityCostUSD += cost
                 breakdown.sawPriorityCost = true
