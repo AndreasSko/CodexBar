@@ -65,7 +65,10 @@ public enum JetBrainsIDEDetector {
     }
 
     public static func detectLatestIDE() -> JetBrainsIDEInfo? {
-        let ides = self.detectInstalledIDEs()
+        self.latestIDE(in: self.detectInstalledIDEs())
+    }
+
+    static func latestIDE(in ides: [JetBrainsIDEInfo]) -> JetBrainsIDEInfo? {
         guard !ides.isEmpty else { return nil }
 
         let fileManager = FileManager.default

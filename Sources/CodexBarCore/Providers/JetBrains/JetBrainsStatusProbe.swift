@@ -104,13 +104,36 @@ public enum JetBrainsStatusProbeError: LocalizedError, Sendable, Equatable {
 
 public struct JetBrainsStatusProbe: Sendable {
     private let settings: ProviderSettingsSnapshot?
+    private let detectIDEs: @Sendable (_ includeMissingQuota: Bool) -> [JetBrainsIDEInfo]
+    private let readLogEntry: @Sendable (_ ideBasePath: String) -> JetBrainsQuotaLogReader.Entry?
 
     public init(settings: ProviderSettingsSnapshot? = nil) {
+        self.init(
+            settings: settings,
+            detectIDEs: { JetBrainsIDEDetector.detectInstalledIDEs(includeMissingQuota: $0) },
+            readLogEntry: {
+                JetBrainsQuotaLogReader.latestEntry(atPath: JetBrainsQuotaLogReader.logFilePath(forIDEBasePath: $0))
+            })
+    }
+
+    init(
+        settings: ProviderSettingsSnapshot?,
+        detectIDEs: @escaping @Sendable (_ includeMissingQuota: Bool) -> [JetBrainsIDEInfo],
+        readLogEntry: @escaping @Sendable (_ ideBasePath: String) -> JetBrainsQuotaLogReader.Entry?)
+    {
         self.settings = settings
+        self.detectIDEs = detectIDEs
+        self.readLogEntry = readLogEntry
     }
 
     public func fetch() async throws -> JetBrainsStatusSnapshot {
-        let (quotaFilePath, detectedIDE) = try self.resolveQuotaFilePath()
+        let quotaFilePath: String
+        let detectedIDE: JetBrainsIDEInfo?
+        do {
+            (quotaFilePath, detectedIDE) = try self.resolveQuotaFilePath()
+        } catch JetBrainsStatusProbeError.noIDEDetected {
+            return try self.logOnlySnapshot()
+        }
         let logEntry = self.latestLogEntry(quotaFilePath: quotaFilePath)
 
         let snapshot: JetBrainsStatusSnapshot
@@ -137,13 +160,23 @@ public struct JetBrainsStatusProbe: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let basePaths = hasCustomPath
             ? [selectedBasePath]
-            : [selectedBasePath] + JetBrainsIDEDetector.detectInstalledIDEs(includeMissingQuota: true).map(\.basePath)
+            : [selectedBasePath] + self.detectIDEs(true).map(\.basePath)
 
         return Set(basePaths)
-            .compactMap {
-                JetBrainsQuotaLogReader.latestEntry(atPath: JetBrainsQuotaLogReader.logFilePath(forIDEBasePath: $0))
-            }
+            .compactMap { self.readLogEntry($0) }
             .max { $0.timestamp < $1.timestamp }
+    }
+
+    /// Auto-detect with no quota XML anywhere: an IDE may still have logged its quota state.
+    private func logOnlySnapshot() throws -> JetBrainsStatusSnapshot {
+        let latest = self.detectIDEs(true)
+            .compactMap { ide in self.readLogEntry(ide.basePath).map { (ide: ide, entry: $0) } }
+            .max { $0.entry.timestamp < $1.entry.timestamp }
+        guard let latest else { throw JetBrainsStatusProbeError.noIDEDetected }
+        return JetBrainsStatusSnapshot(
+            quotaInfo: latest.entry.quotaInfo,
+            refillInfo: latest.entry.refillInfo,
+            detectedIDE: latest.ide)
     }
 
     /// The IDE persists the quota XML rarely; prefer the log when it was written after the XML.
@@ -169,7 +202,7 @@ public struct JetBrainsStatusProbe: Sendable {
             return (quotaPath, nil)
         }
 
-        guard let detectedIDE = JetBrainsIDEDetector.detectLatestIDE() else {
+        guard let detectedIDE = JetBrainsIDEDetector.latestIDE(in: self.detectIDEs(false)) else {
             throw JetBrainsStatusProbeError.noIDEDetected
         }
         return (detectedIDE.quotaFilePath, detectedIDE)

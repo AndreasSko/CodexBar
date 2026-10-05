@@ -1,6 +1,6 @@
-import CodexBarCore
 import Foundation
 import Testing
+@testable import CodexBarCore
 
 struct JetBrainsStatusProbeTests {
     @Test
@@ -390,5 +390,60 @@ struct JetBrainsStatusProbeTests {
         #expect(snapshot.quotaInfo.available == 654_000)
         #expect(abs(snapshot.quotaInfo.usedPercent - 34.6) < 0.001)
         #expect(abs(snapshot.quotaInfo.remainingPercent - 65.4) < 0.001)
+    }
+
+    @Test
+    func `auto-detect falls back to idea log when no IDE has a quota XML`() async throws {
+        let log = [
+            "2026-10-05 15:21:27,386 [1]   INFO - #c.i.m.l.c.q.QuotaManager2Impl - New quota refill state is: "
+                + "Known(next=2026-10-11T17:00:30.231Z, tariff=QuotaRefillInfoTariff(amount=1000000, duration=30d))",
+            "2026-10-05 15:27:49,811 [2]   INFO - #c.i.m.l.c.q.QuotaManager2Impl - New quota state is: "
+                + "Available(current=346495.294, maximum=6489986.397, until=2028-09-22T21:00:00Z, "
+                + "tariffQuota=QuotaDetails(current=346495.294, maximum=1000000, available=653504.706), "
+                + "topUpQuota=QuotaDetails(current=0, maximum=5489986.397, available=5489986.397))",
+        ].joined(separator: "\n")
+        let logEntry = try #require(JetBrainsQuotaLogReader.latestEntry(inLogContent: log))
+        let staleEntry = JetBrainsQuotaLogReader.Entry(
+            timestamp: logEntry.timestamp.addingTimeInterval(-3600),
+            quotaInfo: JetBrainsQuotaInfo(type: "Available", used: 0, maximum: 1_000_000, available: nil, until: nil),
+            refillInfo: nil)
+        let dataGrip = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: "/missing/DataGrip2026.2",
+            quotaFilePath: "/missing/DataGrip2026.2/options/AIAssistantQuotaManager2.xml")
+        let phpStorm = JetBrainsIDEInfo(
+            name: "PhpStorm",
+            version: "2026.2",
+            basePath: "/missing/PhpStorm2026.2",
+            quotaFilePath: "/missing/PhpStorm2026.2/options/AIAssistantQuotaManager2.xml")
+
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { includeMissingQuota in includeMissingQuota ? [dataGrip, phpStorm] : [] },
+            readLogEntry: { basePath in basePath == dataGrip.basePath ? logEntry : staleEntry })
+        let snapshot = try await probe.fetch()
+
+        #expect(snapshot.detectedIDE == dataGrip)
+        #expect(snapshot.quotaInfo.used == 346_495.294)
+        #expect(snapshot.quotaInfo.maximum == 1_000_000)
+        #expect(snapshot.refillInfo?.next == ISO8601DateParser.parse("2026-10-11T17:00:30.231Z"))
+    }
+
+    @Test
+    func `auto-detect without quota XML or log still reports no IDE`() async {
+        let ide = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: "/missing/DataGrip2026.2",
+            quotaFilePath: "/missing/DataGrip2026.2/options/AIAssistantQuotaManager2.xml")
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { includeMissingQuota in includeMissingQuota ? [ide] : [] },
+            readLogEntry: { _ in nil })
+
+        await #expect(throws: JetBrainsStatusProbeError.noIDEDetected) {
+            _ = try await probe.fetch()
+        }
     }
 }
