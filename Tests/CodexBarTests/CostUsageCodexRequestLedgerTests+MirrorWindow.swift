@@ -103,8 +103,8 @@ extension CostUsageCodexRequestLedgerTests {
 
     /// Revision 8 stored the offset-counter mirror as a second row. The revision 9 reparse drops it and keeps the
     /// ledger row's saved pricing, without rebuilding the store.
-    @Test
-    func `revision 8 duplicate mirror rows are removed by the reparse`() throws {
+    @Test(arguments: [false, true])
+    func `revision 8 duplicate mirror rows are removed by the reparse`(unpriced: Bool) throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
         var calendar = Calendar(identifier: .gregorian)
@@ -152,7 +152,14 @@ extension CostUsageCodexRequestLedgerTests {
             reasoning: ledger.reasoning,
             pricingModel: ledger.pricingModel,
             pricingMode: "standard")
-        usageFile.codexRows = [ledger, duplicate]
+        var duplicateRow = duplicate
+        if unpriced {
+            // A fully marked file has no saved price to retain; its rows must stay unknown, not current-priced.
+            ledger.unpricedTokens = 1100
+            duplicateRow.unpricedTokens = 1100
+            options.maxCodexScanBytesPerRefresh = usageFile.size / 2
+        }
+        usageFile.codexRows = [ledger, duplicateRow]
         usageFile.codexParserRevision = 8
         stored.files[file.path] = usageFile
         #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: stored, calendar: calendar)
@@ -163,14 +170,22 @@ extension CostUsageCodexRequestLedgerTests {
         for pass in 1...20 {
             _ = report(end.addingTimeInterval(Double(pass)))
             migrated = load()
-            if migrated?.hasCurrentCodexParser == true { break }
+            if migrated?.hasCurrentCodexParser == true, migrated?.codexScanComplete == true { break }
         }
         let rows = try #require(migrated?.codexRows)
         #expect(migrated?.hasCurrentCodexParser == true)
         #expect(rows.count == 1)
         #expect(rows.first?.responseID == "one")
-        #expect(rows.first?.pricingMode == "priority")
-        #expect(report(end.addingTimeInterval(30)).summary?.totalTokens == 1100)
+        // Saved Priority evidence is retained for priced rows; an unpriced row has no price to carry.
+        if !unpriced {
+            #expect(rows.first?.pricingMode == "priority")
+        }
+        #expect(rows.first?.unpricedTokens == (unpriced ? 1100 : nil))
+        let migratedReport = report(end.addingTimeInterval(30))
+        #expect(migratedReport.summary?.totalTokens == 1100)
+        if unpriced {
+            #expect(migratedReport.summary?.totalCostUSD == nil)
+        }
     }
 
     /// Real token_count payloads carry no turn_id; the active task supplies it, and a new task ends adjacency.
@@ -508,6 +523,24 @@ extension CostUsageCodexRequestLedgerTests {
         #expect(pass1.bufferedUnresolvedForkLines?.isEmpty == false)
         #expect(tokens(cold.rows) == 297)
         #expect(tokens(kept + pass2.rows) == 297)
+    }
+
+    /// Near pairing needs the same known turn; files without turn evidence keep exact pairing only.
+    @Test(arguments: [false, true])
+    func `equal usage without a known turn remains distinct inside the mirror window`(ledgerFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var ledger = Self.record(id: "one", usage: [100, 20, 10, 4], total: [100, 20, 10, 4])
+        var payload = try #require(ledger["payload"] as? [String: Any])
+        payload["turn_id"] = nil
+        ledger["payload"] = payload
+        let legacy = try Self.realLegacy(
+            timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 1000),
+            usage: [100, 20, 10, 4],
+            total: [200, 40, 20, 8])
+        let result = try Self.parse([Self.header()[0]] + (ledgerFirst ? [ledger, legacy] : [legacy, ledger]), env: env)
+        #expect(result.rows.count == 2)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220)
     }
 
     static func taskStarted(_ turnID: String) -> [String: Any] {

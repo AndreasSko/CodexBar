@@ -4182,9 +4182,11 @@ enum CostUsageScanner {
             total: CostUsageCodexTotals?,
             timestamp: String) -> CodexNearMirror?
         {
+            // Without a known turn, equal sizes close in time are not evidence of one request.
             guard requestLedger.nearMirrorsDisabled != true,
+                  let turnID, !turnID.isEmpty,
                   let timestampMs = unixMilliseconds(from: timestamp) else { return nil }
-            let key = [turnID ?? "", String(usage.input), String(usage.cached), String(usage.output)]
+            let key = [turnID, String(usage.input), String(usage.cached), String(usage.output)]
                 .joined(separator: "\u{1F}")
             return CodexNearMirror(key: key, timestampMs: timestampMs, total: total)
         }
