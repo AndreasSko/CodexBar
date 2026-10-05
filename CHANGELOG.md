@@ -2,6 +2,11 @@
 
 ## 0.72.1 — Unreleased
 
+### Changed
+
+- Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
+- Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
+
 ### Fixed
 
 - iCloud Sync: enable production push notifications for timely cross-Mac updates and reject release profiles missing the required capability (#4132). Thanks @h3x89!
