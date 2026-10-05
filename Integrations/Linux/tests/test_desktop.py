@@ -38,7 +38,7 @@ if args[0]=='cost':
 else:
  usage=state.get('usage',{'identity':{'accountEmail':'private@example.com'},
  'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':'2030-01-01T00:00:00Z'}})
- print(json.dumps([{'provider':provider,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels')}]))
+ print(json.dumps([{'provider':provider,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels'),'pace':state.get('pace')}]))
 ''')
         self.fake.chmod(0o755)
         self.log = (self.root / 'desktop.log').open('w+')
@@ -170,6 +170,30 @@ else:
         self.assertEqual(windows[0]['key'], 'secondary')
         self.assertEqual(windows[0]['label'], 'Rate limit')
         self.assertEqual(windows[0]['remaining'], 80)
+
+    def test_panel_details_reach_snapshot_without_identity(self):
+        (self.root / 'state.json').write_text(json.dumps({
+            'usage': {'identity': {'accountEmail': 'private@example.com', 'loginMethod': 'Max'},
+                      'primary': {'usedPercent': 25, 'windowMinutes': 300},
+                      'providerCost': {'period': 'Extra usage', 'currencyCode': 'Credits', 'balance': 500, 'used': 0},
+                      'codexResetCredits': {'availableCount': 2, 'credits': [
+                          {'id': 'private-credit-id', 'status': 'available', 'expires_at': '2030-02-01T00:00:00Z'},
+                          {'id': 'private-credit-id', 'status': 'available', 'expires_at': '2030-01-01T00:00:00Z'}]}},
+            'pace': {'primary': {'summary': 'On pace', 'expectedUsedPercent': 30}}
+        }))
+        self.client('--configure', '{"provider":"claude"}')
+        value = self.wait_for(lambda value: value.get('entries') and not value['busy']
+                              and value['entries'][0].get('plan') == 'Max')
+        entry = value['entries'][0]
+        self.assertEqual(entry['windows'][0]['paceExpected'], 30)
+        self.assertEqual(entry['extraUsage']['balance'], 500)
+        self.assertEqual(entry['resetCredits'], {'available': 2, 'nextExpiresAt': '2030-01-01T00:00:00Z'})
+        self.assertNotIn('private-credit-id', json.dumps(value))
+        self.assertEqual(value['spending'], [])
+        self.assertNotIn('private@example.com', json.dumps(value))
+        self.client('--snapshot', '--with-spending')
+        value = self.wait_for(lambda value: bool(value.get('spending')))
+        self.assertEqual(value['spending'][0]['month'], 12)
 
     def test_invalid_config_is_not_overwritten(self):
         self.client('--quit')

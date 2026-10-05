@@ -57,7 +57,8 @@ function rows(text, showIdentity) {
             var label = (copy && displayText(copy.title, false).trim()) ||
                 cadenceLabel(window.windowMinutes) || safeLabel || ["Session", "Weekly", "Additional"][index];
             windows.push({key: copy ? "extra:" + copy.id : key, label: label, remaining: left,
-                resetsAt: window.resetsAt || "", pace: entry.pace && entry.pace[key] ? String(entry.pace[key].summary || "") : ""});
+                resetsAt: window.resetsAt || "", pace: entry.pace && entry.pace[key] ? String(entry.pace[key].summary || "") : "",
+                paceExpected: entry.pace && entry.pace[key] ? number(entry.pace[key].expectedUsedPercent) : null});
         });
         // Extras come last: a consumer resolving a cadence by first match must still find the
         // provider's general window rather than a lane scoped to one model.
@@ -69,7 +70,7 @@ function rows(text, showIdentity) {
             var label = displayText(extra.title, false).trim() ||
                 cadenceLabel(scopedWindow.windowMinutes) || "Additional";
             windows.push({key: "extra:" + extra.id, label: label,
-                remaining: remaining(scopedWindow), resetsAt: scopedWindow.resetsAt || "", pace: ""});
+                remaining: remaining(scopedWindow), resetsAt: scopedWindow.resetsAt || "", pace: "", paceExpected: null});
         });
         return {
             provider: entry.provider,
@@ -89,6 +90,8 @@ function rows(text, showIdentity) {
             windows: windows,
             updatedAt: usage.updatedAt || "",
             credits: entry.credits && typeof entry.credits.remaining === "number" ? entry.credits.remaining : null,
+            extraUsage: providerCost(usage.providerCost),
+            resetCredits: resetCredits(usage.codexResetCredits),
             error: entry.error ? "Usage unavailable. Check this provider’s CodexBar login/configuration." :
                 windows.length ? "" : "No quota windows reported."
         };
@@ -123,6 +126,23 @@ function chart(value) {
     }).map(function(point) { return {label: String(point.label || ""), value: point.value}; });
     return {title: String(value.title || ""), unit: String(value.unit || ""),
         kind: value.kind === "line" ? "line" : "bars", points: points};
+}
+
+// Codex grants one-time rate-limit resets; export the count and the soonest expiry only.
+function resetCredits(value) {
+    if (!value || typeof value !== "object" || number(value.availableCount) === null) return null;
+    var expiries = (Array.isArray(value.credits) ? value.credits : []).filter(function(credit) {
+        return credit && credit.status === "available" && isFinite(Date.parse(credit.expires_at));
+    }).map(function(credit) { return credit.expires_at; }).sort();
+    return {available: value.availableCount, nextExpiresAt: expiries.length ? expiries[0] : ""};
+}
+
+// Extra usage or prepaid balance reported beside quota windows; amounts only, no identity.
+function providerCost(value) {
+    if (!value || typeof value !== "object") return null;
+    var result = {period: displayText(value.period, false).trim(), currency: displayText(value.currencyCode, false).trim(),
+        used: number(value.used), limit: number(value.limit), balance: number(value.balance)};
+    return result.used === null && result.limit === null && result.balance === null ? null : result;
 }
 
 function number(value) { return typeof value === "number" && isFinite(value) ? value : null; }
