@@ -399,7 +399,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   pairs this way. Bare usage lines are counted when read, so one read while earlier subagent observations are still
   buffered leaves the rest of that file with exact pairing only. When a fork's parent resolves only in a later scan
   pass, a drifted pair not already paired before that pass can remain two rows, as before revision 9.
-  Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices.
+  Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices; a file with
+  saved unpriced rows and no reusable saved prices is reparsed with its rows unpriced rather than at current prices.
   Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while

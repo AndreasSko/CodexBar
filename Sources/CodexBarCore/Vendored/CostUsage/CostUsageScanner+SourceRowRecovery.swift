@@ -237,9 +237,11 @@ extension CostUsageScanner {
         else { return nil }
 
         var pricing: [CodexSourcePricingKey: CodexPricingEvidence] = [:]
+        var hasUnpricedRow = false
         for row in rows where CostUsageDayRange.isInRange(
             dayKey: row.day, since: range.scanSinceKey, until: range.scanUntilKey)
         {
+            hasUnpricedRow = hasUnpricedRow || row.unpricedTokens != nil
             guard row.knownCostNanos == nil, row.unpricedTokens == nil,
                   let key = CodexSourcePricingKey(row),
                   let model = row.pricingModel, !model.isEmpty,
@@ -251,7 +253,9 @@ extension CostUsageScanner {
             }
             pricing[key] = evidence
         }
-        return pricing.isEmpty ? nil : pricing
+        // Saved unknown prices are evidence too: an empty map keeps them unpriced instead of current-priced.
+        if pricing.isEmpty { return hasUnpricedRow ? [:] : nil }
+        return pricing
     }
 
     static func codexRowsWithSourceRecoveryPricing(
