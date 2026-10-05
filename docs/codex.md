@@ -394,10 +394,12 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   establish that they are mirrors. When Codex's token_count counter has diverged from the thread counter, for example
   after a resume, adjacent observations from the same turn with identical input, cached, and output tokens at most
   five seconds apart are one request. A ledger record whose token_count follows a long tool run also pairs when both
-  counters keep the offset learned from the previous pair; a token_count written before its ledger record pairs only
-  inside the window. A resumed session between two observations keeps them distinct, and a replayed response never
-  pairs this way. Bare usage lines are counted when read, so one read while earlier subagent observations are still
-  buffered leaves the rest of that file with exact pairing only. When a fork's parent resolves only in a later scan
+  counters keep the offset learned from the previous pair. Neither rule applies when the second observation's counter
+  advanced by more than its usage since that counter's previous observation, which shows another request in between. A
+  token_count written before its ledger record pairs only inside the window. A resumed session between two
+  observations keeps them distinct, and a replayed response never pairs this way. Bare usage lines are counted when
+  read, so one read while earlier subagent observations are still buffered leaves the rest of that file with exact
+  pairing only. When a fork's parent resolves only in a later scan
   pass, a drifted pair not already paired before that pass can remain two rows, as before revision 9.
   Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices; a file with
   saved unpriced rows and no reusable saved prices is reparsed with its rows unpriced rather than at current prices.

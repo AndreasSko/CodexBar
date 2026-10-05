@@ -403,6 +403,10 @@ enum CostUsageScanner {
         /// Set when bare usage is counted while an earlier subagent observation is still buffered. The buffer is
         /// processed later without that separator, so the rest of the file keeps exact pairing only.
         var nearMirrorsDisabled: Bool?
+        /// Each side's latest cumulative counter. When the second observation of a near pair advanced its counter by
+        /// more than its own usage, that counter saw another request in between, so the pair is two requests.
+        var lastLedgerTotal: CostUsageCodexTotals?
+        var lastLegacyTotal: CostUsageCodexTotals?
         var countedUsage: CostUsageCodexTotals?
 
         mutating func clearPendingMirrors(when shouldClear: Bool = true) {
@@ -415,14 +419,19 @@ enum CostUsageScanner {
             self.pendingLegacyNearMirror = nil
         }
 
-        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?, near: CodexNearMirror?) {
+        mutating func beginLegacyObservation(
+            keys: Set<String>?,
+            snapshot: String?,
+            near: CodexNearMirror?,
+            continuous: Bool)
+        {
             defer { self.clearPendingMirrors() }
             guard let keys, let pending = self.pendingLedgerMirrors,
                   let snapshot, let responseID = self.pendingLedgerResponseID else { return }
             let ledger = self.pendingLedgerNearMirror
             let offset = CodexNearMirror.counterOffset(ledger: ledger, legacy: near)
-            let pairsNear = near?.isWithinWindow(of: ledger) == true
-                || (near?.key == ledger?.key && offset != nil && offset == self.mirrorCounterOffset)
+            let pairsNear = continuous && (near?.isWithinWindow(of: ledger) == true
+                || (near?.key == ledger?.key && offset != nil && offset == self.mirrorCounterOffset))
             guard !keys.isDisjoint(with: pending) || pairsNear else { return }
             self.rememberMirrors([snapshot], responseID: responseID)
             if let offset { self.mirrorCounterOffset = offset }
@@ -4191,6 +4200,18 @@ enum CostUsageScanner {
             return CodexNearMirror(key: key, timestampMs: timestampMs, total: total)
         }
 
+        /// False when a counter advanced by more than this request's usage since its side's previous observation.
+        func advancesByOnly(
+            _ usage: CostUsageCodexTotals,
+            from previous: CostUsageCodexTotals?,
+            to total: CostUsageCodexTotals?) -> Bool
+        {
+            guard let previous, let total else { return true }
+            return total.input - previous.input <= usage.input
+                && total.cached - previous.cached <= usage.cached
+                && total.output - previous.output <= usage.output
+        }
+
         func observeLegacyMirror(
             usage: CostUsageCodexTotals?,
             turnID: String?,
@@ -4201,7 +4222,9 @@ enum CostUsageScanner {
             let snapshot = mirrorKey(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
             let adjacent = adjacentMirrorKeys(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
             let near = nearMirror(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
-            requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot, near: near)
+            let continuous = advancesByOnly(usage, from: requestLedger.lastLegacyTotal, to: total)
+            if let total { requestLedger.lastLegacyTotal = total }
+            requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot, near: near, continuous: continuous)
             return (snapshot, adjacent, near)
         }
 
@@ -4229,11 +4252,14 @@ enum CostUsageScanner {
             let adjacentKeys = adjacentMirrorKeys(
                 turnID: turnID, usage: usage, total: record.threadTotal, timestamp: timestamp)
             let near = nearMirror(turnID: turnID, usage: usage, total: record.threadTotal, timestamp: timestamp)
+            let continuous = advancesByOnly(usage, from: requestLedger.lastLedgerTotal, to: record.threadTotal)
+            // A replay carries an earlier counter, so it never moves the continuity baseline.
+            if !isReplay { requestLedger.lastLedgerTotal = record.threadTotal }
             // A token_count written before its ledger record pairs only inside the window; the distinct-request
             // protection for equal sizes depends on that order.
             // A replay is already counted, so it never claims a different request by size and time alone.
             let adjacentIndex = requestLedger.pendingLegacyMirrors?.isDisjoint(with: adjacentKeys) == false
-                || (!isReplay && near?.isWithinWindow(of: requestLedger.pendingLegacyNearMirror) == true)
+                || (!isReplay && continuous && near?.isWithinWindow(of: requestLedger.pendingLegacyNearMirror) == true)
                 ? requestLedger.pendingLegacyRowIndex : nil
             if adjacentIndex != nil,
                let offset = CodexNearMirror.counterOffset(ledger: near, legacy: requestLedger.pendingLegacyNearMirror)

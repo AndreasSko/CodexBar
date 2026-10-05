@@ -526,6 +526,65 @@ extension CostUsageCodexRequestLedgerTests {
     }
 
     /// Near pairing needs the same known turn; files without turn evidence keep exact pairing only.
+    /// After an exact pair, a legacy-only and a ledger-only request of equal size can land milliseconds apart. The
+    /// later counter advances by both requests, so the two are distinct even inside the window, including through
+    /// the revision 8 reparse.
+    @Test(arguments: [false, true])
+    func `a counter that advances past its usage keeps equal requests distinct`(ledgerFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let start = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let end = try #require(ISO8601DateFormatter().date(from: Self.timestampC))
+        let usage = [100, 20, 10, 4]
+        let first = try Self.timestamp(Self.timestampA, plusMilliseconds: 1000)
+        let second = try Self.timestamp(Self.timestampA, plusMilliseconds: 1002)
+        let onlyLedger = Self.record(
+            id: "two", timestamp: ledgerFirst ? first : second, usage: usage, total: ledgerFirst
+                ? [200, 40, 20, 8] : [300, 60, 30, 12])
+        let onlyLegacy = Self.legacy(
+            timestamp: ledgerFirst ? second : first, usage: usage, total: ledgerFirst
+                ? [300, 60, 30, 12] : [200, 40, 20, 8])
+        let file = try env.writeCodexSessionFile(
+            day: start,
+            filename: "continuity.jsonl",
+            contents: env.jsonl(Self.header() + [
+                Self.record(id: "one", usage: usage, total: usage),
+                Self.legacy(timestamp: Self.timestampA, usage: usage, total: usage),
+            ] + (ledgerFirst ? [onlyLedger, onlyLegacy] : [onlyLegacy, onlyLedger])))
+        var options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"),
+            calendar: calendar)
+        options.refreshMinIntervalSeconds = 0
+        func report(_ now: Date) -> CostUsageDailyReport {
+            CostUsageScanner.loadDailyReport(provider: .codex, since: start, until: end, now: now, options: options)
+        }
+        func load() -> CostUsageFileUsage? {
+            CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar).files[file.path]
+        }
+        #expect(report(end).summary?.totalTokens == 330)
+        #expect(load()?.codexRows?.count == 3)
+
+        var stored = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot, calendar: calendar)
+        var usageFile = try #require(stored.files[file.path])
+        usageFile.codexParserRevision = 8
+        stored.files[file.path] = usageFile
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: stored, calendar: calendar)
+            .catchUpRequired)
+        var migrated: CostUsageFileUsage?
+        for pass in 1...20 {
+            _ = report(end.addingTimeInterval(Double(pass)))
+            migrated = load()
+            if migrated?.hasCurrentCodexParser == true, migrated?.codexScanComplete == true { break }
+        }
+        #expect(migrated?.hasCurrentCodexParser == true)
+        #expect(migrated?.codexRows?.count == 3)
+        #expect(report(end.addingTimeInterval(30)).summary?.totalTokens == 330)
+    }
+
     /// Two requests can share a saved-pricing key. If one was saved as unknown, the key cannot prove which request
     /// its price belongs to, so the revision 9 reparse prices neither.
     @Test(arguments: [false, true])
