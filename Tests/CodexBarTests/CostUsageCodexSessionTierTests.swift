@@ -48,14 +48,14 @@ struct CostUsageCodexSessionTierTests {
         defer { env.cleanup() }
         let day = try env.makeLocalNoon(year: 2026, month: 9, day: 10)
         let timestamp = env.isoString(for: day)
-        let prefix = env.jsonl([
+        let prefix = try env.jsonl([
             ["type": "session_meta", "timestamp": timestamp, "payload": ["id": "tier-checkpoint"]],
             ["type": "event_msg", "timestamp": timestamp, "payload": [
                 "type": "thread_settings_applied",
                 "thread_settings": ["service_tier": "priority"],
             ]],
         ])
-        let suffix = env.jsonl([
+        let suffix = try env.jsonl([
             [
                 "type": "event_msg",
                 "timestamp": timestamp,
@@ -68,13 +68,13 @@ struct CostUsageCodexSessionTierTests {
             ]],
         ])
         let file = env.root.appendingPathComponent("tier-checkpoint.jsonl")
-        try prefix.write(to: file)
+        try prefix.write(to: file, atomically: true, encoding: .utf8)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let first = CostUsageScanner.parseCodexFile(fileURL: file, range: range)
         #expect(first.serviceTierState?.pending == "priority")
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
-        try handle.write(contentsOf: suffix)
+        try handle.write(contentsOf: Data(suffix.utf8))
         try handle.close()
         let second = CostUsageScanner.parseCodexFile(
             fileURL: file,
