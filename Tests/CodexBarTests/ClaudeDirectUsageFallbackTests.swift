@@ -64,12 +64,13 @@ struct ClaudeDirectUsageFallbackTests {
             #expect(!invocations.contains("secret-env"))
             #expect(!invocations.contains("remote-registration-would-occur"))
             #expect(self.log.arguments(for: "direct") == [
-                "--strict-mcp-config", "--settings", #"{"remoteControlAtStartup":false}"#, "/usage",
+                "--strict-mcp-config",
+                "--settings", #"{"remoteControlAtStartup":false,"disableAllHooks":true}"#, "/usage",
             ])
             let ptyArguments = self.log.arguments(for: "pty")
             #expect(Array(ptyArguments.dropLast()) == [
                 "--allowed-tools", "", "--strict-mcp-config",
-                "--settings", #"{"remoteControlAtStartup":false}"#, "--session-id",
+                "--settings", #"{"remoteControlAtStartup":false,"disableAllHooks":true}"#, "--session-id",
             ])
             let sessionID = try #require(ptyArguments.last)
             #expect(UUID(uuidString: sessionID) != nil)
@@ -220,8 +221,9 @@ struct ClaudeDirectUsageFallbackTests {
         done
         REMOTE_CONTROL_DISABLED=0
         EXPECT_SETTINGS=0
+        PROBE_SETTINGS='{"remoteControlAtStartup":false,"disableAllHooks":true}'
         for argument in "$@"; do
-          if [ "$EXPECT_SETTINGS" = "1" ] && [ "$argument" = '{"remoteControlAtStartup":false}' ]; then
+          if [ "$EXPECT_SETTINGS" = "1" ] && [ "$argument" = "$PROBE_SETTINGS" ]; then
             REMOTE_CONTROL_DISABLED=1
           fi
           EXPECT_SETTINGS=0
