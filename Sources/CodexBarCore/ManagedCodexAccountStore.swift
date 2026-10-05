@@ -22,6 +22,19 @@ public struct FileManagedCodexAccountStore: ManagedCodexAccountStoring, @uncheck
     }
 
     public func loadAccounts() throws -> ManagedCodexAccountSet {
+        let accounts = try self.readAccountSet()
+        return accounts.version == Self.currentVersion
+            ? ManagedCodexAccountSet(version: accounts.version, accounts: accounts.accounts)
+            : self.migrateLegacyAccounts(accounts)
+    }
+
+    /// Reads metadata without hydrating legacy fields from credential files or writing migrations.
+    public func loadAccountMetadata() throws -> ManagedCodexAccountSet {
+        let accounts = try self.readAccountSet()
+        return ManagedCodexAccountSet(version: accounts.version, accounts: accounts.accounts)
+    }
+
+    private func readAccountSet() throws -> ManagedCodexAccountSet {
         guard self.fileManager.fileExists(atPath: self.fileURL.path) else {
             return Self.emptyAccountSet()
         }
@@ -32,10 +45,7 @@ public struct FileManagedCodexAccountStore: ManagedCodexAccountStoring, @uncheck
         guard (1...Self.currentVersion).contains(accounts.version) else {
             throw FileManagedCodexAccountStoreError.unsupportedVersion(accounts.version)
         }
-        if accounts.version == Self.currentVersion {
-            return ManagedCodexAccountSet(version: Self.currentVersion, accounts: accounts.accounts)
-        }
-        return self.migrateLegacyAccounts(accounts)
+        return accounts
     }
 
     public func storeAccounts(_ accounts: ManagedCodexAccountSet) throws {
@@ -100,14 +110,15 @@ public struct FileManagedCodexAccountStore: ManagedCodexAccountStoring, @uncheck
     }
 
     public static func defaultURL() -> URL {
-        if CodexCredentialFileAccess.isTestContext {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let url = base
+            .appendingPathComponent("CodexBar", isDirectory: true)
+            .appendingPathComponent("managed-codex-accounts.json")
+        if CodexCredentialFileAccess.isTestContext, !CodexCredentialFileAccess.permits(url) {
             return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
                 .appendingPathComponent("managed-codex-accounts.json")
         }
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        return base
-            .appendingPathComponent("CodexBar", isDirectory: true)
-            .appendingPathComponent("managed-codex-accounts.json")
+        return url
     }
 }
