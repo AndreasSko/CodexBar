@@ -54,6 +54,40 @@ final class SpendDashboardScreenshotRenderTests: XCTestCase {
         }
     }
 
+    func test_renderBrandIconScreenshots() throws {
+        guard let dir = ProcessInfo.processInfo.environment["CODEXBAR_BRAND_ICON_PROOF_DIR"] else {
+            throw XCTSkip("Set CODEXBAR_BRAND_ICON_PROOF_DIR to render synthetic brand icon proof.")
+        }
+        let directory = URL(fileURLWithPath: dir, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let now = try XCTUnwrap(Self.gmtCalendar.date(from: DateComponents(year: 2026, month: 9, day: 30)))
+        let providers: [UsageProvider] = [.claude, .codex, .cursor, .antigravity, .mistral, .muse, .bedrock, .vertexai]
+        let inputs = providers.map { provider in
+            SpendDashboardModel.ProviderInput(
+                provider: provider,
+                displayName: ProviderDescriptorRegistry.descriptor(for: provider).metadata.displayName,
+                snapshot: Self.snapshot(
+                    entries: [Self.entry(day: "2026-09-30", cost: 1.25, tokens: 42000, model: "example-test-model")],
+                    historyDays: 30,
+                    now: now))
+        }
+        let model = SpendDashboardModel.build(
+            inputs: inputs, requestedDays: 30, now: now, calendar: Self.gmtCalendar)
+        let group = try XCTUnwrap(model.groups.first)
+        for dark in [false, true] {
+            let view = AnyView(SpendProviderBreakdownRows(group: group)
+                .padding(24)
+                .frame(width: 760)
+                .environment(\.colorScheme, dark ? .dark : .light)
+                .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+                .tint(.purple)
+                .background(dark ? Color(red: 0.12, green: 0.12, blue: 0.12) : .white))
+            let data = try XCTUnwrap(Self.pngData(for: view, appearance: dark ? .darkAqua : .aqua))
+            try data
+                .write(to: directory.appendingPathComponent(dark ? "brand-icons-dark.png" : "brand-icons-light.png"))
+        }
+    }
+
     func test_renderCostHistoryPrivacyScreenshots() throws {
         guard let dir = ProcessInfo.processInfo.environment["CODEXBAR_COST_PRIVACY_PROOF_DIR"] else {
             throw XCTSkip("Set CODEXBAR_COST_PRIVACY_PROOF_DIR to render synthetic cost-history privacy proof.")
@@ -461,9 +495,9 @@ final class SpendDashboardScreenshotRenderTests: XCTestCase {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private static func pngData(for view: AnyView) -> Data? {
+    private static func pngData(for view: AnyView, appearance: NSAppearance.Name = .aqua) -> Data? {
         let hosting = NSHostingView(rootView: view)
-        hosting.appearance = NSAppearance(named: .aqua)
+        hosting.appearance = NSAppearance(named: appearance)
         let size = hosting.fittingSize
         guard size.width > 0, size.height > 0 else { return nil }
         hosting.frame = CGRect(origin: .zero, size: size)
@@ -473,7 +507,7 @@ final class SpendDashboardScreenshotRenderTests: XCTestCase {
             styleMask: [.borderless],
             backing: .buffered,
             defer: false)
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: appearance)
         window.contentView = hosting
         window.layoutIfNeeded()
         hosting.layoutSubtreeIfNeeded()

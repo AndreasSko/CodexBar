@@ -1,0 +1,66 @@
+---
+summary: "Usage & Spend brand artwork provenance and monochrome rendering boundaries."
+read_when:
+  - Adding or updating colored provider artwork
+  - Changing Usage & Spend icon presentation
+---
+
+# Usage & Spend provider artwork
+
+Provider and subscription rows request `ProviderBrandIcon.Style.brand`. Model rows explicitly request
+`.monochrome`, with the primary foreground color (black in light appearance, white in dark appearance).
+Menu bar and settings callers retain the default monochrome rendering.
+
+`Brand-ProviderIcon-*` assets are opt-in. They preserve their stored fills, masks and gradients;
+SwiftUI must render them as original images, without applying the configurable chart accent color.
+Brand and monochrome requests have separate cached NSImage instances.
+
+If no curated asset exists, or it cannot be decoded, use the existing adaptive template. Existing
+provider SVGs often contain white silhouettes and must not simply be switched to original rendering.
+This fallback does not assert that the provider has an officially monochrome-only identity.
+The OpenCodex source retains its existing branch symbol.
+
+## Sources
+
+Reviewed 2026-10-01; Antigravity PNG and cloud icons verified 2026-10-06.
+These files identify the corresponding third-party products; their marks remain
+the property of their owners. Colors are not sampled from screenshots or chosen from chart palettes.
+
+| Asset | Primary source | Local transformation |
+| --- | --- | --- |
+| Claude | [Anthropic brand guidelines](https://github.com/anthropics/skills/blob/8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4/skills/brand-guidelines/SKILL.md) | Existing bundled silhouette, replacing white with the documented primary accent `#D97757`. This is a palette-backed variant, not an unmodified logo download. |
+| Antigravity | [Official homepage PNG](https://antigravity.google/assets/image/antigravity-logo.png) | Unmodified transparent PNG. Native SVG decoding flattens the homepage's blurred gradient, so use the official raster asset. |
+| Mistral | [Official homepage](https://mistral.ai/) header SVG; [brand page](https://mistral.ai/brand/) | Preserved all five path fills; adjusted square viewBox for padding. |
+| Muse Code / Meta | [Official developer site asset](https://dev.meta.ai/logo/meta-logo-with-text.svg) | Removed wordmark paths; retained the Meta symbol and gradients. Adjusted square viewBox for padding. |
+| Bedrock | [AWS architecture icon library](https://aws.amazon.com/architecture/icons/), `Icon-package_07312026`, `Arch_Amazon-Bedrock_64.svg` | Preserved the official colored background and white glyph; expanded viewBox for transparent padding. |
+| Vertex AI | [Google Cloud icon library](https://cloud.google.com/icons), `core-products-icons.zip`, `VertexAI-512-color.svg` | Unmodified vector artwork, including the original transparent padding. |
+
+When adding another brand, verify artwork against a primary source and document the transformation
+here before enabling original rendering. Do not infer a brand color from provider progress-bar colors.
+
+## Checksums
+
+SHA-256 pins the reviewed local bytes; a later asset update should update this table and the source notes.
+
+| File | SHA-256 |
+| --- | --- |
+| `Brand-ProviderIcon-antigravity.png` | `193ba1805de11c23cd0c7a1df92aa0a886708e57350f6f7766100afe5befed73` |
+| `Brand-ProviderIcon-bedrock.svg` | `6a0f3817d771064f3d4cb8687e415417c9abccb3930b049bb8c2643f787ec224` |
+| `Brand-ProviderIcon-claude.svg` | `4cd39a3832c842390c21a6598dba20d4db91632a978cb34e39aa1659fe88fe5c` |
+| `Brand-ProviderIcon-mistral.svg` | `13e29ba8fa7a2a01a3086b1cf6601e72fd389ffaac3139ccd95f046cc6f53524` |
+| `Brand-ProviderIcon-muse.svg` | `b49f20f0738c318be02177b1823bc702c6007fe9c0ec20bba8641454cff20bd3` |
+| `Brand-ProviderIcon-vertexai.svg` | `17922247f3110026fd637c531d0604c67a00c9a58a6e152030f2242b9fd48a8e` |
+
+## Validation
+
+`ProviderIconResourcesTests` verifies independent caches in both load orders, adaptive fallback and
+actual colored pixels in decoded assets, including warm/green Antigravity pixels. Render synthetic light/dark UI proof with:
+
+```sh
+source Scripts/test_environment.sh
+CODEXBAR_BRAND_ICON_PROOF_DIR=docs/screenshots/usage-spend-brand-icons \
+  swift test --filter SpendDashboardScreenshotRenderTests.test_renderBrandIconScreenshots
+```
+
+The screenshot fixture uses an unrelated purple tint to reveal accidental brand tinting. Model rows
+retain the existing provider association; this change does not add model-to-vendor identity inference.

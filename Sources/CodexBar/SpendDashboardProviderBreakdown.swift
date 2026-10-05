@@ -203,8 +203,7 @@ struct SpendProviderBreakdownRows: View {
                         self.childDivider
                     }
                     HStack(spacing: 9) {
-                        SpendProviderIcon(provider: row.provider, size: 16)
-                            .opacity(0.76)
+                        SpendProviderIcon(provider: row.provider, style: .monochrome, size: 16)
                         Text(row.modelName)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -282,6 +281,7 @@ struct SpendProviderBreakdownRows: View {
 struct SpendProviderIcon: View {
     let provider: UsageProvider
     var sourceKind: SpendDashboardModel.SourceKind = .native
+    var style: ProviderBrandIcon.Style = .brand
     var size: CGFloat = 20
 
     var body: some View {
@@ -289,12 +289,16 @@ struct SpendProviderIcon: View {
             if self.sourceKind == .openCodex {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.body.weight(.semibold))
-            } else if let icon = ProviderBrandIcon.image(for: self.provider) {
-                Image(nsImage: icon).resizable().scaledToFit()
+            } else if let icon = ProviderBrandIcon.image(for: self.provider, style: self.style) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .renderingMode(icon.isTemplate ? .template : .original)
+                    .scaledToFit()
             } else {
                 Image(systemName: "circle.dotted")
             }
         }
+        .foregroundStyle(.primary)
         .frame(width: self.size, height: self.size)
         .accessibilityHidden(true)
     }
