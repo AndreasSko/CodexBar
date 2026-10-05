@@ -49,6 +49,8 @@ struct CostUsageCodexReportPricingWorkTests {
             modelsDevCatalog: catalog,
             sessionRoots: roots))
         // One full report, one report per file, and one final report per project.
+        print("[codex-report-preparation] files=4 daily=1 sessionOrProjectFileReports=4 "
+            + "projectReports=1 reportBuilds=\(preparation.reportBuildCount) summariesPreserved=true")
         #expect(preparation.reportBuildCount == 1 + 4 + 1)
     }
 
