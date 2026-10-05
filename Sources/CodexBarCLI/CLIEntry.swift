@@ -172,6 +172,7 @@ enum CodexBarCLI {
         let configSignature = CommandSignature.describe(ConfigOptions()).flattened()
         let configDumpSignature = CommandSignature.describe(ConfigDumpOptions()).flattened()
         let configProviderToggleSignature = CommandSignature.describe(ConfigProviderToggleOptions()).flattened()
+        let configSetSourceSignature = CommandSignature.describe(ConfigSetSourceOptions()).flattened()
         let configSetAPIKeySignature = CommandSignature.describe(ConfigSetAPIKeyOptions()).flattened()
         let cacheSignature = CommandSignature.describe(CacheOptions()).flattened()
         let diagnoseSignature = CommandSignature.describe(DiagnoseOptions()).flattened()
@@ -259,6 +260,11 @@ enum CodexBarCLI {
                         abstract: "Store a provider API key",
                         discussion: nil,
                         signature: configSetAPIKeySignature),
+                    CommandDescriptor(
+                        name: "set-source",
+                        abstract: "Store a provider data source",
+                        discussion: nil,
+                        signature: configSetSourceSignature),
                     Self.preferencesCommandDescriptor(),
                 ],
                 defaultSubcommandName: "validate"),
