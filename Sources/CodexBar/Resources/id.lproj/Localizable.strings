@@ -1645,3 +1645,8 @@
 "Supported browsers: %@. Use Manual for other browsers." = "Browser yang didukung: %@. Gunakan Manual untuk browser lain.";
 "Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Tempel header Cookie dari permintaan Chrome ke www.workbuddy.cn/profile/plans-usage.";
 "Reserved" = "Dicadangkan";
+
+/* Selected browser profile */
+"Browser profile" = "Profil browser";
+"Unavailable profile: %@" = "Profil tidak tersedia: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Hanya baca profil %@ yang dipilih. Akun tidak pernah dipilih secara otomatis.";

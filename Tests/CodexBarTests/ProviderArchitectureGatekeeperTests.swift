@@ -156,9 +156,9 @@ struct ProviderArchitectureGatekeeperTests {
             Self.hash(descriptor.branding.burnDownWidgetColor, into: &burnDownFingerprint)
         }
 
-        // WorkBuddy extends the existing widget palette.
-        #expect(widgetFingerprint == 2_840_091_373_576_283_663)
-        #expect(burnDownFingerprint == 15_211_090_808_401_890_944)
+        // Langdock extends the palette without changing existing provider colors.
+        #expect(widgetFingerprint == 4_709_037_098_170_366_388)
+        #expect(burnDownFingerprint == 12_054_221_810_937_042_671)
     }
 
     @Test

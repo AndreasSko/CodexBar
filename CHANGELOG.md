@@ -5,9 +5,11 @@
 ### Added
 
 - CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
+- Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
 - Codex: list managed accounts and explicitly promote one from the macOS CLI, preserving displaced credentials with shared app/CLI locking, private atomic writes, and rejection of changed auth or managed-home destinations (#3191, #4234). Thanks @Yuxin-Qiao!
 
 - Dashboard: expose managed Codex accounts with saved usage, stable IDs, independent errors, and shared identity redaction in one-shot JSON and HTTP schema-v1 snapshots (#4184). Thanks @niteshmanav!
+
 ### Changed
 
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
