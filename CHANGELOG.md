@@ -14,7 +14,7 @@
 
 ### Fixed
 
-- Codex costs: a request with unknown historical pricing no longer hides the estimate for the other requests of its model and day. The day shows the priced subtotal as a partial estimate with its unpriced request count, and a day with an unpriced model is no longer reported as fully priced (#4273). Thanks @gabrielrojasc!
+- Codex costs: a request with unknown historical pricing no longer hides the estimate for the other requests of its model and day. The day shows the priced subtotal as a partial estimate with its unpriced request count, and a day with an unpriced model is no longer reported as fully priced (#4279). Thanks @gabrielrojasc!
 
 ## 0.72.0 — 2026-10-04
 
