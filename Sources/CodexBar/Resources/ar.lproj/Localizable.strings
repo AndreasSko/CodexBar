@@ -1557,6 +1557,10 @@
 "Cache write" = "Cache write";
 "Reasoning" = "Reasoning";
 "Sessions" = "Sessions";
+
+"Independent chat" = "محادثة مستقلة";
+"Independent chats" = "محادثات مستقلة";
+"Chat %d" = "محادثة %d";
 "Projects" = "Projects";
 "Plan metered" = "Plan metered";
 "List-price equivalent" = "List-price equivalent";
@@ -1640,3 +1644,5 @@
 "antigravity_quota_window_note" = "تكلفة النافذة تشمل كل النماذج · النافذة المعروضة هي الفئة الأكثر تقييدًا";
 "antigravity_no_priced_token_history" = "لا يتوفر سجل رموز Antigravity مُسعّر.";
 "Supported browsers: %@. Use Manual for other browsers." = "المتصفحات المدعومة: %@. استخدم الوضع اليدوي للمتصفحات الأخرى.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "الصق ترويسة Cookie من طلب Chrome إلى www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "محجوز";
