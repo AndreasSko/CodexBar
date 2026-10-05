@@ -2,6 +2,10 @@
 
 ## 0.72.1 — Unreleased
 
+### Added
+
+- CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
