@@ -344,12 +344,19 @@ enum CostUsageScanner {
         let nextUsageRowIndex: Int
         let tokenSnapshots: [CostUsageCodexTokenSnapshot]
         let jsonlResumeState: CostUsageJsonl.ResumeState?
+        let serviceTierState: CodexServiceTierState?
         let bufferedSubagentLines: [CodexBufferedFastLine]?
         let bufferedUnresolvedForkLines: [CodexBufferedFastLine]?
         var rowSourceEndOffsets: [Int: Int64] = [:]
         var forkAccountingState: CodexForkAccountingState?
         var requestLedgerState: CodexRequestLedgerState?
         var replacedLegacyRowIndices: Set<Int> = []
+    }
+
+    struct CodexServiceTierState: Codable, Equatable {
+        var pending: String?
+        var current: String?
+        var byTurn: [String: String] = [:]
     }
 
     struct CodexRequestLedgerState: Codable, Equatable {
@@ -3989,6 +3996,7 @@ enum CostUsageScanner {
         initialRawTotalsBaseline: CostUsageCodexTotals? = nil,
         initialHasDivergentTotals: Bool = false,
         initialCodexTurnID: String? = nil,
+        initialServiceTierState: CodexServiceTierState? = nil,
         initialCodexUsageRowIndex: Int = 0,
         inheritedTotalsResolver: ((String, String) -> CodexForkBaseline)? = nil) -> CodexParseResult
     {
@@ -4006,6 +4014,7 @@ enum CostUsageScanner {
                 initialRawTotalsBaseline: initialRawTotalsBaseline,
                 initialHasDivergentTotals: initialHasDivergentTotals,
                 initialCodexTurnID: initialCodexTurnID,
+                initialServiceTierState: initialServiceTierState,
                 initialCodexUsageRowIndex: initialCodexUsageRowIndex,
                 inheritedTotalsResolver: throwingResolver,
                 checkCancellation: nil)) ?? CodexParseResult(
@@ -4036,6 +4045,7 @@ enum CostUsageScanner {
             nextUsageRowIndex: initialCodexUsageRowIndex,
             tokenSnapshots: [],
             jsonlResumeState: nil,
+            serviceTierState: initialServiceTierState,
             bufferedSubagentLines: nil,
             bufferedUnresolvedForkLines: nil)
     }
@@ -4054,6 +4064,7 @@ enum CostUsageScanner {
         initialHasDivergentTotals: Bool = false,
         initialHasInterleavedTotals: Bool = false,
         initialCodexTurnID: String? = nil,
+        initialServiceTierState: CodexServiceTierState? = nil,
         initialCodexUsageRowIndex: Int = 0,
         initialBufferedSubagentLines: [CodexBufferedFastLine]? = nil,
         initialBufferedUnresolvedForkLines: [CodexBufferedFastLine]? = nil,
@@ -4094,9 +4105,9 @@ enum CostUsageScanner {
         var forkBaselineResolved = initialForkAccountingState != nil
         var hasUnresolvedForkBaseline = false
         var currentTurnID = initialCodexTurnID
-        var pendingServiceTier: String?
-        var currentServiceTier: String?
-        var turnServiceTiers: [String: String] = [:]
+        var pendingServiceTier = initialServiceTierState?.pending
+        var currentServiceTier = initialServiceTierState?.current
+        var turnServiceTiers = initialServiceTierState?.byTurn ?? [:]
         var codexUsageRowIndex = initialCodexUsageRowIndex
         var rawTotalsBaseline = initialRawTotalsBaseline ?? initialTotals
         var sawDivergentTotals = initialHasDivergentTotals
@@ -4118,7 +4129,9 @@ enum CostUsageScanner {
         }, uniquingKeysWith: { first, _ in first })
 
         func sessionPricingMode(for turnID: String?) -> String? {
-            if let turnID, let mode = turnServiceTiers[turnID] { return mode }
+            if let turnID {
+                return turnServiceTiers[turnID] ?? (turnID == currentTurnID ? currentServiceTier : nil)
+            }
             return currentServiceTier
         }
 
@@ -5195,6 +5208,12 @@ enum CostUsageScanner {
             nextUsageRowIndex: codexUsageRowIndex,
             tokenSnapshots: tokenSnapshots,
             jsonlResumeState: jsonlResumeState,
+            serviceTierState: pendingServiceTier == nil && currentServiceTier == nil && turnServiceTiers.isEmpty
+                ? nil
+                : CodexServiceTierState(
+                    pending: pendingServiceTier,
+                    current: currentServiceTier,
+                    byTurn: turnServiceTiers),
             bufferedSubagentLines: parsedBytes < effectiveTargetSize
                 || effectiveTargetSize < currentFileSize
                 || jsonlResumeState != nil

@@ -405,6 +405,7 @@ extension CostUsageStore {
         var interleavedTotals: Bool?
         var parserRevision: Int?
         var hasExactUsageRowIndex: Bool?
+        var serviceTierState: CostUsageScanner.CodexServiceTierState?
         var forkAccountingState: CostUsageScanner.CodexForkAccountingState?
         var requestLedgerState: CostUsageScanner.CodexRequestLedgerState?
     }
@@ -625,6 +626,7 @@ extension CostUsageStore {
                 codexJSONLResumeState: file.scanState.resumePayload.flatMap {
                     try? decoder.decode(CostUsageJsonl.ResumeState.self, from: $0)
                 },
+                codexServiceTierState: details.serviceTierState,
                 codexForkAccountingState: details.forkAccountingState,
                 codexRequestLedgerState: details.requestLedgerState,
                 codexBufferedSubagentLines: Self.bufferedLines(buffers, kind: .subagent, decoder: decoder),
@@ -1016,6 +1018,7 @@ extension CostUsageStore {
             interleavedTotals: usage.hasInterleavedTotals,
             parserRevision: usage.codexParserRevision,
             hasExactUsageRowIndex: usage.codexNextUsageRowIndex != nil,
+            serviceTierState: usage.codexServiceTierState,
             forkAccountingState: usage.codexForkAccountingState,
             requestLedgerState: usage.codexRequestLedgerState)
         let file = CostUsageStoreFile(

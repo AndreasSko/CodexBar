@@ -323,7 +323,7 @@ struct CostUsageCodexRetryBufferPresence: Codable, Equatable, Sendable {
 
 struct CostUsageFileUsage: Codable, Equatable {
     /// Increment for native parser corrections; older or absent revisions use bounded reparsing.
-    static let currentCodexParserRevision = 8
+    static let currentCodexParserRevision = 9
 
     var mtimeUnixMs: Int64
     var size: Int64
@@ -367,6 +367,7 @@ struct CostUsageFileUsage: Codable, Equatable {
     var codexScanTargetSize: Int64?
     var codexScanComplete: Bool?
     var codexJSONLResumeState: CostUsageJsonl.ResumeState?
+    var codexServiceTierState: CostUsageScanner.CodexServiceTierState? = nil
     var codexForkAccountingState: CostUsageScanner.CodexForkAccountingState?
     var codexRequestLedgerState: CostUsageScanner.CodexRequestLedgerState?
     var codexBufferedSubagentLines: [CostUsageScanner.CodexBufferedFastLine]?
