@@ -29,8 +29,9 @@ JetBrains AI is a local-only provider. We read quota information directly from t
 - `quotaInfo` attribute (JSON):
   - `type`: quota type (e.g., "Available")
   - `current`: tokens used
-  - `maximum`: total tokens
-  - `tariffQuota.available`: remaining tokens
+  - `maximum`: total tokens (monthly tariff + top-up credits)
+  - `tariffQuota.current` / `tariffQuota.maximum` / `tariffQuota.available`: monthly credits used / granted / remaining
+  - `topUpQuota.current` / `topUpQuota.maximum` / `topUpQuota.available`: purchased top-up credits
   - `until`: subscription end date
 - `nextRefill` attribute (JSON):
   - `type`: refill type (e.g., "Known")
@@ -40,7 +41,8 @@ JetBrains AI is a local-only provider. We read quota information directly from t
 
 ## Parsing and mapping
 
-- Usage calculation: `tariffQuota.available / maximum * 100` for remaining percent
+- Usage calculation: `tariffQuota.current / tariffQuota.maximum * 100` for used percent, matching the IDE's
+  "monthly credits left" display; top-level `current` / `maximum` are only used when `tariffQuota` is absent
 - Reset date: from `nextRefill.next`, not `quotaInfo.until`
 - HTML entity decoding: `&#10;` → newline, `&quot;` → quote
 

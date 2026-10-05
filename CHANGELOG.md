@@ -16,6 +16,10 @@
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
+### Fixed
+
+- JetBrains AI: compute Current usage from the monthly tariff quota instead of dividing by the combined monthly + top-up maximum, so accounts with top-up credits no longer show ~99% remaining; show `local` instead of "jetbrains not detected" in the provider detail line and hide the always-undetected Version row.
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights

@@ -213,12 +213,16 @@ public struct JetBrainsStatusProbe: Sendable {
         let maximumStr = json["maximum"] as? String
         let untilStr = json["until"] as? String
 
-        // tariffQuota contains the actual available credits
+        // tariffQuota holds the monthly credits the IDE shows ("X / Y monthly credits left").
+        // The top-level current/maximum include top-up credits, so mixing them with
+        // tariffQuota.available skews the percentage (e.g. 1% used instead of 35%).
         let tariffQuota = json["tariffQuota"] as? [String: Any]
+        let tariffCurrent = (tariffQuota?["current"] as? String).flatMap { Double($0) }
+        let tariffMaximum = (tariffQuota?["maximum"] as? String).flatMap { Double($0) }
         let availableStr = tariffQuota?["available"] as? String
 
-        let used = currentStr.flatMap { Double($0) } ?? 0
-        let maximum = maximumStr.flatMap { Double($0) } ?? 0
+        let used = tariffCurrent ?? currentStr.flatMap { Double($0) } ?? 0
+        let maximum = tariffMaximum ?? maximumStr.flatMap { Double($0) } ?? 0
         let available = availableStr.flatMap { Double($0) }
         let until = ISO8601DateParser.parse(untilStr)
 

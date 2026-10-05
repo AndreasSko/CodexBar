@@ -356,4 +356,39 @@ struct JetBrainsStatusProbeTests {
             _ = try JetBrainsStatusProbe.parseXMLData(data, detectedIDE: nil)
         }
     }
+
+    @Test
+    func `uses monthly tariff quota when top-up credits inflate the overall maximum`() throws {
+        let quotaInfo = [
+            "{&#10;  &quot;type&quot;: &quot;Available&quot;,",
+            "&#10;  &quot;current&quot;: &quot;346000&quot;,",
+            "&#10;  &quot;maximum&quot;: &quot;6489986.397&quot;,",
+            "&#10;  &quot;tariffQuota&quot;: {",
+            "&#10;    &quot;current&quot;: &quot;346000&quot;,",
+            "&#10;    &quot;maximum&quot;: &quot;1000000&quot;,",
+            "&#10;    &quot;available&quot;: &quot;654000&quot;",
+            "&#10;  },",
+            "&#10;  &quot;topUpQuota&quot;: {",
+            "&#10;    &quot;current&quot;: &quot;0&quot;,",
+            "&#10;    &quot;maximum&quot;: &quot;5489986.397&quot;,",
+            "&#10;    &quot;available&quot;: &quot;5489986.397&quot;",
+            "&#10;  }",
+            "&#10;}",
+        ].joined()
+        let xml = """
+        <application>
+          <component name="AIAssistantQuotaManager2">
+            <option name="quotaInfo" value="\(quotaInfo)" />
+          </component>
+        </application>
+        """
+
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.quotaInfo.used == 346_000)
+        #expect(snapshot.quotaInfo.maximum == 1_000_000)
+        #expect(snapshot.quotaInfo.available == 654_000)
+        #expect(abs(snapshot.quotaInfo.usedPercent - 34.6) < 0.001)
+        #expect(abs(snapshot.quotaInfo.remainingPercent - 65.4) < 0.001)
+    }
 }
