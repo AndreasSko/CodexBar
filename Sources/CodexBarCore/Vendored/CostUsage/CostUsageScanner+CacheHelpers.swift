@@ -131,10 +131,6 @@ extension CostUsageScanner {
                 && !overflow
                 && rowTokenTotal == canonicalTotalTokens
         }
-
-        func isTrusted(canonicalTotalTokens: Int) -> Bool {
-            !self.hasIncompletePricing && self.coversGroup(canonicalTotalTokens: canonicalTotalTokens)
-        }
     }
 
     static func codexRowCostBreakdown(
