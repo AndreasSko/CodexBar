@@ -39,6 +39,9 @@ extension UsageStore {
     }
 
     nonisolated static func underlyingProviderTransportError(_ error: Error) -> Error {
+        if let error = error as? ProviderBrowserSessionFailure {
+            return error.underlyingError
+        }
         if let error = error as? DeepSeekPlatformTransportError {
             return error.underlyingError
         }
@@ -88,6 +91,8 @@ extension UsageStore {
         priorSnapshot: UsageSnapshot?) -> Bool
     {
         guard self.hasMatchingDeepSeekBalanceOwner(after: error, priorSnapshot: priorSnapshot) else { return false }
+        guard BrowserSessionFailurePolicy.hasMatchingOwner(after: error, priorSnapshot: priorSnapshot)
+        else { return false }
         return self.errorIsCancellation(error)
     }
 
@@ -98,10 +103,12 @@ extension UsageStore {
     {
         guard hadPriorData else { return false }
         guard self.hasMatchingDeepSeekBalanceOwner(after: error, priorSnapshot: priorSnapshot) else { return false }
+        guard BrowserSessionFailurePolicy.hasMatchingOwner(after: error, priorSnapshot: priorSnapshot)
+        else { return false }
         if self.underlyingProviderTransportError(error) is CancellationError {
             return true
         }
-        if self.isPreservableNetworkTransportError(error) {
+        if self.isPreservableNetworkTransportError(error) || BrowserSessionFailurePolicy.isTransient(error) {
             return true
         }
 

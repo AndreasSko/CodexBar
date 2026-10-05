@@ -1641,3 +1641,8 @@
 "Supported browsers: %@. Use Manual for other browsers." = "Webbläsare som stöds: %@. Använd Manuellt för andra webbläsare.";
 "Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Klistra in Cookie-headern från en Chrome-begäran till www.workbuddy.cn/profile/plans-usage.";
 "Reserved" = "Reserverat";
+
+/* Selected browser profile */
+"Browser profile" = "Webbläsarprofil";
+"Unavailable profile: %@" = "Profilen är inte tillgänglig: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Läs endast den valda %@-profilen. Konton väljs aldrig automatiskt.";

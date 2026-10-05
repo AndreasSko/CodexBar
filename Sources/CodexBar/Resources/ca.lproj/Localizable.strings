@@ -1644,3 +1644,8 @@
 "Supported browsers: %@. Use Manual for other browsers." = "Navegadors compatibles: %@. Fes servir Manual per als altres navegadors.";
 "Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Enganxeu la capçalera Cookie d’una sol·licitud de Chrome a www.workbuddy.cn/profile/plans-usage.";
 "Reserved" = "Reservat";
+
+/* Selected browser profile */
+"Browser profile" = "Perfil del navegador";
+"Unavailable profile: %@" = "Perfil no disponible: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Llegeix només el perfil de %@ seleccionat. Els comptes no se seleccionen mai automàticament.";

@@ -2,6 +2,8 @@
 
 ## 0.72.1 — Unreleased
 
+- Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
