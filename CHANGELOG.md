@@ -2,6 +2,10 @@
 
 ## 0.72.1 — Unreleased
 
+### Added
+
+- Dashboard: expose managed Codex accounts with saved usage, stable IDs, independent errors, and shared identity redaction in one-shot JSON and HTTP schema-v1 snapshots (#4184). Thanks @niteshmanav!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
