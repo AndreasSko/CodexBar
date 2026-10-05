@@ -350,6 +350,9 @@ enum CostUsageScanner {
         var forkAccountingState: CodexForkAccountingState?
         var requestLedgerState: CodexRequestLedgerState?
         var replacedLegacyRowIndices: Set<Int> = []
+        /// Source pricing key of the legacy observation that each request-ledger row replaced.
+        /// Ledger and token_count events carry different timestamps, so saved pricing must be found by this key.
+        var ledgerLegacyPricingKeys: [Int: CodexSourcePricingKey] = [:]
     }
 
     struct CodexRequestLedgerState: Codable, Equatable {
@@ -4092,6 +4095,7 @@ enum CostUsageScanner {
         var lastAcceptedTokenTimestamp: String?
         var requestLedger = initialRequestLedgerState ?? CodexRequestLedgerState()
         var replacedLegacyRowIndices: Set<Int> = []
+        var ledgerLegacyPricingKeys: [Int: CodexSourcePricingKey] = [:]
         let retainedRows = Dictionary(initialRequestLedgerRows.compactMap { row in
             row.eventIndex.map { ($0, row) }
         }, uniquingKeysWith: { first, _ in first })
@@ -4210,7 +4214,7 @@ enum CostUsageScanner {
                     ? Self.codexModelEvidence(currentModel) : nil)
                 ?? CostUsagePricing.codexUnattributedModel
             requestLedger.countedUsage = Self.codexAddTotals(base, usage)
-            appendUsage(
+            let ledgerIndex = appendUsage(
                 usage,
                 day: day,
                 model: model,
@@ -4220,8 +4224,25 @@ enum CostUsageScanner {
                 mirrorKeys: keys,
                 retainedPricing: legacyRow,
                 endOffset: endOffset)
+            if let legacyRow, legacyRow.model == CostUsagePricing.normalizeCodexModel(model),
+               let legacyKey = CodexSourcePricingKey(legacyRow)
+            {
+                ledgerLegacyPricingKeys[ledgerIndex] = legacyKey
+            }
             observeTimestamp(timestamp)
             lastAcceptedTokenTimestamp = timestamp
+        }
+
+        /// An older parser saved this mirrored token_count observation as its own row. Keep its key on the
+        /// ledger row that owns the request so a parser upgrade can recover that row's saved pricing.
+        func rememberMirroredLegacyPricingKey(responseID: String, legacyRow: CodexUsageRow) {
+            // A bounded slice can end between the ledger row and this mirror; the ledger row is then retained.
+            guard let ledger = rows.last(where: { $0.responseID == responseID })
+                ?? retainedRows.values.first(where: { $0.responseID == responseID }),
+                let ledgerIndex = ledger.eventIndex, ledger.model == legacyRow.model,
+                let legacyKey = CodexSourcePricingKey(legacyRow)
+            else { return }
+            ledgerLegacyPricingKeys[ledgerIndex] = legacyKey
         }
 
         func add(dayKey: String, model: String, input: Int, cached: Int, output: Int) {
@@ -4650,7 +4671,19 @@ enum CostUsageScanner {
 
             // Observe legacy counters even when the ledger owns the row. Later legacy-only events
             // still need their original baseline and replay/containment protection.
-            if let key = mirror?.snapshot, requestLedger.mirroredResponses?[key] != nil {
+            if let key = mirror?.snapshot, let responseID = requestLedger.mirroredResponses?[key] {
+                rememberMirroredLegacyPricingKey(
+                    responseID: responseID,
+                    legacyRow: CodexUsageRow(
+                        day: dayKey,
+                        model: CostUsagePricing.normalizeCodexModel(model),
+                        rawModel: model,
+                        turnID: record.turnID ?? currentTurnID,
+                        eventIndex: nil,
+                        timestampUnixMs: unixMilliseconds(from: record.timestamp),
+                        input: deltaUsage.input,
+                        cached: deltaUsage.cached,
+                        output: deltaUsage.output))
                 return
             }
             if deltaInput == 0, deltaCached == 0, deltaOutput == 0 {
@@ -5170,7 +5203,8 @@ enum CostUsageScanner {
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
                 && requestLedger.sessionID == sessionId
                 ? nil : requestLedger,
-            replacedLegacyRowIndices: replacedLegacyRowIndices)
+            replacedLegacyRowIndices: replacedLegacyRowIndices,
+            ledgerLegacyPricingKeys: ledgerLegacyPricingKeys)
     }
 
     private static func codexTurnID(from payload: [String: Any]) -> String? {

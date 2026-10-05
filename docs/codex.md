@@ -377,7 +377,13 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while
-  matching saved pricing survives replacement of an older legacy page.
+  matching saved pricing survives replacement of an older legacy page. Parser upgrades look up that pricing with the
+  replaced legacy row's own timestamp, because the owned response and its token_count mirror are usually recorded
+  a few hundred milliseconds apart. Bounded upgrades restore that pricing to a retained ledger row
+  when a later slice reaches its token_count mirror. Stores from 0.72.0 (`ed735dc27ffa70d9`) are adopted with their
+  history, and fully marked ledger rows return to the pricing evidence that release recorded, including its Priority
+  evidence. Authoritative amounts keep their markers, as do files with a fully marked legacy row, which indicates
+  invalidated saved evidence.
   Thread and execution-session identities are validated separately; copied child history remains excluded by the
   existing subagent boundaries. Cached tails retain these identities across refreshes and SQLite reopen.
   Compatible caches retain stored history and matching saved prices while older parser revisions reparse in bounded
