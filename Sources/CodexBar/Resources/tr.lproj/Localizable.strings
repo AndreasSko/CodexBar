@@ -1649,3 +1649,8 @@
 "Supported browsers: %@. Use Manual for other browsers." = "Desteklenen tarayıcılar: %@. Diğer tarayıcılar için Manuel seçeneğini kullanın.";
 "Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Chrome’dan www.workbuddy.cn/profile/plans-usage adresine gönderilen isteğin Cookie başlığını yapıştırın.";
 "Reserved" = "Ayrılmış";
+
+/* Selected browser profile */
+"Browser profile" = "Tarayıcı profili";
+"Unavailable profile: %@" = "Profil kullanılamıyor: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Yalnızca seçilen %@ profilini oku. Hesaplar asla otomatik seçilmez.";

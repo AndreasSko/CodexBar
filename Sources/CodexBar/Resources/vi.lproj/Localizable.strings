@@ -1648,3 +1648,8 @@
 "Supported browsers: %@. Use Manual for other browsers." = "Trình duyệt được hỗ trợ: %@. Dùng chế độ Thủ công cho các trình duyệt khác.";
 "Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Dán tiêu đề Cookie từ yêu cầu Chrome tới www.workbuddy.cn/profile/plans-usage.";
 "Reserved" = "Đã giữ lại";
+
+/* Selected browser profile */
+"Browser profile" = "Hồ sơ trình duyệt";
+"Unavailable profile: %@" = "Hồ sơ không khả dụng: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Chỉ đọc hồ sơ %@ đã chọn. Tài khoản không bao giờ được chọn tự động.";
