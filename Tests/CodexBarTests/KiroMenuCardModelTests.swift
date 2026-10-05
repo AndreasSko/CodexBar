@@ -69,6 +69,47 @@ struct KiroMenuCardModelTests {
     }
 
     @Test
+    func `kiro model shows monthly pace beside the credits line`() throws {
+        let now = Date()
+        let snapshot = KiroUsageSnapshot(
+            planName: "KIRO POWER",
+            creditsUsed: 6000,
+            creditsTotal: 10000,
+            creditsPercent: 60,
+            bonusCreditsUsed: nil,
+            bonusCreditsTotal: nil,
+            bonusExpiryDays: nil,
+            resetsAt: now.addingTimeInterval(20 * 24 * 60 * 60),
+            updatedAt: now).toUsageSnapshot()
+        let metadata = try #require(ProviderDefaults.metadata[.kiro])
+
+        let model = UsageMenuCardView.Model.make(.init(
+            provider: .kiro,
+            metadata: metadata,
+            snapshot: snapshot,
+            credits: nil,
+            creditsError: nil,
+            dashboardError: nil,
+            tokenSnapshot: nil,
+            tokenError: nil,
+            account: AccountInfo(email: nil, plan: nil),
+            isRefreshing: false,
+            lastError: nil,
+            usageBarsShowUsed: false,
+            resetTimeDisplayStyle: .countdown,
+            tokenCostUsageEnabled: false,
+            showOptionalCreditsAndExtraUsage: true,
+            hidePersonalInfo: false,
+            now: now))
+
+        // About a third of the month has passed, but 60% of the credits are spent.
+        let credits = try #require(model.metrics.first)
+        #expect(credits.detailLeftText?.hasSuffix("% in deficit") == true)
+        #expect(credits.pacePercent != nil)
+        #expect(credits.detailText == "4000 of 10000 credits left")
+    }
+
+    @Test
     func `kiro model hides overage spend when overages are disabled`() throws {
         let now = Date()
         let snapshot = KiroUsageSnapshot(

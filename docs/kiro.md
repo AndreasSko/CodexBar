@@ -63,6 +63,8 @@ Kiro uses the AWS `kiro-cli` tool to fetch usage data. No browser cookies or OAu
     totals and zero allowances do not replace the CLI plan metrics or invent a missing plan gauge.
   - `usedPercent`: extracted from `███...█ X%` pattern, or `planUsed / planLimit` when the API answered.
   - `resetsAt`: parsed from `resets on MM/DD` (assumes current or next year), or `nextDateReset` from the API.
+  - `windowMinutes`: the monthly sentinel when a reset date is known, so the gauge gets calendar-month pace,
+    a Plan Usage history series, and the recorded quota burndown.
 - **Secondary window**: Bonus credits (when present).
   - Parsed from `Bonus credits: X.XX/Y credits used`. Always CLI-sourced. When `GetUsageLimits` includes a
     non-empty `bonuses[]` array, CodexBar keeps the CLI plan gauge instead of treating bonus spend as plan
