@@ -41,3 +41,6 @@ Days with a model that has no estimate:
 2026-10-05: dayCost=$ unpricedRequestCount=223 pricedRequestCount=757 coverage=(priced 757, unpriced 223) models=[codex-auto-review=no estimate, gpt-6-astra=$, gpt-6-luna=$, gpt-6.1-sol=$]
 
 30-day coverage: priced 3905, unpriced 839
+
+reproducibility: local Codex data; not reproducible elsewhere. The scenario is covered by
+'a day with an unpriced model reports incomplete coverage' (make test-fast FILTER='CostUsageCodexPartialPricingTests').

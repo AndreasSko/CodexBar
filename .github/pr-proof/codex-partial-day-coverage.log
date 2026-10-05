@@ -15,3 +15,6 @@ TZ=UTC; costs use bundled gpt-5.4 rates (the 300K request crosses the long-conte
 [partial-pricing] fullyPricedDay=2.25 dayCostWithOneMarkedRequest=Optional(2.0) unpricedRequestCount=Optional(1) quotaSliceCost=Optional(2.0) quotaSliceComplete=false
 [partial-pricing] dayCost=Optional(0.25) models=["gpt-5.4=Optional(0.25)", "gpt-5.5=nil"] unpricedRequestCount=Optional(1) coverage=CostUsageCoverageCounts(priced: 1, unpriced: 1, unmetered: 0, estimated: 0)
 ✔ Test run with 2 tests in 1 suite passed after 0.065 seconds.
+
+transcript source: the repro test in #4273, run on each tree
+covered by: make test-fast FILTER='CostUsageCodexPartialPricingTests'
