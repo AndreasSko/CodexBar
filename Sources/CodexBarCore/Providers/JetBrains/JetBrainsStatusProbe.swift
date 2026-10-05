@@ -111,7 +111,53 @@ public struct JetBrainsStatusProbe: Sendable {
 
     public func fetch() async throws -> JetBrainsStatusSnapshot {
         let (quotaFilePath, detectedIDE) = try self.resolveQuotaFilePath()
-        return try Self.parseQuotaFile(at: quotaFilePath, detectedIDE: detectedIDE)
+        let logEntry = self.latestLogEntry(quotaFilePath: quotaFilePath)
+
+        let snapshot: JetBrainsStatusSnapshot
+        do {
+            snapshot = try Self.parseQuotaFile(at: quotaFilePath, detectedIDE: detectedIDE)
+        } catch {
+            guard let logEntry else { throw error }
+            return JetBrainsStatusSnapshot(
+                quotaInfo: logEntry.quotaInfo,
+                refillInfo: logEntry.refillInfo,
+                detectedIDE: detectedIDE)
+        }
+
+        let quotaFileModifiedAt = (try? FileManager.default.attributesOfItem(atPath: quotaFilePath))?[.modificationDate]
+            as? Date
+        return Self.applyingLogEntry(logEntry, to: snapshot, quotaFileModifiedAt: quotaFileModifiedAt)
+    }
+
+    /// Quota is per account, so in auto-detect mode any IDE's log may hold the freshest state.
+    private func latestLogEntry(quotaFilePath: String) -> JetBrainsQuotaLogReader.Entry? {
+        let selectedBasePath = ((quotaFilePath as NSString).deletingLastPathComponent as NSString)
+            .deletingLastPathComponent
+        let hasCustomPath = !(self.settings?.jetbrainsIDEBasePath?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let basePaths = hasCustomPath
+            ? [selectedBasePath]
+            : [selectedBasePath] + JetBrainsIDEDetector.detectInstalledIDEs(includeMissingQuota: true).map(\.basePath)
+
+        return Set(basePaths)
+            .compactMap {
+                JetBrainsQuotaLogReader.latestEntry(atPath: JetBrainsQuotaLogReader.logFilePath(forIDEBasePath: $0))
+            }
+            .max { $0.timestamp < $1.timestamp }
+    }
+
+    /// The IDE persists the quota XML rarely; prefer the log when it was written after the XML.
+    static func applyingLogEntry(
+        _ logEntry: JetBrainsQuotaLogReader.Entry?,
+        to snapshot: JetBrainsStatusSnapshot,
+        quotaFileModifiedAt: Date?) -> JetBrainsStatusSnapshot
+    {
+        guard let logEntry else { return snapshot }
+        if let quotaFileModifiedAt, quotaFileModifiedAt >= logEntry.timestamp { return snapshot }
+        return JetBrainsStatusSnapshot(
+            quotaInfo: logEntry.quotaInfo,
+            refillInfo: logEntry.refillInfo ?? snapshot.refillInfo,
+            detectedIDE: snapshot.detectedIDE)
     }
 
     private func resolveQuotaFilePath() throws -> (String, JetBrainsIDEInfo?) {

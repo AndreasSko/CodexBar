@@ -24,6 +24,16 @@ JetBrains AI is a local-only provider. We read quota information directly from t
    - Path: `<IDE_BASE>/options/AIAssistantQuotaManager2.xml` (macOS/Linux)
    - Format: XML with HTML-encoded JSON attributes
 
+3) **IDE log (fresher quota state)**
+   - The IDE logs every quota refresh but persists the XML rarely; the XML can stay weeks behind the
+     "monthly credits left" value shown in the IDE (observed with AI Assistant 262.10968.x)
+   - Path: `~/Library/Logs/<vendor>/<IDE>/idea.log` (macOS), `~/.cache/<vendor>/<IDE>/log/idea.log` (Linux)
+   - Reads the last 4 MB and takes the newest `QuotaManager2Impl - New quota state is: …` line with numbers,
+     plus the newest `New quota refill state is: …` line for the reset date
+   - Auto-detect mode checks every detected IDE's log (quota is per account); a custom path only checks that IDE
+   - Used only when its timestamp is newer than the XML's modification date; falls back to the XML when the log
+     is missing, rotated, or the line format changes
+
 ## XML structure
 
 - `quotaInfo` attribute (JSON):
@@ -64,9 +74,11 @@ JetBrains AI is a local-only provider. We read quota information directly from t
 - Requires JetBrains IDE with AI Assistant enabled
 - XML file only exists after AI Assistant usage
 - Internal file format; may change between IDE versions
+- `idea.log` line format is not a stable interface either; parsing fails soft back to the XML
 
 ## Key files
 
 - `Sources/CodexBarCore/Providers/JetBrains/JetBrainsStatusProbe.swift`
+- `Sources/CodexBarCore/Providers/JetBrains/JetBrainsQuotaLogReader.swift`
 - `Sources/CodexBarCore/Providers/JetBrains/JetBrainsIDEDetector.swift`
 - `Sources/CodexBar/Providers/JetBrains/JetBrainsProviderImplementation.swift`

@@ -19,6 +19,7 @@
 ### Fixed
 
 - JetBrains AI: compute Current usage from the monthly tariff quota instead of dividing by the combined monthly + top-up maximum, so accounts with top-up credits no longer show ~99% remaining; show `local` instead of "jetbrains not detected" in the provider detail line and hide the always-undetected Version row.
+- JetBrains AI: prefer the newest quota state from the IDE's `idea.log` when it is newer than `AIAssistantQuotaManager2.xml`, which the IDE can leave weeks out of date; falls back to the XML when the log is missing or its format changes.
 
 ## 0.72.0 — 2026-10-04
 
