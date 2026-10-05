@@ -1,0 +1,54 @@
+CodexBar Codex ledger mirror window: real-history proof
+Verified 2026-10-05 on macOS 27.0, arm64. Counts only; dollar amounts, paths,
+prompts, and account details are omitted.
+
+Harness:
+- A temporary, uncommitted Swift test in the CodexBarTests target drove the
+  CLI cost path (CostUsageFetcher.loadTokenSnapshot, then renderCostText) over
+  one real ~/.codex history, read-only. Each run started from its own copy of
+  the same 0.72.0 cost cache (parser revision 8).
+- 30-day window, America/Santiago calendar, fixed "now" of
+  2026-10-05T23:00:00Z, pricing refresh off.
+- Each run repeated fetch passes until the snapshot reported a full scan and
+  no cached file had pending scan work. It then dumped totals and per-file row
+  counts.
+- main @ 6a26b2e9b and this branch ran in parallel against the same live
+  history.
+
+Results (both runs fully scanned, no pending files):
+
+                                          main     branch
+  fetch passes                             113        183
+  parser revision of cached files     r8=3591    r9=3585
+  ledger rows                           66,204     66,206
+  legacy rows in files with ledger rows 40,807      1,714
+  30-day tokens                     13,562,646,041  8,102,604,890
+
+Per-file diff:
+- No file lost ledger rows, and no file gained legacy rows.
+- The branch removed 39,093 legacy rows. They are the token_count mirrors of
+  ledger rows that main counted a second time.
+- One live session appended 2 ledger records between the two runs, which
+  accounts for 66,204 vs 66,206.
+- 6 cache entries exist only in main's cache. Each has 0 rows. They are stale
+  empty fragments retained from the copied cache, and the revision 9 reparse
+  drops them.
+
+Raw-log cross-check (Python, same window, read-only):
+- 66,608 unique token_usage_record responses, 8.27B input and output tokens.
+- 66,336 token_count events sit next to a token_usage_record with identical
+  input, cached, and output tokens, within 60 s. They hold 8.21B tokens, so
+  nearly every ledger response has a mirror.
+- The 5.46B tokens the branch removes from main's total fit inside that mirror
+  pool. Main already merged mirrors that share a timestamp or thread total.
+
+Reproduce: add the harness as Tests/CodexBarTests/ZZMirrorRealSetupProofTests.swift
+(the PR description includes its source), then run from each checkout:
+  source Scripts/test_environment.sh && CODEXBAR_REAL_PROOF=1 \
+    CODEXBAR_PROOF_CACHE_SOURCE=<copy of ~/Library/Caches/CodexBar> \
+    CODEXBAR_PROOF_OUTPUT=<out.txt> \
+    swift test --filter ZZMirrorRealSetupProofTests
+
+Scope: one person's Codex history. It shows the duplicate rows are removed
+without losing ledger rows. It does not cover forks whose parent resolves in a
+later scan pass. That limit is documented in docs/codex.md.
