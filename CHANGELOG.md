@@ -2,6 +2,10 @@
 
 ## 0.72.1 — Unreleased
 
+### Fixed
+
+- iCloud Sync: enable production push notifications for timely cross-Mac updates and reject release profiles missing the required capability (#4132). Thanks @h3x89!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
