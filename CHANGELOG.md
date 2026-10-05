@@ -9,7 +9,7 @@
 
 ### Fixed
 
-- Codex costs: the 0.72.0 cache upgrade no longer marks request-ledger usage as unpriced when its timestamp differs from the token_count row it replaces, which hid most September and October estimates (30-day totals near $0). Caches already upgraded by 0.72.0 are repaired on launch without a rebuild and keep the Priority evidence recorded during that upgrade; authoritative amounts and files whose saved evidence was invalidated keep their unpriced markers (#4270). Thanks @gabrielrojasc!
+- Codex costs: upgrading an older cache keeps saved request pricing when Codex records the request-ledger entry a few hundred milliseconds apart from its token_count, instead of marking the request unpriced and hiding that day's estimate (#4270). Caches already upgraded by 0.72.0 keep those markers; run `codexbar cache clear --cost` to rebuild them from session logs. Thanks @gabrielrojasc!
 
 ## 0.72.0 — 2026-10-04
 

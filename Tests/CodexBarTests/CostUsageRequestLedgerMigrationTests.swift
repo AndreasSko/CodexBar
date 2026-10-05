@@ -223,63 +223,38 @@ struct CostUsageRequestLedgerMigrationTests {
         #expect(try #require(upgraded.summary?.totalCostUSD) > standardCost)
     }
 
-    @Test(arguments: [
-        (storedHash: "ed735dc27ffa70d9", invalidated: false),
-        (storedHash: "ed735dc27ffa70d9", invalidated: true),
-        (storedHash: "029fe80aa98f27e8", invalidated: false),
-    ])
-    func `adopting a 0_72_0 store repairs only ledger timestamp pricing markers`(
-        _ scenario: (storedHash: String, invalidated: Bool)) throws
-    {
+    @Test
+    func `adopting a 0_72_0 store keeps ledger only pricing markers through reopen`() throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
         let day = try env.makeLocalNoon(year: 2026, month: 9, day: 10)
         let file = try env.writeCodexSessionFile(
             day: day,
             filename: "marked-ledger.jsonl",
-            contents: Self.offsetLedgerLines(
-                day: day,
-                env: env,
-                scenario: (ledgerFirst: true, offsetMs: 400),
-                inputs: [200_000, 50000, 25000, 10000]))
+            contents: Self.offsetLedgerLines(day: day, env: env, scenario: (ledgerFirst: true, offsetMs: 400)))
         var options = Self.options(env: env)
         options.refreshMinIntervalSeconds = 3600
         #expect(Self.report(day: day, options: options).summary?.totalCostUSD != nil)
 
-        // Rows 0 and 1 carry the 0.72.0 signature. An authoritative amount is never cleared. A fully marked
-        // legacy row means the file's saved evidence was invalidated, so every marker in that file is kept.
+        // Invalidated source evidence leaves only fully marked ledger rows. Their pricing is unknown, so adoption
+        // must not turn them into estimates; a cache rebuild is the explicit way to reprice from the logs.
         var stored = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
         var usage = try #require(stored.files[file.path])
-        let rows = try #require(usage.codexRows)
-        #expect(rows.count == 4)
-        usage.codexRows = try rows.enumerated().map { index, row in
+        usage.codexRows = usage.codexRows?.map { row in
             var row = row
             row.unpricedTokens = row.input + row.output
-            if index == 2 { row.knownCostNanos = 123_000_000 }
-            guard index == 3, scenario.invalidated else { return row }
-            var object = try #require(
-                JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any])
-            object.removeValue(forKey: "responseID")
-            object.removeValue(forKey: "requestMirrorKeys")
-            return try JSONDecoder().decode(
-                CostUsageScanner.CodexUsageRow.self,
-                from: JSONSerialization.data(withJSONObject: object))
+            return row
         }
+        let markedRows = try #require(usage.codexRows)
         stored.files[file.path] = usage
         #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: stored).catchUpRequired)
-        #expect(Self.report(day: day, options: options).summary?.totalCostUSD == nil)
-        try Self.markPredecessor(cacheRoot: env.cacheRoot, parserHash: scenario.storedHash)
+        try Self.markPredecessor(cacheRoot: env.cacheRoot, parserHash: "ed735dc27ffa70d9")
 
-        let adopted = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
-        let adoptedRows = try #require(adopted.files[file.path]?.codexRows)
-        let repairs = scenario.storedHash == "ed735dc27ffa70d9" && !scenario.invalidated
-        let marked: [Int] = rows.map { $0.input + $0.output }
-        let expectedMarkers: [Int?] = repairs ? [nil, nil, marked[2], nil] : marked
-        let expectedCosts: [Int64?] = [nil, nil, 123_000_000, nil]
-        #expect(adoptedRows.map(\.unpricedTokens) == expectedMarkers)
-        #expect(adoptedRows.map(\.knownCostNanos) == expectedCosts)
-        #expect(adoptedRows.map(\.pricingMode) == rows.map(\.pricingMode))
-        #expect(adopted.files[file.path]?.days == usage.days)
+        for _ in 0..<2 {
+            let reopened = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
+            #expect(reopened.files[file.path]?.codexRows == markedRows)
+            #expect(Self.report(day: day, options: options).summary?.totalCostUSD == nil)
+        }
     }
 
     private static func options(env: CostUsageTestEnvironment) -> CostUsageScanner.Options {

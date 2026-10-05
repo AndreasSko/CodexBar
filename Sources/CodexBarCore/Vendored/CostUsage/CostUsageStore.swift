@@ -122,7 +122,7 @@ actor CostUsageStore {
         parserHash: CodexParserHash.value)
     static let cacheGeneration = "sqlite:\(CostUsageStore.schemaVersion)"
     static let compatiblePredecessorParserHashes: Set<String> = [
-        "ed735dc27ffa70d9", // 0.72.0 ledger rows keep their history; mismatched-timestamp pricing markers are repaired.
+        "ed735dc27ffa70d9", // 0.72.0 rows, markers, and checkpoints are kept; only the retained report is dropped.
         "029fe80aa98f27e8", // Revision 7 caches retain history during bounded JSON-fallback reparsing.
         "c61aebb9cf043a72", // Revision 6 ledger caches reparse through the shared ownership router.
         "4a4c4ef34ce6f037", // Request-ledger accounting uses bounded native parser-revision migration.
@@ -177,12 +177,6 @@ actor CostUsageStore {
         "dd19ffa2dcfa8d47",
         "2d17f4981b78d07f",
         "8050a4faf4fddb96",
-        "ed735dc27ffa70d9",
-    ]
-    /// 0.72.0 upgraded legacy rows to request-ledger rows but looked up their saved pricing with the ledger
-    /// event's timestamp, which differs from the replaced token_count row. Every such request was marked
-    /// unpriced although the parser had already attached the same pricing evidence a fresh scan assigns.
-    static let ledgerTimestampPricingRepairPredecessorParserHashes: Set<String> = [
         "ed735dc27ffa70d9",
     ]
 
@@ -716,9 +710,6 @@ extension CostUsageStore {
     }
 
     private func adoptCompatiblePredecessor(_ database: OpaquePointer, storedHash: String) throws {
-        if Self.ledgerTimestampPricingRepairPredecessorParserHashes.contains(storedHash) {
-            try Self.repairLedgerTimestampPricingMarkers(database)
-        }
         if Self.incompatibleRetainedReportPredecessorParserHashes.contains(storedHash),
            var metadata = try Self.readSingleton(
                CostUsageStoreMetadata.self,
@@ -741,55 +732,6 @@ extension CostUsageStore {
         try Self.stepDone(statement, database: database)
         guard sqlite3_changes(database) == 1 else { throw StoreError.incompatibleSchema }
         try Self.execute(database, "PRAGMA user_version = \(self.expectedSchemaVersion)")
-    }
-
-    /// A row marked unpriced for all of its billed tokens, without an authoritative amount, with pricing evidence set.
-    static func hasFullPricingMarker(_ row: CostUsageScanner.CodexUsageRow) -> Bool {
-        guard row.knownCostNanos == nil, let unpriced = row.unpricedTokens,
-              let pricingModel = row.pricingModel, !pricingModel.isEmpty,
-              row.pricingMode == "standard" || row.pricingMode == "priority"
-        else { return false }
-        let (tokens, overflow) = row.input.addingReportingOverflow(row.output)
-        return unpriced == (overflow ? Int.max : max(1, tokens))
-    }
-
-    private static func repairLedgerTimestampPricingMarkers(_ database: OpaquePointer) throws {
-        let select = try Self.prepare(database, "SELECT file_id, row_index, payload FROM usage_rows")
-        defer { sqlite3_finalize(select) }
-        var candidates: [(fileID: Int64, rowIndex: Int64, payload: Data)] = []
-        // Invalidated source evidence also marks legacy rows; those files keep every marker.
-        var invalidatedFiles: Set<Int64> = []
-        while true {
-            let result = sqlite3_step(select)
-            if result == SQLITE_DONE { break }
-            guard result == SQLITE_ROW else { throw StoreError.sqlite(result) }
-            guard let bytes = sqlite3_column_blob(select, 2) else { continue }
-            let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(select, 2)))
-            let fileID = sqlite3_column_int64(select, 0)
-            guard var row = try? JSONDecoder().decode(CostUsageScanner.CodexUsageRow.self, from: data),
-                  Self.hasFullPricingMarker(row)
-            else { continue }
-            guard row.responseID != nil else {
-                invalidatedFiles.insert(fileID)
-                continue
-            }
-            row.unpricedTokens = nil
-            try candidates.append((fileID, sqlite3_column_int64(select, 1), JSONEncoder().encode(row)))
-        }
-        let repaired = candidates.filter { !invalidatedFiles.contains($0.fileID) }
-        guard !repaired.isEmpty else { return }
-        let update = try Self.prepare(
-            database,
-            "UPDATE usage_rows SET payload = ? WHERE file_id = ? AND row_index = ?")
-        defer { sqlite3_finalize(update) }
-        for row in repaired {
-            sqlite3_reset(update)
-            Self.bind(row.payload, to: update, at: 1)
-            Self.bind(row.fileID, to: update, at: 2)
-            Self.bind(row.rowIndex, to: update, at: 3)
-            try Self.stepDone(update, database: database)
-        }
-        Self.log.info("repaired \(repaired.count) Codex ledger pricing markers from 0.72.0")
     }
 
     private func createSchema(_ database: OpaquePointer) throws {
