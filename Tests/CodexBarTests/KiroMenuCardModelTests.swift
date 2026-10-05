@@ -53,7 +53,7 @@ struct KiroMenuCardModelTests {
         #expect(model.email == "person@example.com")
         #expect(model.planText == "Kiro Free")
         #expect(model.metrics.map(\.title) == ["Credits", "Bonus"])
-        #expect(model.metrics.first?.detailLeftText == "49.83 of 50 credits left")
+        #expect(model.metrics.first?.detailText == "49.83 of 50 credits left")
         #expect(model.metrics.dropFirst().first?.detailLeftText == "1954.47 of 2000 bonus credits left")
         #expect(model.usageNotes.contains("Auth: Google"))
         #expect(model.providerDetails.flatMap(\.rows).contains {
