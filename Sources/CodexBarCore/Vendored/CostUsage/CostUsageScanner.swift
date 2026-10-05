@@ -4235,12 +4235,22 @@ enum CostUsageScanner {
 
         /// An older parser saved this mirrored token_count observation as its own row. Keep its key on the
         /// ledger row that owns the request so a parser upgrade can recover that row's saved pricing.
-        func rememberMirroredLegacyPricingKey(responseID: String, legacyRow: CodexUsageRow) {
+        func rememberMirroredLegacyPricingKey(
+            responseID: String,
+            legacyRow: CodexUsageRow,
+            mirror: (snapshot: String, counterAlias: String?))
+        {
             // A bounded slice can end between the ledger row and this mirror; the ledger row is then retained.
             guard let ledger = rows.last(where: { $0.responseID == responseID })
                 ?? retainedRows.values.first(where: { $0.responseID == responseID }),
                 let ledgerIndex = ledger.eventIndex, ledger.model == legacyRow.model,
                 let legacyKey = CodexSourcePricingKey(legacyRow)
+            else { return }
+            // A replay also links its mirror to this row for deduplication; only the original record's own
+            // mirror (same turn, usage, and cumulative total) describes the request this row owns.
+            let ownKeys = ledger.requestMirrorKeys ?? []
+            guard ownKeys.contains(mirror.snapshot)
+                || mirror.counterAlias.map({ alias in ownKeys.contains { $0.hasPrefix(alias) } }) == true
             else { return }
             ledgerLegacyPricingKeys[ledgerIndex] = legacyKey
         }
@@ -4683,7 +4693,10 @@ enum CostUsageScanner {
                         timestampUnixMs: unixMilliseconds(from: record.timestamp),
                         input: deltaUsage.input,
                         cached: deltaUsage.cached,
-                        output: deltaUsage.output))
+                        output: deltaUsage.output),
+                    mirror: (key, total.map {
+                        mirrorKey(turnID: mirrorTurnID, usage: last ?? deltaUsage, total: $0, timestamp: nil)
+                    }))
                 return
             }
             if deltaInput == 0, deltaCached == 0, deltaOutput == 0 {

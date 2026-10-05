@@ -329,6 +329,131 @@ struct CostUsageRequestLedgerMigrationTests {
         #expect(Self.report(day: day, options: options).summary?.totalCostUSD == nil)
     }
 
+    /// A replayed response links its later token_count to the original ledger row for deduplication. Only the
+    /// original's own mirror may supply that row's saved pricing; the replay's legacy row is a different request.
+    @Test(arguments: [
+        (bounded: false, verbatimDuplicate: false, originalUnpriced: false),
+        (bounded: true, verbatimDuplicate: false, originalUnpriced: false),
+        (bounded: false, verbatimDuplicate: true, originalUnpriced: false),
+        (bounded: false, verbatimDuplicate: false, originalUnpriced: true),
+        (bounded: true, verbatimDuplicate: false, originalUnpriced: true),
+    ])
+    func `legacy upgrade takes saved pricing only from the original request mirror`(
+        _ scenario: (bounded: Bool, verbatimDuplicate: Bool, originalUnpriced: Bool)) throws
+    {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let day = try env.makeLocalNoon(year: 2026, month: 9, day: 10)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func tokens(_ input: Int, _ output: Int) -> [String: Int] {
+            ["input_tokens": input, "cached_input_tokens": 0, "output_tokens": output]
+        }
+        func ledger(at date: Date, total: Int) -> [String: Any] {
+            [
+                "type": "token_usage_record",
+                "timestamp": formatter.string(from: date.addingTimeInterval(0.4)),
+                "payload": [
+                    "thread_id": "replay-thread", "session_id": "replay-execution", "response_id": "replay-response",
+                    "turn_id": "replay-turn", "usage": tokens(100_000, 1000), "thread_token_usage": tokens(
+                        total,
+                        total / 100),
+                ],
+            ]
+        }
+        func count(at date: Date, total: Int) -> [String: Any] {
+            ["type": "event_msg", "timestamp": formatter.string(from: date), "payload": [
+                "type": "token_count", "turn_id": "replay-turn", "info": [
+                    "last_token_usage": tokens(100_000, 1000), "total_token_usage": tokens(total, total / 100),
+                ],
+            ]]
+        }
+        let original = day.addingTimeInterval(10)
+        let replay = day.addingTimeInterval(20)
+        var lines: [[String: Any]] = [
+            [
+                "type": "session_meta",
+                "timestamp": formatter.string(from: day),
+                "payload": ["id": "replay-thread", "session_id": "replay-execution"],
+            ],
+            [
+                "type": "turn_context",
+                "timestamp": formatter.string(from: day),
+                "payload": ["model": "gpt-5.4", "turn_id": "replay-turn"],
+            ],
+            ledger(at: original, total: 100_000),
+        ]
+        if scenario.verbatimDuplicate {
+            lines += [ledger(at: original, total: 100_000), count(at: original, total: 100_000)]
+        } else {
+            lines += [
+                count(at: original, total: 100_000),
+                ledger(at: replay, total: 200_000),
+                count(at: replay, total: 200_000),
+            ]
+        }
+        let file = try env.writeCodexSessionFile(
+            day: day,
+            filename: "replay-migration.jsonl",
+            contents: env.jsonl(lines))
+        var options = Self.options(env: env)
+        _ = Self.report(day: day, options: options)
+
+        // Revision 5 saved one legacy row per token_count: the original request with Priority evidence, and the
+        // replay's observation with Standard evidence.
+        var old = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
+        var usage = try #require(old.files[file.path])
+        usage.codexParserRevision = 5
+        usage.codexRequestLedgerState = nil
+        let dayKey = CostUsageScanner.CostUsageDayRange.dayKey(from: day)
+        let observations = scenario.verbatimDuplicate ? [(original, "priority")]
+            : [(original, "priority"), (replay, "standard")]
+        usage.codexRows = observations.enumerated().map { index, observation in
+            CostUsageScanner.CodexUsageRow(
+                day: dayKey,
+                model: "gpt-5.4",
+                rawModel: "gpt-5.4",
+                turnID: "replay-turn",
+                eventIndex: index,
+                timestampUnixMs: Int64(observation.0.timeIntervalSince1970 * 1000),
+                input: 100_000,
+                cached: 0,
+                output: 1000,
+                unpricedTokens: index == 0 && scenario.originalUnpriced ? 101_000 : nil,
+                pricingModel: "gpt-5.4",
+                pricingMode: observation.1)
+        }
+        old.files[file.path] = usage
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: old).catchUpRequired)
+        try Self.markPredecessor(cacheRoot: env.cacheRoot, parserHash: "4a4c4ef34ce6f037")
+        if scenario.bounded {
+            options.maxCodexScanBytesPerRefresh = 256
+            options.maxCodexSessionFileBytes = 256
+        }
+
+        var migrated: CostUsageFileUsage?
+        let fileSize = try Int64(Data(contentsOf: file).count)
+        for _ in 0..<60 {
+            _ = Self.report(day: day, options: options)
+            migrated = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
+                .files[file.path]
+            if migrated?.hasCurrentCodexParser == true, migrated?.codexScanComplete == true,
+               migrated?.parsedBytes == fileSize { break }
+        }
+        let rows = try #require(migrated?.codexRows)
+        let ledgerRow = try #require(rows.first { $0.responseID == "replay-response" })
+        #expect(migrated?.hasCurrentCodexParser == true)
+        #expect(rows.count == 1)
+        #expect(rows.compactMap(\.responseID) == ["replay-response"])
+        if scenario.originalUnpriced {
+            // The original was saved unknown; the replay's Standard evidence must not price it.
+            #expect(ledgerRow.unpricedTokens == 101_000)
+        } else {
+            #expect(ledgerRow.unpricedTokens == nil)
+            #expect(ledgerRow.pricingMode == "priority")
+        }
+    }
+
     private static func options(env: CostUsageTestEnvironment) -> CostUsageScanner.Options {
         var options = CostUsageScanner.Options(
             codexSessionsRoot: env.codexSessionsRoot,
