@@ -2,6 +2,8 @@
 
 ## 0.72.1 — Unreleased
 
+- Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights

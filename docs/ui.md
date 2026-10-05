@@ -55,7 +55,7 @@ read_when:
 - Time tokens offer Session and Weekly variants of Resets in and Reset at, including in conditional branches.
   The original unqualified reset tokens continue to follow the automatic window. A selected window that is
   unavailable displays a dash rather than substituting another window. Cursor also exposes **Grok Bot %**
-  while its named allowance is available; a missing allowance hides that token. Saved layouts use V4 keys
+  while its named allowance is available; a saved token shows its label and a dash when unavailable. Saved layouts use V4 keys
   alongside a V3 projection that drops named-extra tokens but keeps explicit reset selections, and a
   v0.56.8-readable V2 projection, which omits the new tokens and conditional rules that use them while preserving
   existing conditional placements, direct lane selections, and other providers' overrides. Re-upgrading restores
@@ -75,7 +75,7 @@ read_when:
 | --- | --- | --- |
 | Identity | Icon, Provider name, Account | Provider-scoped branding and identity |
 | Usage | Session %, Weekly %, Scoped weekly %, Auto %, Usage bar | Window percentage or a compact three-glyph usage bar |
-| Usage | Grok Bot % (Cursor) | Named allowance percentage; hidden when the allowance is absent |
+| Usage | Named allowances (Cursor Grok Bot, Antigravity family weekly quotas) | Own label and percentage; a saved selection shows a dash when unavailable |
 | Usage | Session pace, Weekly pace, Auto pace | Signed pace delta for that window |
 | Time | Resets in, Reset at (automatic, Session, Weekly), Runs out | Selected-window relative reset, absolute reset, or pace estimate |
 | Money | Balance, Cost today, Cost 30d | Provider balance or remaining credits, or local cost estimate for the selected period |
@@ -196,7 +196,7 @@ Cost-history submenus keep tall histories in a scrollable viewport. Switching To
 
 ### Provider percent window
 
-In Icon and Percent mode, provider settings expose an Auto, Session, or Weekly picker when the provider supports multiple quota windows. The choice updates top-level percent tokens in that provider’s layout. Conditional tokens and other providers’ layouts remain independent; use the layout editor for mixed percent windows.
+In Icon and Percent mode, provider settings expose a **Menu bar metric** picker when the provider supports multiple quota windows. Alongside Auto, Session, and Weekly, it offers the provider's declared named allowances: Cursor's Grok Bot and Antigravity's Gemini weekly and Claude/GPT weekly quotas. These choices remain available before a reading arrives. The choice updates top-level percent tokens in that provider’s layout and persists through its existing layout override. Named allowances render their own label and percentage, with an en dash for missing or unknown data and a real zero preserved. Balance, reset, conditional tokens, and other providers’ layouts remain independent; use the layout editor for mixed percent windows.
 
 ### Inline cost chart inspection
 
