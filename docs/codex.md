@@ -391,7 +391,10 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   once on its event date, with matching legacy `token_count` observations reconciled rather than added again.
   Exact mirrors include their timestamps, so repeated counters cannot erase an earlier legacy-only request.
   Adjacent observations also need a matching timestamp or thread cumulative total; equal request sizes alone do not
-  establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
+  establish that they are mirrors. When Codex's token_count counter has diverged from the thread counter, for example
+  after a resume, adjacent observations from the same turn with identical input, cached, and output tokens at most
+  five seconds apart are one request; parser revision 9 reparses existing files once to remove those duplicates while
+  retaining saved prices. Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while
   matching saved pricing survives replacement of an older legacy page.

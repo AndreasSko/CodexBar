@@ -352,6 +352,21 @@ enum CostUsageScanner {
         var replacedLegacyRowIndices: Set<Int> = []
     }
 
+    /// An observation's turn and request size with its time, for pairing a ledger record with its token_count mirror
+    /// when their cumulative counters diverge (for example after a resume).
+    struct CodexNearMirror: Codable, Equatable {
+        /// Codex writes both events for one response at completion; seconds apart at most, never minutes.
+        static let windowMilliseconds: Int64 = 5000
+
+        let key: String
+        let timestampMs: Int64
+
+        func pairs(with other: CodexNearMirror?) -> Bool {
+            guard let other, other.key == self.key else { return false }
+            return abs(other.timestampMs - self.timestampMs) <= Self.windowMilliseconds
+        }
+    }
+
     struct CodexRequestLedgerState: Codable, Equatable {
         var responseIDs: Set<String> = []
         var mirroredResponses: [String: String]? = [:]
@@ -363,6 +378,8 @@ enum CostUsageScanner {
         var pendingLedgerResponseID: String?
         var pendingLegacyMirrors: Set<String>?
         var pendingLegacyRowIndex: Int?
+        var pendingLedgerNearMirror: CodexNearMirror?
+        var pendingLegacyNearMirror: CodexNearMirror?
         var countedUsage: CostUsageCodexTotals?
 
         mutating func clearPendingMirrors(when shouldClear: Bool = true) {
@@ -371,11 +388,14 @@ enum CostUsageScanner {
             self.pendingLedgerResponseID = nil
             self.pendingLegacyMirrors = nil
             self.pendingLegacyRowIndex = nil
+            self.pendingLedgerNearMirror = nil
+            self.pendingLegacyNearMirror = nil
         }
 
-        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?) {
+        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?, near: CodexNearMirror?) {
             defer { self.clearPendingMirrors() }
-            guard let keys, let pending = self.pendingLedgerMirrors, !keys.isDisjoint(with: pending),
+            guard let keys, let pending = self.pendingLedgerMirrors,
+                  !keys.isDisjoint(with: pending) || near?.pairs(with: self.pendingLedgerNearMirror) == true,
                   let snapshot, let responseID = self.pendingLedgerResponseID else { return }
             self.rememberMirrors([snapshot], responseID: responseID)
         }
@@ -4128,17 +4148,25 @@ enum CostUsageScanner {
             return keys
         }
 
+        func nearMirror(turnID: String?, usage: CostUsageCodexTotals, timestamp: String) -> CodexNearMirror? {
+            guard let timestampMs = unixMilliseconds(from: timestamp) else { return nil }
+            let key = [turnID ?? "", String(usage.input), String(usage.cached), String(usage.output)]
+                .joined(separator: "\u{1F}")
+            return CodexNearMirror(key: key, timestampMs: timestampMs)
+        }
+
         func observeLegacyMirror(
             usage: CostUsageCodexTotals?,
             turnID: String?,
             total: CostUsageCodexTotals?,
-            timestamp: String) -> (snapshot: String, adjacent: Set<String>)?
+            timestamp: String) -> (snapshot: String, adjacent: Set<String>, near: CodexNearMirror?)?
         {
             guard let usage else { return nil }
             let snapshot = mirrorKey(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
             let adjacent = adjacentMirrorKeys(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
-            requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot)
-            return (snapshot, adjacent)
+            let near = nearMirror(turnID: turnID, usage: usage, timestamp: timestamp)
+            requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot, near: near)
+            return (snapshot, adjacent, near)
         }
 
         func handleRequestLedger(_ record: CodexRequestUsageRecord, endOffset: Int64?) {
@@ -4164,13 +4192,17 @@ enum CostUsageScanner {
             let mirror = keys.first(where: { requestLedger.legacyRowIndices[$0] != nil })
             let adjacentKeys = adjacentMirrorKeys(
                 turnID: turnID, usage: usage, total: record.threadTotal, timestamp: timestamp)
+            let near = nearMirror(turnID: turnID, usage: usage, timestamp: timestamp)
             let adjacentIndex = requestLedger.pendingLegacyMirrors?.isDisjoint(with: adjacentKeys) == false
+                || near?.pairs(with: requestLedger.pendingLegacyNearMirror) == true
                 ? requestLedger.pendingLegacyRowIndex : nil
             let mirrorIndex = mirror.flatMap { requestLedger.legacyRowIndices[$0] } ?? adjacentIndex
             requestLedger.pendingLegacyMirrors = nil
             requestLedger.pendingLegacyRowIndex = nil
+            requestLedger.pendingLegacyNearMirror = nil
             requestLedger.pendingLedgerMirrors = mirrorIndex == nil ? adjacentKeys : nil
             requestLedger.pendingLedgerResponseID = mirrorIndex == nil ? responseID : nil
+            requestLedger.pendingLedgerNearMirror = mirrorIndex == nil ? near : nil
             let legacyRow = mirrorIndex.flatMap { index in
                 rows.first(where: { $0.eventIndex == index }) ?? retainedRows[index]
             }
@@ -4667,6 +4699,7 @@ enum CostUsageScanner {
             if let key = mirror?.snapshot { requestLedger.legacyRowIndices[key] = eventIndex }
             requestLedger.pendingLegacyMirrors = mirror?.adjacent
             requestLedger.pendingLegacyRowIndex = eventIndex
+            requestLedger.pendingLegacyNearMirror = mirror?.near
         }
 
         func processFastLine(_ fastLine: CodexFastLine, sourceEndOffset: Int64?) throws {

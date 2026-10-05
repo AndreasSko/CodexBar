@@ -18,6 +18,10 @@
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
+### Fixed
+
+- Codex costs: stop counting a response twice when Codex's token_count counter has drifted from the thread counter, for example after a resume. Adjacent same-turn observations with identical usage at most five seconds apart now reconcile as one request, and existing caches reparse once without a rebuild. Thanks @gabrielrojasc!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
