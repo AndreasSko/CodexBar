@@ -16,6 +16,7 @@
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
 - Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
+- Costs: reduce peak memory when loading Codex cost history for reports and scans; stored usage rows decode as SQLite returns them instead of first collecting every encoded row.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
 ## 0.72.0 — 2026-10-04

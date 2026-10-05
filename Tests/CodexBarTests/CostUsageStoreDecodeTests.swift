@@ -51,6 +51,23 @@ extension CostUsageStoreReadWorkTests {
         #expect(decoded == expected)
     }
 
+    @Test
+    func `streamed codex baseline matches the full snapshot decode`() async throws {
+        let fixture = try ReadWorkFixture(fileCount: 3, rowsPerFile: 4, incomplete: true)
+        defer { fixture.remove() }
+        let path = try #require(fixture.canonical.files.keys.min())
+        var rows = await fixture.store.readSnapshot().usageRows.filter { $0.path == path }
+        rows.append(.init(path: path, rowIndex: rows.count, payload: Data("invalid JSON".utf8)))
+        #expect(await fixture.store.replaceUsageRows(path: path, rows: rows))
+
+        let snapshot = await fixture.store.readSnapshot(loadTokenSnapshots: false)
+        let expected = CostUsageStore.decodeCodexCache(from: snapshot, recorder: nil, tokenSnapshotsLoaded: false)
+        let baseline = try #require(await fixture.store.codexBaselineProjectionForTesting())
+        #expect(baseline.decoded == expected)
+        #expect(baseline.rowCounts == snapshot.usageRows.reduce(into: [:]) { $0[$1.path, default: 0] += 1 })
+        #expect(baseline.rowCounts[path] == 5)
+    }
+
     static func decodeGoldenCache(fixture: ReadWorkFixture, fileCount: Int) throws -> CostUsageCache {
         var expected = fixture.canonical
         let path = try #require(expected.files.keys.first)
@@ -155,5 +172,11 @@ extension CostUsageStoreReadWorkTests {
             reportSinceKey: ReadWorkFixture.day,
             reportUntilKey: ReadWorkFixture.day)
         return expected
+    }
+}
+
+extension CostUsageStore {
+    fileprivate func codexBaselineProjectionForTesting() -> (decoded: CostUsageCache, rowCounts: [String: Int])? {
+        self.readCodexBaseline().map { ($0.decoded, $0.persistence.rowCounts) }
     }
 }
