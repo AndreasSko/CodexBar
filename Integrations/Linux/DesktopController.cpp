@@ -368,9 +368,14 @@ bool DesktopController::listen(const QString &socketPath) {
                 const auto command = request.value("command").toString();
                 QJsonObject response{{"ok", true}};
                 if (command == "snapshot" || command == "background") {
-                    // Panel adapters may opt in to spending without opening the window; reuse its five-minute cache.
-                    if (request.value("spending").toBool() && !costBusy() && m_costError.isEmpty() &&
-                        QDateTime::currentMSecsSinceEpoch() - m_costUpdated > 300000) refreshCosts();
+                    // Panel adapters may opt in to spending without opening the window; reuse its five-minute
+                    // cache, and after a failed scan retry at most every few seconds so polling stays bounded.
+                    const auto now = QDateTime::currentMSecsSinceEpoch();
+                    if (request.value("spending").toBool() && !costBusy() && now - m_costUpdated > 300000 &&
+                        (m_costError.isEmpty() || now - m_costRequested > 5000)) {
+                        m_costRequested = now;
+                        refreshCosts();
+                    }
                     response = snapshot();
                 }
                 else if (command == "autostart") {

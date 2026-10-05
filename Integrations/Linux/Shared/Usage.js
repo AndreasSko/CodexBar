@@ -128,13 +128,20 @@ function chart(value) {
         kind: value.kind === "line" ? "line" : "bars", points: points};
 }
 
-// Codex grants one-time rate-limit resets; export the count and the soonest expiry only.
-function resetCredits(value) {
-    if (!value || typeof value !== "object" || number(value.availableCount) === null) return null;
-    var expiries = (Array.isArray(value.credits) ? value.credits : []).filter(function(credit) {
-        return credit && credit.status === "available" && isFinite(Date.parse(credit.expires_at));
-    }).map(function(credit) { return credit.expires_at; }).sort();
-    return {available: value.availableCount, nextExpiresAt: expiries.length ? expiries[0] : ""};
+// Codex grants one-time rate-limit resets. Match the shared core inventory: count available,
+// unexpired credits (no expiry counts as unexpired) and export only the soonest expiry.
+function resetCredits(value, now) {
+    if (!value || typeof value !== "object" || !Array.isArray(value.credits)) return null;
+    now = typeof now === "number" ? now : Date.now();
+    var usable = value.credits.filter(function(credit) {
+        if (!credit || credit.status !== "available") return false;
+        if (credit.expires_at === undefined || credit.expires_at === null || credit.expires_at === "") return true;
+        var expiry = Date.parse(credit.expires_at);
+        return isFinite(expiry) && expiry > now;
+    });
+    var expiries = usable.map(function(credit) { return Date.parse(credit.expires_at); })
+        .filter(function(expiry) { return isFinite(expiry); }).sort(function(a, b) { return a - b; });
+    return {available: usable.length, nextExpiresAt: expiries.length ? new Date(expiries[0]).toISOString() : ""};
 }
 
 // Extra usage or prepaid balance reported beside quota windows; amounts only, no identity.
