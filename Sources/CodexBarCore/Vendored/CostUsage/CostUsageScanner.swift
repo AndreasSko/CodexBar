@@ -4238,7 +4238,7 @@ enum CostUsageScanner {
         func rememberMirroredLegacyPricingKey(
             responseID: String,
             legacyRow: CodexUsageRow,
-            mirror: (snapshot: String, counterAlias: String?))
+            mirror: (snapshot: String, counterAlias: String?, exact: String))
         {
             // A bounded slice can end between the ledger row and this mirror; the ledger row is then retained.
             guard let ledger = rows.last(where: { $0.responseID == responseID })
@@ -4249,6 +4249,8 @@ enum CostUsageScanner {
             // A replay also links its mirror to this row for deduplication; only the original record's own
             // mirror (same turn, usage, and cumulative total) describes the request this row owns.
             let ownKeys = ledger.requestMirrorKeys ?? []
+            // A mirror stamped with another ledger record for this response belongs to that replay.
+            if !ownKeys.contains(mirror.exact), requestLedger.mirroredResponses?[mirror.exact] == responseID { return }
             guard ownKeys.contains(mirror.snapshot)
                 || mirror.counterAlias.map({ alias in ownKeys.contains { $0.hasPrefix(alias) } }) == true
             else { return }
@@ -4694,9 +4696,16 @@ enum CostUsageScanner {
                         input: deltaUsage.input,
                         cached: deltaUsage.cached,
                         output: deltaUsage.output),
-                    mirror: (key, total.map {
-                        mirrorKey(turnID: mirrorTurnID, usage: last ?? deltaUsage, total: $0, timestamp: nil)
-                    }))
+                    mirror: (
+                        key,
+                        total.map {
+                            mirrorKey(turnID: mirrorTurnID, usage: last ?? deltaUsage, total: $0, timestamp: nil)
+                        },
+                        mirrorKey(
+                            turnID: mirrorTurnID,
+                            usage: last ?? deltaUsage,
+                            total: nil,
+                            timestamp: record.timestamp)))
                 return
             }
             if deltaInput == 0, deltaCached == 0, deltaOutput == 0 {

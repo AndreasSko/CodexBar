@@ -332,14 +332,16 @@ struct CostUsageRequestLedgerMigrationTests {
     /// A replayed response links its later token_count to the original ledger row for deduplication. Only the
     /// original's own mirror may supply that row's saved pricing; the replay's legacy row is a different request.
     @Test(arguments: [
-        (bounded: false, verbatimDuplicate: false, originalUnpriced: false),
-        (bounded: true, verbatimDuplicate: false, originalUnpriced: false),
-        (bounded: false, verbatimDuplicate: true, originalUnpriced: false),
-        (bounded: false, verbatimDuplicate: false, originalUnpriced: true),
-        (bounded: true, verbatimDuplicate: false, originalUnpriced: true),
+        (bounded: false, verbatimDuplicate: false, originalUnpriced: false, turnTracking: false),
+        (bounded: true, verbatimDuplicate: false, originalUnpriced: false, turnTracking: false),
+        (bounded: false, verbatimDuplicate: true, originalUnpriced: false, turnTracking: false),
+        (bounded: false, verbatimDuplicate: false, originalUnpriced: true, turnTracking: false),
+        (bounded: true, verbatimDuplicate: false, originalUnpriced: true, turnTracking: false),
+        (bounded: false, verbatimDuplicate: false, originalUnpriced: true, turnTracking: true),
+        (bounded: true, verbatimDuplicate: false, originalUnpriced: true, turnTracking: true),
     ])
     func `legacy upgrade takes saved pricing only from the original request mirror`(
-        _ scenario: (bounded: Bool, verbatimDuplicate: Bool, originalUnpriced: Bool)) throws
+        _ scenario: (bounded: Bool, verbatimDuplicate: Bool, originalUnpriced: Bool, turnTracking: Bool)) throws
     {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
@@ -349,16 +351,21 @@ struct CostUsageRequestLedgerMigrationTests {
         func tokens(_ input: Int, _ output: Int) -> [String: Int] {
             ["input_tokens": input, "cached_input_tokens": 0, "output_tokens": output]
         }
+        /// With turnTracking, a resumed session's token_count totals follow the turn, each ledger record shares its
+        /// mirror's timestamp, and the replay's mirror total equals the original record's thread total.
         func ledger(at date: Date, total: Int) -> [String: Any] {
-            [
+            var payload: [String: Any] = [
+                "thread_id": "replay-thread", "session_id": "replay-execution", "response_id": "replay-response",
+                "turn_id": "replay-turn", "usage": tokens(100_000, 1000),
+                "thread_token_usage": tokens(
+                    total + (scenario.turnTracking ? 100_000 : 0),
+                    (total + (scenario.turnTracking ? 100_000 : 0)) / 100),
+            ]
+            if scenario.turnTracking { payload["turn_token_usage"] = tokens(total, total / 100) }
+            return [
                 "type": "token_usage_record",
-                "timestamp": formatter.string(from: date.addingTimeInterval(0.4)),
-                "payload": [
-                    "thread_id": "replay-thread", "session_id": "replay-execution", "response_id": "replay-response",
-                    "turn_id": "replay-turn", "usage": tokens(100_000, 1000), "thread_token_usage": tokens(
-                        total,
-                        total / 100),
-                ],
+                "timestamp": formatter.string(from: date.addingTimeInterval(scenario.turnTracking ? 0 : 0.4)),
+                "payload": payload,
             ]
         }
         func count(at date: Date, total: Int) -> [String: Any] {
