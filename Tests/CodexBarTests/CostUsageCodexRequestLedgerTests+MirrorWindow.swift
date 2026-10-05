@@ -6,7 +6,7 @@ extension CostUsageCodexRequestLedgerTests {
     /// After a resume, Codex's token_count counter can run behind the thread counter while both events still describe
     /// the same response a few milliseconds apart. Adjacent same-turn observations with identical usage inside the
     /// mirror window are one request; beyond it they stay distinct.
-    @Test(arguments: [false, true], [2, 4900, 5100])
+    @Test(arguments: [false, true], [2, 4900, 5000, 5001, 5100])
     func `adjacent offset counters pair only inside the mirror window`(ledgerFirst: Bool, gapMs: Int) throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
@@ -171,5 +171,157 @@ extension CostUsageCodexRequestLedgerTests {
         #expect(rows.first?.responseID == "one")
         #expect(rows.first?.pricingMode == "priority")
         #expect(report(end.addingTimeInterval(30)).summary?.totalTokens == 1100)
+    }
+
+    /// Real token_count payloads carry no turn_id; the active task supplies it, and a new task ends adjacency.
+    @Test(arguments: [false, true])
+    func `real token count shape pairs within its task only`(taskBetween: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let usage = [100, 20, 10, 4]
+        let later = try Self.timestamp(Self.timestampA, plusMilliseconds: 2)
+        var lines = Self.header() + [
+            Self.taskStarted("synthetic-turn"),
+            Self.record(id: "one", usage: usage, total: [1100, 220, 110, 44], turnTotal: [500, 100, 50, 20]),
+        ]
+        if taskBetween { lines.append(Self.taskStarted("synthetic-turn")) }
+        lines.append(Self.realLegacy(timestamp: later, usage: usage, total: [860, 172, 86, 34]))
+        let result = try Self.parse(lines, env: env)
+        #expect(result.rows.count == (taskBetween ? 2 : 1))
+        #expect(result.rows.compactMap(\.responseID) == ["one"])
+    }
+
+    /// After a tool runs, Codex writes the token_count long after its ledger record. Once a pair established the
+    /// counter offset, a later ledger-first pair with the same offset is one request; a different offset is not.
+    @Test(arguments: [true, false])
+    func `far ledger first mirrors pair when their counter offset matches`(sameOffset: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let farLater = try Self.timestamp(Self.timestampA, plusMilliseconds: 30000)
+        let result = try Self.parse(Self.header() + [
+            Self.taskStarted("synthetic-turn"),
+            Self.record(id: "one", usage: [100, 20, 10, 4], total: [1100, 220, 110, 44], turnTotal: [500, 100, 50, 20]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2),
+                usage: [100, 20, 10, 4],
+                total: [860, 172, 86, 34]),
+            Self.record(
+                id: "two",
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 10),
+                usage: [60, 20, 6, 3],
+                total: [1160, 240, 116, 47],
+                turnTotal: [560, 120, 56, 23]),
+            Self.realLegacy(
+                timestamp: farLater,
+                usage: [60, 20, 6, 3],
+                total: sameOffset ? [920, 192, 92, 37] : [925, 192, 92, 37]),
+        ], env: env)
+        #expect(result.rows.count == (sameOffset ? 2 : 3))
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == (sameOffset ? 176 : 242))
+        #expect(result.rows.compactMap(\.responseID) == ["one", "two"])
+    }
+
+    /// Offset pairing applies only when the ledger record comes first; a token_count followed much later by a ledger
+    /// record of equal size stays two requests even when their offset matches the learned one.
+    @Test
+    func `far legacy first observations stay distinct even with the learned offset`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let result = try Self.parse(Self.header() + [
+            Self.taskStarted("synthetic-turn"),
+            Self.record(id: "one", usage: [100, 20, 10, 4], total: [1100, 220, 110, 44], turnTotal: [500, 100, 50, 20]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2),
+                usage: [100, 20, 10, 4],
+                total: [860, 172, 86, 34]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 10),
+                usage: [60, 20, 6, 3],
+                total: [920, 192, 92, 37]),
+            Self.record(
+                id: "two",
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 30000),
+                usage: [60, 20, 6, 3],
+                total: [1160, 240, 116, 47],
+                turnTotal: [560, 120, 56, 23]),
+        ], env: env)
+        #expect(result.rows.count == 3)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 242)
+    }
+
+    /// A legacy-only request is part of the thread counter, so an owned record of equal size that follows it is a
+    /// different request even when the offset from an earlier pair is known.
+    @Test
+    func `legacy only request before an equal owned request stays distinct`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let result = try Self.parse(Self.header() + [
+            Self.taskStarted("synthetic-turn"),
+            Self.record(id: "one", usage: [100, 20, 10, 4], total: [1100, 220, 110, 44], turnTotal: [500, 100, 50, 20]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 2),
+                usage: [100, 20, 10, 4],
+                total: [860, 172, 86, 34]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 20000),
+                usage: [50, 10, 5, 2],
+                total: [910, 182, 91, 36]),
+            Self.record(
+                id: "two",
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 50000),
+                usage: [50, 10, 5, 2],
+                total: [1200, 240, 120, 48],
+                turnTotal: [600, 120, 60, 24]),
+            Self.realLegacy(
+                timestamp: Self.timestamp(Self.timestampA, plusMilliseconds: 50002),
+                usage: [50, 10, 5, 2],
+                total: [960, 192, 96, 38]),
+        ], env: env)
+        #expect(result.rows.count == 3)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220)
+    }
+
+    /// A resumed session and a counted bare usage line both separate observations, so they cannot be one request.
+    @Test(arguments: [false, true], ["resume", "bare usage"])
+    func `session resume or bare usage between observations keeps them distinct`(
+        ledgerFirst: Bool,
+        separator: String) throws
+    {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let usage = [100, 20, 10, 4]
+        let between = try Self.timestamp(Self.timestampA, plusMilliseconds: 1000)
+        let later = try Self.timestamp(Self.timestampA, plusMilliseconds: 2000)
+        let ledger = Self.record(
+            id: "one",
+            timestamp: ledgerFirst ? Self.timestampA : later,
+            usage: usage,
+            total: [1100, 220, 110, 44],
+            turnTotal: [500, 100, 50, 20])
+        let legacy = Self.legacy(
+            timestamp: ledgerFirst ? later : Self.timestampA,
+            usage: usage,
+            total: [860, 172, 86, 34])
+        let separatorLine: [String: Any] = separator == "resume"
+            ? ["type": "session_meta", "timestamp": between, "payload": ["id": "synthetic-thread"]]
+            : ["timestamp": between, "usage": ["prompt_tokens": 10, "completion_tokens": 1]]
+        let result = try Self.parse(
+            Self.header() + (ledgerFirst ? [ledger, separatorLine, legacy] : [legacy, separatorLine, ledger]),
+            env: env)
+        let bareTokens = separator == "bare usage" ? 11 : 0
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220 + bareTokens)
+    }
+
+    static func taskStarted(_ turnID: String) -> [String: Any] {
+        ["type": "event_msg", "timestamp": self.timestampA, "payload": ["type": "task_started", "turn_id": turnID]]
+    }
+
+    /// The token_count shape Codex writes: no turn_id in the payload.
+    static func realLegacy(timestamp: String, usage: [Int], total: [Int]) -> [String: Any] {
+        ["type": "event_msg", "timestamp": timestamp, "payload": [
+            "type": "token_count", "info": [
+                "last_token_usage": self.tokens(usage), "total_token_usage": self.tokens(total),
+            ],
+        ]]
     }
 }

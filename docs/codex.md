@@ -393,8 +393,11 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   Adjacent observations also need a matching timestamp or thread cumulative total; equal request sizes alone do not
   establish that they are mirrors. When Codex's token_count counter has diverged from the thread counter, for example
   after a resume, adjacent observations from the same turn with identical input, cached, and output tokens at most
-  five seconds apart are one request; parser revision 9 reparses existing files once to remove those duplicates while
-  retaining saved prices. Legacy snapshots containing only last usage or only cumulative totals also
+  five seconds apart are one request. A ledger record whose token_count follows a long tool run also pairs when both
+  counters keep the offset learned from the previous pair; a token_count written before its ledger record pairs only
+  inside the window. A resumed session or a counted bare usage line between two observations keeps them distinct.
+  Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices.
+  Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while
   matching saved pricing survives replacement of an older legacy page.
