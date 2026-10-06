@@ -18,6 +18,7 @@ enum OpenCodexUsageAggregator {
         var tokens = CostUsageDailyReport.OptionalCountAccumulator()
         var cost: Double = 0
         var sawCost = false
+        var incompleteRequestCount = 0
     }
 
     struct SessionAccumulator {
@@ -232,6 +233,11 @@ enum OpenCodexUsageAggregator {
     {
         model.mix.merge(entry.usage?.tokenMix ?? .init())
         model.tokens.merge(entry.resolvedTotalCount)
+        // Missing usage is an exclusion, not a failure of the other model rows. An overflowing
+        // total still has token evidence and must remain invalid rather than becoming an exclusion.
+        if entry.resolvedTotalTokens == nil, entry.usage?.tokenMix.hasAnyClass != true {
+            model.incompleteRequestCount = CostUsageIncompleteRequests.sum([model.incompleteRequestCount, 1])
+        }
         if let cost {
             model.cost += cost
             model.sawCost = true
@@ -267,7 +273,8 @@ enum OpenCodexUsageAggregator {
                 outputTokens: model.mix.outputTokens,
                 cacheReadTokens: model.mix.cacheReadTokens,
                 cacheCreationTokens: model.mix.cacheCreationTokens,
-                reasoningTokens: model.mix.reasoningTokens)
+                reasoningTokens: model.mix.reasoningTokens,
+                incompleteRequestCount: model.incompleteRequestCount > 0 ? model.incompleteRequestCount : nil)
         }
     }
 
