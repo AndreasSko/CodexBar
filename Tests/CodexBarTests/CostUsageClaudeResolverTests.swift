@@ -215,14 +215,12 @@ struct CostUsageClaudeResolverTests {
         modelID: String) -> Double?
     {
         resolver.costUSD(
+            model: modelID,
             providerID: providerID,
-            modelID: modelID,
-            tokens: CostUsagePricing.ClaudeCostTokens(
-                input: 100,
-                cacheRead: 50,
-                cacheCreation: 0,
-                cacheCreation1h: 0,
-                output: 10))
+            inputTokens: 100,
+            cacheReadInputTokens: 50,
+            cacheCreationInputTokens: 0,
+            outputTokens: 10)
     }
 
     static func cost(_ resolver: CostUsagePricing.ClaudeResolver, model: String) -> Double? {

@@ -336,9 +336,10 @@ enum AntigravityLocalReader {
         usage: AntigravityProtoReader.ParsedUsage,
         cacheWrite: Int) -> Double?
     {
-        func resolve(_ candidate: String) -> Double? {
+        func resolve(_ candidate: String, providerID: String? = nil) -> Double? {
             pricing.costUSD(
                 model: candidate,
+                providerID: providerID,
                 inputTokens: usage.newInput,
                 cacheReadInputTokens: usage.cacheRead,
                 cacheCreationInputTokens: cacheWrite,
@@ -348,15 +349,7 @@ enum AntigravityLocalReader {
         if let cost = resolve(model) { return cost }
         if let base = self.pricingBaseModelID(for: model), let cost = resolve(base) { return cost }
         guard let entry = self.explicitCatalogEntries[model.lowercased()] else { return nil }
-        return pricing.costUSD(
-            providerID: entry.providerID,
-            modelID: entry.modelID,
-            tokens: CostUsagePricing.ClaudeCostTokens(
-                input: usage.newInput,
-                cacheRead: usage.cacheRead,
-                cacheCreation: cacheWrite,
-                cacheCreation1h: 0,
-                output: usage.output + usage.reasoning))
+        return resolve(entry.modelID, providerID: entry.providerID)
     }
 
     private static func checkedMergeEntry(
