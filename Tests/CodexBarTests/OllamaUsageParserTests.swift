@@ -361,4 +361,110 @@ struct OllamaUsageParserTests {
         #expect(usage.primary?.windowMinutes == 5 * 60)
         #expect(usage.secondary == nil)
     }
+
+    @Test
+    func `parses free usage meter as the primary monthly window`() throws {
+        // Free plans render the included-credit meter as "Free usage"; the models info box
+        // above it also contains the literal "Free usage" text, so the first match is not the meter.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let html = """
+        <div>
+          <h2 class="text-xl font-medium flex items-center space-x-2">
+            <span>Included usage</span>
+            <span
+              class="text-xs font-normal px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 capitalize"
+              >free</span
+            >
+          </h2>
+          <h2 id="header-email">user@example.com</h2>
+          <div id="free-plan-models">
+            <p>Free usage credits can be used with the following cloud models:</p>
+          </div>
+          <div>
+            <div class="flex justify-between mb-2">
+              <span class="text-sm">Free usage</span>
+              <span class="text-sm">69.5% used</span>
+            </div>
+            <div class="relative group" data-usage-meter>
+              <div
+                class="relative h-3 overflow-hidden rounded-full bg-neutral-200"
+                data-usage-track
+                aria-label="Free usage 69.5% used"
+              >
+                <div class="flex h-full overflow-hidden bg-neutral-950" style="width: 69.5%; "></div>
+              </div>
+            </div>
+            <div class="text-xs text-neutral-500 mt-1 local-time" data-time="2026-10-26T15:19:11Z">
+              Resets in 2 weeks.
+            </div>
+          </div>
+        </div>
+        """
+
+        let snapshot = try OllamaUsageParser.parse(html: html, now: now)
+
+        #expect(snapshot.planName == "free")
+        #expect(snapshot.accountEmail == "user@example.com")
+        #expect(snapshot.monthlyUsedPercent == 69.5)
+        #expect(snapshot.sessionUsedPercent == nil)
+        #expect(snapshot.weeklyUsedPercent == nil)
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        let expectedReset = formatter.date(from: "2026-10-26T15:19:11Z")
+        #expect(snapshot.monthlyResetsAt == expectedReset)
+
+        let usage = snapshot.toUsageSnapshot()
+        #expect(usage.primary?.usedPercent == 69.5)
+        #expect(usage.primary?.resetsAt == expectedReset)
+        #expect(usage.secondary == nil)
+        #expect(usage.identity?.loginMethod == "free")
+    }
+
+    @Test
+    func `free and monthly usage labels map to the same primary window`() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        func page(label: String) -> String {
+            """
+            <div>
+              <span>\(label)</span>
+              <span>69.5% used</span>
+              <div class="local-time" data-time="2026-10-26T15:19:11Z">Resets in 2 weeks.</div>
+            </div>
+            """
+        }
+
+        let free = try OllamaUsageParser.parse(html: page(label: "Free usage"), now: now)
+        let monthly = try OllamaUsageParser.parse(html: page(label: "Monthly usage"), now: now)
+
+        #expect(free.monthlyUsedPercent == monthly.monthlyUsedPercent)
+        #expect(free.monthlyResetsAt == monthly.monthlyResetsAt)
+
+        let freeUsage = free.toUsageSnapshot()
+        let monthlyUsage = monthly.toUsageSnapshot()
+        #expect(freeUsage.primary?.windowMinutes == monthlyUsage.primary?.windowMinutes)
+        #expect(freeUsage.primary?.windowMinutes == ProviderPaceCapability.monthlyWindowSentinelMinutes)
+    }
+
+    @Test
+    func `usage label prose does not truncate a preceding block`() throws {
+        // "Free usage credits can be used with the following cloud models:" contains another
+        // usage label. It must not act as a window boundary for the Monthly block above it.
+        let html = """
+        <div>
+          <span>Monthly usage</span>
+          <span>$7.50 of $60 used</span>
+          <p>Free usage credits can be used with the following cloud models:</p>
+          <div class="local-time" data-time="2026-09-30T15:14:29Z">Resets in 4 weeks.</div>
+        </div>
+        """
+
+        let snapshot = try OllamaUsageParser.parse(html: html)
+
+        #expect(snapshot.monthlyUsedPercent == 12.5)
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        #expect(snapshot.monthlyResetsAt == formatter.date(from: "2026-09-30T15:14:29Z"))
+    }
 }
