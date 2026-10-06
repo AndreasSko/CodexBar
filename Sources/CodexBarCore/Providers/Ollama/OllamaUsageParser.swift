@@ -2,8 +2,6 @@ import Foundation
 
 enum OllamaUsageParser {
     // Current settings use monthly credits; retain legacy usage labels for older pages.
-    // Free plans render the included-credit meter as "Free usage" instead of "Monthly usage";
-    // both label the same primary included-usage window.
     private static let monthlyUsageLabels = ["Monthly usage", "Free usage"]
     private static let legacyPrimaryUsageLabels = ["Session usage", "Hourly usage"]
     private static let primaryUsageLabels = monthlyUsageLabels + legacyPrimaryUsageLabels
@@ -33,7 +31,7 @@ enum OllamaUsageParser {
     static func parseClassified(html: String, now: Date = Date()) -> ClassifiedParseResult {
         let plan = self.parsePlanName(html)
         let email = self.parseAccountEmail(html)
-        let monthly = self.parseUsageBlock(labels: Self.monthlyUsageLabels, html: html)
+        let monthly = self.parseUsageBlock(labels: self.monthlyUsageLabels, html: html)
         let session = self.parseUsageBlock(labels: Self.legacyPrimaryUsageLabels, html: html)
         let weekly = self.parseUsageBlock(label: "Weekly usage", html: html)
 
@@ -91,14 +89,14 @@ enum OllamaUsageParser {
     }
 
     private static func parseUsageBlock(label: String, html: String) -> UsageBlock? {
-        guard let labelRange = self.labelTextNodeRange(label, in: html) else { return nil }
+        guard let labelRange = html.range(of: #">\s*\#(label)\s*<"#, options: .regularExpression) else { return nil }
         let tail = String(html[labelRange.upperBound...])
         let window = self.usageBlockWindow(after: label, in: tail)
 
         guard let usedPercent = self.parsePercent(in: window) else { return nil }
         let resetsAt = self.parseISODate(in: window)
         let windowMinutes: Int? = switch label {
-        case "Monthly usage", "Free usage":
+        case let label where self.monthlyUsageLabels.contains(label):
             // Monthly windows carry the 30-day sentinel duration; pace resolves the real
             // calendar month from the reset date via the resetWindowPace rule.
             ProviderPaceCapability.monthlyWindowSentinelMinutes
@@ -122,26 +120,11 @@ enum OllamaUsageParser {
         return nil
     }
 
-    /// Range of the label's own text node (`>Label<`), not a bare substring.
-    ///
-    /// A substring match also hits prose such as "Free usage credits can be used with the following
-    /// cloud models:", which would both start a window before the real meter and act as a spurious
-    /// boundary that truncates the reset timestamp of the preceding block.
-    private static func labelTextNodeRange(_ label: String, in html: String) -> Range<String.Index>? {
-        let pattern = #">\s*\#(NSRegularExpression.escapedPattern(for: label))\s*<"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(
-                  in: html,
-                  range: NSRange(html.startIndex..<html.endIndex, in: html))
-        else { return nil }
-        return Range(match.range, in: html)
-    }
-
     private static func usageBlockWindow(after label: String, in tail: String) -> String {
         let maxLength = 4000
         let boundary = self.usageLabels
             .filter { $0 != label }
-            .compactMap { self.labelTextNodeRange($0, in: tail)?.lowerBound }
+            .compactMap { tail.range(of: #">\s*\#($0)\s*<"#, options: .regularExpression)?.lowerBound }
             .min()
         let bounded = boundary.map { String(tail[..<$0]) } ?? String(tail.prefix(maxLength))
         return String(bounded.prefix(maxLength))

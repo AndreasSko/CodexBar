@@ -206,8 +206,8 @@ struct OllamaUsageParserTests {
         #expect(snapshot.weeklyUsedPercent == 3.4)
     }
 
-    @Test
-    func `parses monthly dollar usage from new settings HTML`() throws {
+    @Test(arguments: ["", "<p>Free usage credits can be used with the following cloud models:</p>"])
+    func `parses monthly dollar usage from new settings HTML`(labelProse: String) throws {
         // Captured monthly-credit markup includes line breaks inside closing tags.
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let html = """
@@ -237,6 +237,7 @@ struct OllamaUsageParserTests {
                 </div>
               </div>
             </div>
+            \(labelProse)
             <div
               class="text-xs text-neutral-500 mt-1 local-time"
               data-time="2026-09-30T15:14:29Z"
@@ -364,8 +365,7 @@ struct OllamaUsageParserTests {
 
     @Test
     func `parses free usage meter as the primary monthly window`() throws {
-        // Free plans render the included-credit meter as "Free usage"; the models info box
-        // above it also contains the literal "Free usage" text, so the first match is not the meter.
+        // Sanitized settings-page fragment from #4308; explanatory prose is not a meter label.
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let html = """
         <div>
@@ -409,62 +409,14 @@ struct OllamaUsageParserTests {
         #expect(snapshot.sessionUsedPercent == nil)
         #expect(snapshot.weeklyUsedPercent == nil)
 
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        let expectedReset = formatter.date(from: "2026-10-26T15:19:11Z")
+        let expectedReset = ISO8601DateFormatter().date(from: "2026-10-26T15:19:11Z")
         #expect(snapshot.monthlyResetsAt == expectedReset)
 
         let usage = snapshot.toUsageSnapshot()
+        #expect(usage.primary?.windowMinutes == ProviderPaceCapability.monthlyWindowSentinelMinutes)
         #expect(usage.primary?.usedPercent == 69.5)
         #expect(usage.primary?.resetsAt == expectedReset)
         #expect(usage.secondary == nil)
         #expect(usage.identity?.loginMethod == "free")
-    }
-
-    @Test
-    func `free and monthly usage labels map to the same primary window`() throws {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        func page(label: String) -> String {
-            """
-            <div>
-              <span>\(label)</span>
-              <span>69.5% used</span>
-              <div class="local-time" data-time="2026-10-26T15:19:11Z">Resets in 2 weeks.</div>
-            </div>
-            """
-        }
-
-        let free = try OllamaUsageParser.parse(html: page(label: "Free usage"), now: now)
-        let monthly = try OllamaUsageParser.parse(html: page(label: "Monthly usage"), now: now)
-
-        #expect(free.monthlyUsedPercent == monthly.monthlyUsedPercent)
-        #expect(free.monthlyResetsAt == monthly.monthlyResetsAt)
-
-        let freeUsage = free.toUsageSnapshot()
-        let monthlyUsage = monthly.toUsageSnapshot()
-        #expect(freeUsage.primary?.windowMinutes == monthlyUsage.primary?.windowMinutes)
-        #expect(freeUsage.primary?.windowMinutes == ProviderPaceCapability.monthlyWindowSentinelMinutes)
-    }
-
-    @Test
-    func `usage label prose does not truncate a preceding block`() throws {
-        // "Free usage credits can be used with the following cloud models:" contains another
-        // usage label. It must not act as a window boundary for the Monthly block above it.
-        let html = """
-        <div>
-          <span>Monthly usage</span>
-          <span>$7.50 of $60 used</span>
-          <p>Free usage credits can be used with the following cloud models:</p>
-          <div class="local-time" data-time="2026-09-30T15:14:29Z">Resets in 4 weeks.</div>
-        </div>
-        """
-
-        let snapshot = try OllamaUsageParser.parse(html: html)
-
-        #expect(snapshot.monthlyUsedPercent == 12.5)
-
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        #expect(snapshot.monthlyResetsAt == formatter.date(from: "2026-09-30T15:14:29Z"))
     }
 }
