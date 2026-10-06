@@ -955,6 +955,7 @@ extension CostUsageStoreTests {
 
 extension CostUsageStoreTests {
     @Test(arguments: [
+        "99d920977063318a", // Scheduling diagnostics retain history and checkpoints.
         "029fe80aa98f27e8", // Before the shared JSON fallback.
         "c61aebb9cf043a72", // Previous request-ledger revision.
         "4a4c4ef34ce6f037", // Before request-ledger accounting.
@@ -1001,6 +1002,7 @@ extension CostUsageStoreTests {
         let fixture = try StoreFixture()
         defer { fixture.remove() }
         #expect(CostUsageStore.compatiblePredecessorParserHashes == [
+            "99d920977063318a",
             "ed735dc27ffa70d9",
             "029fe80aa98f27e8",
             "c61aebb9cf043a72",
