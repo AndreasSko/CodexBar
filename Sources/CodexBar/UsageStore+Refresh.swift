@@ -922,12 +922,16 @@ extension UsageStore {
             accountEmail: account.email,
             accountOrganization: identity?.accountOrganization,
             loginMethod: identity?.loginMethod ?? account.workspaceLabel))
-        let currentSnapshots = [CodexAccountUsageSnapshot(
+        let projection = self.freshCodexVisibleAccountProjectionForAccountRefresh()
+        var currentSnapshots = Self.codexAccountSnapshots(
+            self.codexAccountSnapshots,
+            reconciledWith: projection).filter { $0.id != account.id }
+        currentSnapshots.append(CodexAccountUsageSnapshot(
             account: account,
             snapshot: relabeled,
             error: nil,
             sourceLabel: sourceLabel,
-            credits: self.credits)]
+            credits: self.credits))
         self.codexAccountSnapshots = currentSnapshots
         self.codexAccountUsageSnapshotStore?.store(currentSnapshots)
     }
