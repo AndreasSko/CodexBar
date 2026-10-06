@@ -150,9 +150,21 @@ struct CostUsageStoreReadView: Sendable {
         CostUsageScanner.buildCodexReportFromCache(cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
     }
 
-    func projects(range: CostUsageScanner.CostUsageDayRange, cacheRoot: URL?) -> [CostUsageProjectBreakdown] {
-        CostUsageScanner.buildCodexProjectBreakdownsFromCache(
-            cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot)
+    func reports(
+        range: CostUsageScanner.CostUsageDayRange,
+        cacheRoot: URL?,
+        roots: [URL],
+        includeBreakdowns: Bool = true,
+        includeProjects: Bool = true)
+        -> (daily: CostUsageDailyReport, projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown])
+    {
+        CostUsageScanner.buildCodexReportProjectionsFromCache(
+            cache: self.cache,
+            range: range,
+            modelsDevCacheRoot: cacheRoot,
+            sessionRoots: roots,
+            includeBreakdowns: includeBreakdowns,
+            includeProjects: includeProjects)
     }
 
     func projectSessionIDs(range: CostUsageScanner.CostUsageDayRange) -> [String: Set<String>] {
@@ -169,15 +181,6 @@ struct CostUsageStoreReadView: Sendable {
             sessionIDsByPath[path, default: []].insert(id)
         }
         return sessionIDsByPath
-    }
-
-    func sessions(
-        range: CostUsageScanner.CostUsageDayRange,
-        cacheRoot: URL?,
-        roots: [URL]) -> [CostUsageSessionBreakdown]
-    {
-        CostUsageScanner.buildCodexSessionBreakdownsFromCache(
-            cache: self.cache, range: range, modelsDevCacheRoot: cacheRoot, sessionRoots: roots)
     }
 
     func catchUpStatus(

@@ -13,6 +13,8 @@
 
 ### Changed
 
+- Codex: build each file cost report once across daily, session, and project refresh views, including cached dashboard loads, while keeping pricing scopes separate (#4275, #4277). Thanks @luochen211!
+
 - Storage: reduce repeated path processing while scanning provider directories, preserving component totals and symbolic-link exclusions (#4286). Thanks @Yuxin-Qiao!
 
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.

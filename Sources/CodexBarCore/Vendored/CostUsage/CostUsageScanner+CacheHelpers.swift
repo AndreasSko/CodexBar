@@ -1366,6 +1366,9 @@ extension CostUsageScanner {
             CostUsagePricing.modelsDevCatalog(cacheRoot: $0)
         }) -> CostUsageDailyReport
     {
+        #if DEBUG
+        CostUsageStoreTestHooks.current.readWorkRecorder?.recordReportBuild()
+        #endif
         let priorityTurns = priorityTurns ?? cache.codexResolvedPriorityTurns ?? [:]
         var reportCache = cache
         for (path, usage) in cache.files where self.needsCodexPricingMetadata(usage, range: range) {

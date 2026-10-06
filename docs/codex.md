@@ -481,6 +481,10 @@ These account rows intentionally exclude pi and OMP sessions because their histo
 by one Codex account. The normal Codex cost menu and CLI scan continue to include supported pi-compatible history. The
 dashboard labels its values as local estimates and keeps currencies separate.
 
+Cost refreshes and cached dashboard loads share each file report between session and project views. Daily and
+project totals retain their own pricing evidence scopes. All preparation is local to one call, so later loads use
+their current rows, prices, roots, dates, and time zone without retaining another report cache.
+
 ## Local storage footprint
 
 Storage scans reuse top-level component paths within each scan. Symbolic links stay excluded, and path aliases
