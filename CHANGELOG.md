@@ -20,7 +20,8 @@
 
 ### Fixed
 
-- Codex costs: stop counting a response twice when Codex's token_count counter has drifted from the thread counter, for example after a resume. Adjacent same-turn observations with identical usage reconcile as one request when they are at most five seconds apart, or when a token_count written after a long tool run keeps the counter offset of the previous pair; existing caches reparse once without a rebuild (#4290). Thanks @gabrielrojasc!
+- Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+- Codex costs: avoid double-counting drifted request-ledger mirrors, including delayed observations after context compaction; keep saved prices through the repair (#4289, #4290). Thanks @gabrielrojasc and @kcharlan!
 
 ## 0.72.0 — 2026-10-04
 

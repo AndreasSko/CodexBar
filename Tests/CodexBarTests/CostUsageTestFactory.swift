@@ -1,0 +1,161 @@
+import Foundation
+@testable import CodexBarCore
+
+/// Convenience defaults for synthetic cache fixtures. Production calls the value initializer directly.
+extension CostUsageScanner {
+    static func makeFileUsage(
+        mtimeUnixMs: Int64,
+        size: Int64,
+        days: [String: [String: [Int]]],
+        parsedBytes: Int64?,
+        lastModel: String? = nil,
+        lastTotals: CostUsageCodexTotals? = nil,
+        lastCountedTotals: CostUsageCodexTotals? = nil,
+        lastRawTotalsBaseline: CostUsageCodexTotals? = nil,
+        lastRawTotalsWatermark: CostUsageCodexTotals? = nil,
+        seenRawTotals: [CostUsageCodexTotals]? = nil,
+        hasDivergentTotals: Bool? = nil,
+        hasInterleavedTotals: Bool? = nil,
+        lastCodexTurnID: String? = nil,
+        sessionId: String? = nil,
+        forkedFromId: String? = nil,
+        forkBaselineDependencyKey: String? = nil,
+        projectPath: String? = nil,
+        canonicalProjectPath: String? = nil,
+        codexCostCacheComplete: Bool? = true,
+        codexSession: CostUsageCodexSessionMetadata? = nil,
+        codexCostNanos: [String: [String: Int64]]? = nil,
+        codexPrioritySurchargeNanos: [String: [String: Int64]]? = nil,
+        codexStandardCostNanos: [String: [String: Int64]]? = nil,
+        codexPriorityCostNanos: [String: [String: Int64]]? = nil,
+        codexStandardTokens: [String: [String: Int]]? = nil,
+        codexPriorityTokens: [String: [String: Int]]? = nil,
+        codexTurnIDs: [String]? = nil,
+        codexRows: [CodexUsageRow]? = nil,
+        codexTokenSnapshots: [CostUsageCodexTokenSnapshot]? = nil,
+        codexTokenCheckpoints: [CostUsageCodexTokenCheckpoint]? = nil,
+        codexTokenTimestampsMonotonic: Bool? = nil,
+        codexTokenIndexAnchor: CostUsageCodexTokenIndexAnchor? = nil,
+        claudeRows: [ClaudeUsageRow]? = nil,
+        codexScanFileId: String? = nil,
+        codexScanTargetSize: Int64? = nil,
+        codexScanComplete: Bool? = nil,
+        codexJSONLResumeState: CostUsageJsonl.ResumeState? = nil,
+        codexForkAccountingState: CodexForkAccountingState? = nil,
+        codexRequestLedgerState: CodexRequestLedgerState? = nil,
+        codexBufferedSubagentLines: [CodexBufferedFastLine]? = nil,
+        codexBufferedUnresolvedForkLines: [CodexBufferedFastLine]? = nil) -> CostUsageFileUsage
+    {
+        CostUsageFileUsage(
+            mtimeUnixMs: mtimeUnixMs,
+            size: size,
+            days: days,
+            parsedBytes: parsedBytes,
+            lastModel: lastModel,
+            lastTotals: lastTotals,
+            lastCountedTotals: lastCountedTotals,
+            lastRawTotalsBaseline: lastRawTotalsBaseline,
+            lastRawTotalsWatermark: lastRawTotalsWatermark,
+            seenRawTotals: seenRawTotals,
+            hasDivergentTotals: hasDivergentTotals,
+            hasInterleavedTotals: hasInterleavedTotals,
+            lastCodexTurnID: lastCodexTurnID,
+            sessionId: sessionId,
+            forkedFromId: forkedFromId,
+            forkBaselineDependencyKey: forkBaselineDependencyKey,
+            projectPath: projectPath,
+            canonicalProjectPath: canonicalProjectPath,
+            codexCostCacheComplete: codexCostCacheComplete,
+            codexSession: codexSession,
+            codexCostNanos: codexCostNanos,
+            codexPrioritySurchargeNanos: codexPrioritySurchargeNanos,
+            codexStandardCostNanos: codexStandardCostNanos,
+            codexPriorityCostNanos: codexPriorityCostNanos,
+            codexStandardTokens: codexStandardTokens,
+            codexPriorityTokens: codexPriorityTokens,
+            codexTurnIDs: codexTurnIDs,
+            codexRows: codexRows,
+            codexTokenSnapshots: codexTokenSnapshots,
+            codexTokenCheckpoints: codexTokenCheckpoints,
+            codexTokenTimestampsMonotonic: codexTokenTimestampsMonotonic,
+            codexTokenIndexAnchor: codexTokenIndexAnchor,
+            claudeRows: claudeRows,
+            codexScanFileId: codexScanFileId,
+            codexScanTargetSize: codexScanTargetSize,
+            codexScanComplete: codexScanComplete,
+            codexJSONLResumeState: codexJSONLResumeState,
+            codexForkAccountingState: codexForkAccountingState,
+            codexRequestLedgerState: codexRequestLedgerState,
+            codexBufferedSubagentLines: codexBufferedSubagentLines,
+            codexBufferedUnresolvedForkLines: codexBufferedUnresolvedForkLines)
+    }
+}
+
+extension CostUsageScanner {
+    static func needsCodexPricingMetadata(_ usage: CostUsageFileUsage) -> Bool {
+        !(usage.codexRows?.isEmpty ?? true)
+            && (usage.codexCostCacheComplete != true || self.needsCodexModeSplitCache(usage))
+    }
+}
+
+extension CostUsageScanner {
+    static func parseCodexFile(
+        fileURL: URL,
+        range: CostUsageDayRange,
+        startOffset: Int64 = 0,
+        initialModel: String? = nil,
+        initialTotals: CostUsageCodexTotals? = nil,
+        initialRawTotalsBaseline: CostUsageCodexTotals? = nil,
+        initialHasDivergentTotals: Bool = false,
+        initialCodexTurnID: String? = nil,
+        initialCodexUsageRowIndex: Int = 0,
+        inheritedTotalsResolver: ((String, String) -> CodexForkBaseline)? = nil) -> CodexParseResult
+    {
+        let throwingResolver: ((String, String) throws -> CodexForkBaseline)? = inheritedTotalsResolver
+            .map { resolver in
+                { sessionId, timestamp in resolver(sessionId, timestamp) }
+            }
+        return (
+            try? Self.parseCodexFileCancellable(
+                fileURL: fileURL,
+                range: range,
+                startOffset: startOffset,
+                initialModel: initialModel,
+                initialTotals: initialTotals,
+                initialRawTotalsBaseline: initialRawTotalsBaseline,
+                initialHasDivergentTotals: initialHasDivergentTotals,
+                initialCodexTurnID: initialCodexTurnID,
+                initialCodexUsageRowIndex: initialCodexUsageRowIndex,
+                inheritedTotalsResolver: throwingResolver,
+                checkCancellation: nil)) ?? CodexParseResult(
+            days: [:],
+            parsedBytes: startOffset,
+            scanTargetSize: startOffset,
+            lastModel: initialModel,
+            lastTotals: initialTotals,
+            lastCountedTotals: initialTotals,
+            lastRawTotalsBaseline: initialRawTotalsBaseline,
+            lastRawTotalsWatermark: initialRawTotalsBaseline,
+            seenRawTotals: [],
+            hasDivergentTotals: initialHasDivergentTotals,
+            hasInterleavedTotals: false,
+            lastCodexTurnID: initialCodexTurnID,
+            sessionId: nil,
+            forkedFromId: nil,
+            dependsOnParentTotals: false,
+            projectPath: nil,
+            codexSession: CostUsageCodexSessionMetadata(
+                sessionId: nil,
+                forkedFromId: nil,
+                cwd: nil,
+                title: nil,
+                startedAtUnixMs: nil,
+                latestActivityUnixMs: nil),
+            rows: [],
+            nextUsageRowIndex: initialCodexUsageRowIndex,
+            tokenSnapshots: [],
+            jsonlResumeState: nil,
+            bufferedSubagentLines: nil,
+            bufferedUnresolvedForkLines: nil)
+    }
+}

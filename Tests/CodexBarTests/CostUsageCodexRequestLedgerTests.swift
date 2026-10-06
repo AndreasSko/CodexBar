@@ -54,19 +54,30 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(result.rows.first?.input == 100)
     }
 
-    @Test(arguments: [false, true], [false, true])
-    func `request accounting survives append and SQLite reopen`(legacyFirst: Bool, sameWindow: Bool) async throws {
+    @Test(arguments: [false, true], [
+        (sameWindow: false, drifted: false), (sameWindow: true, drifted: false),
+        (sameWindow: false, drifted: true), (sameWindow: true, drifted: true),
+    ])
+    func `request accounting survives append and SQLite reopen`(
+        legacyFirst: Bool, scenario: (sameWindow: Bool, drifted: Bool)) async throws
+    {
+        let (sameWindow, drifted) = scenario
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
         let start = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
         let end = try #require(ISO8601DateFormatter().date(from: Self.timestampC))
-        let first = Self.record(id: "one", usage: [1000, 200, 100, 40], total: [1000, 200, 100, 40])
-        let mirror = Self.legacy(
-            timestamp: Self.timestampA,
+        let later = try Self.timestamp(Self.timestampA, plusMilliseconds: 2)
+        let first = Self.record(
+            id: "one",
+            timestamp: drifted && legacyFirst ? later : Self.timestampA,
             usage: [1000, 200, 100, 40],
-            total: [1000, 200, 100, 40])
+            total: drifted ? [3000, 600, 300, 120] : [1000, 200, 100, 40])
+        let mirror = Self.legacy(
+            timestamp: drifted && !legacyFirst ? later : Self.timestampA,
+            usage: [1000, 200, 100, 40],
+            total: drifted ? [1500, 300, 150, 60] : [1000, 200, 100, 40])
         let file = try env.writeCodexSessionFile(
             day: start,
             filename: "synthetic-ledger.jsonl",
@@ -114,6 +125,7 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(resumed.sessionTokens == 132)
         let saved = await CostUsageStore(cacheRoot: env.cacheRoot).readSnapshot()
         #expect(saved.files.allSatisfy { $0.scanState.isComplete == true })
+        #expect(saved.usageRows.count == 3)
         let stable = try await fetch(end.addingTimeInterval(120))
         #expect(stable.daily == resumed.daily)
         let reopened = await CostUsageStore(cacheRoot: env.cacheRoot).readSnapshot()
