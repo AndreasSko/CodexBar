@@ -14,7 +14,9 @@ retain the default monochrome rendering.
 
 `Brand-ProviderIcon-*` assets are opt-in. They preserve their stored fills, masks and gradients;
 SwiftUI must render them as original images, without applying the configurable chart accent color.
-Brand and monochrome requests have separate cached NSImage instances.
+Brand and monochrome requests have separate cached NSImage instances. Curated names use the
+provider identifier, since Codex, OpenAI API and Azure OpenAI share a legacy monochrome resource
+but must not share the Codex application's product artwork.
 
 If no curated asset exists, or it cannot be decoded, use the existing adaptive template. Existing
 provider SVGs often contain white silhouettes and must not simply be switched to original rendering.
@@ -28,12 +30,13 @@ retain it. Long model names truncate in the middle and expose the full name in a
 
 ## Sources
 
-Reviewed 2026-10-01; Antigravity PNG and cloud icons verified 2026-10-06.
+Reviewed 2026-10-01; Codex, Antigravity PNG and cloud icons verified 2026-10-06.
 These files identify the corresponding third-party products; their marks remain
 the property of their owners. Colors are not sampled from screenshots or chosen from chart palettes.
 
 | Asset | Primary source | Local transformation |
 | --- | --- | --- |
+| Codex | [Official Codex app](https://openai.com/codex/), signed by OpenAI OpCo, LLC (`2DC432GLL2`), version `26.928.31416` / build `12553` | Unmodified transparent PNG from `Contents/Resources/app.asar`, `webview/assets/codex-app-ga-logo-3e5209898ca3.png`. Verified the extracted bytes against the archive's SHA-256 integrity record. Preserved the blue/purple gradient and white terminal mark; no cropping, tracing or recoloring. The shared desktop app identifies itself as `com.openai.codex`. |
 | Claude | [Anthropic brand guidelines](https://github.com/anthropics/skills/blob/8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4/skills/brand-guidelines/SKILL.md) | Existing bundled silhouette, replacing white with the documented primary accent `#D97757`. This is a palette-backed variant, not an unmodified logo download. |
 | Antigravity | [Official homepage PNG](https://antigravity.google/assets/image/antigravity-logo.png) | Unmodified transparent PNG. Native SVG decoding flattens the homepage's blurred gradient, so use the official raster asset. |
 | Mistral | [Official homepage](https://mistral.ai/) header SVG; [brand page](https://mistral.ai/brand/) | Preserved all five path fills; adjusted square viewBox for padding. |
@@ -44,12 +47,18 @@ the property of their owners. Colors are not sampled from screenshots or chosen 
 When adding another brand, verify artwork against a primary source and document the transformation
 here before enabling original rendering. Do not infer a brand color from provider progress-bar colors.
 
+Codex brand rows use the app's product-specific terminal artwork rather than the generic OpenAI
+knot in the existing monochrome resource. Provider and native account rows share this brand asset.
+Use the app's transparent in-product artwork. Its desktop launcher icon also contains an opaque
+background and is not suitable for these rows.
+
 ## Checksums
 
 SHA-256 pins the reviewed local bytes; a later asset update should update this table and the source notes.
 
 | File | SHA-256 |
 | --- | --- |
+| `Brand-ProviderIcon-codex.png` | `8e82b26c98a10e45798ce48124515720657f7735fb8d0853b3f087eaa8a6b74e` |
 | `Brand-ProviderIcon-antigravity.png` | `193ba1805de11c23cd0c7a1df92aa0a886708e57350f6f7766100afe5befed73` |
 | `Brand-ProviderIcon-bedrock.svg` | `6a0f3817d771064f3d4cb8687e415417c9abccb3930b049bb8c2643f787ec224` |
 | `Brand-ProviderIcon-claude.svg` | `4cd39a3832c842390c21a6598dba20d4db91632a978cb34e39aa1659fe88fe5c` |

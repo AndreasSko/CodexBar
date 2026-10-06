@@ -43,8 +43,10 @@ enum ProviderBrandIcon {
         }
         // Only explicitly curated brand assets have reliable original colors. Existing provider
         // SVGs are often white silhouettes, so they must remain templates in both appearances.
+        // Providers can share a monochrome resource while representing different products.
+        let brandResourceName = "Brand-ProviderIcon-" + provider.rawValue
         let brandImage: NSImage? = style == .brand ? ["svg", "png"].lazy.compactMap { fileExtension in
-            bundle.url(forResource: "Brand-" + baseName, withExtension: fileExtension)
+            bundle.url(forResource: brandResourceName, withExtension: fileExtension)
                 .flatMap { NSImage(contentsOf: $0) }
         }.first : nil
         guard let image = brandImage ?? bundle.url(forResource: baseName, withExtension: "svg")
