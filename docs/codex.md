@@ -300,8 +300,9 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   - Native Codex logs parse `event_msg` token_count entries and `turn_context` model markers; when both are present,
     `turn_context` is authoritative for the model bucket.
   - Native session `thread_settings_applied.thread_settings.service_tier` evidence applies to the following
-    `task_started` turn, using the existing published Fast multipliers. Pending settings and known Priority turns
-    survive incremental scans and SQLite reopening. Unknown or missing tiers retain the Standard fallback;
+    `task_started` turn and subsequent turns until another settings event replaces it, using the existing published
+    Fast multipliers. The effective thread tier and known Priority turns survive incremental scans and SQLite reopening.
+    Without a known tier, or after an unknown tier is applied, pricing retains the Standard fallback;
     subagents do not inherit a parent tier. Live or saved Priority trace evidence remains authoritative, including
     after trace pruning. Compatible stores retain history while older parser revisions reparse within the scan budget.
   - Direct forks preserve the inherited origin of cumulative counters when resolving parent snapshots, including

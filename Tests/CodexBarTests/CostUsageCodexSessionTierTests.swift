@@ -71,7 +71,7 @@ struct CostUsageCodexSessionTierTests {
         try prefix.write(to: file, atomically: true, encoding: .utf8)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let first = try CostUsageScanner.parseCodexFileCancellable(fileURL: file, range: range)
-        #expect(first.requestLedgerState?.pendingPriority == true)
+        #expect(first.requestLedgerState?.threadPriority == true)
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
         try handle.write(contentsOf: Data(suffix.utf8))
@@ -129,7 +129,7 @@ struct CostUsageCodexSessionTierTests {
         #expect(await stored.fetchFile(path: file.path) == before)
         let checkpoint = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
         let tierState = try #require(checkpoint.files[file.path]?.codexRequestLedgerState)
-        #expect(tierState.pendingPriority == (prefixCount == 2 ? true : nil))
+        #expect(tierState.threadPriority == (prefixCount != 7))
         #expect(tierState.priorityTurnIDs == (prefixCount == 2 ? nil : ["priority-turn"]))
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
@@ -146,6 +146,55 @@ struct CostUsageCodexSessionTierTests {
         let fresh = CostUsageScanner.loadDailyReport(
             provider: .codex, since: day, until: day, now: day.addingTimeInterval(1), options: options)
         #expect(fresh.data == resumed.data)
+    }
+
+    @Test(arguments: [false, true])
+    func `thread priority remains effective across later turns`(resume: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let day = try env.makeLocalNoon(year: 2026, month: 9, day: 10)
+        let timestamp = env.isoString(for: day)
+        func event(_ payload: [String: Any]) -> [String: Any] {
+            ["type": "event_msg", "timestamp": timestamp, "payload": payload]
+        }
+        func usage(_ turn: String) -> [String: Any] {
+            event(["type": "token_count", "turn_id": turn, "info": ["last_token_usage": [
+                "input_tokens": 100, "output_tokens": 10,
+            ]]])
+        }
+        let prefix: [[String: Any]] = [
+            ["type": "session_meta", "timestamp": timestamp, "payload": ["id": "persistent-tier"]],
+            event(["type": "thread_settings_applied", "thread_settings": ["service_tier": "priority"]]),
+            event(["type": "task_started", "turn_id": "first-turn"]),
+            ["type": "turn_context", "timestamp": timestamp, "payload": ["model": "gpt-5.4"]],
+            usage("first-turn"),
+        ]
+        let file = env.root.appendingPathComponent("persistent-tier.jsonl")
+        try env.jsonl(prefix).write(to: file, atomically: true, encoding: .utf8)
+        let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
+        let first = resume ? try CostUsageScanner.parseCodexFileCancellable(fileURL: file, range: range) : nil
+        let checkpoint = try first?.requestLedgerState.map {
+            try JSONDecoder().decode(
+                CostUsageScanner.CodexRequestLedgerState.self, from: JSONEncoder().encode($0))
+        }
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(env.jsonl([
+            event(["type": "task_started", "turn_id": "second-turn"]), usage("second-turn"),
+        ]).utf8))
+        try handle.close()
+        let parsed = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file,
+            range: range,
+            startOffset: first?.parsedBytes ?? 0,
+            initialModel: first?.lastModel,
+            initialSessionID: first?.sessionId,
+            initialTotals: first?.lastTotals,
+            initialCodexTurnID: first?.lastCodexTurnID,
+            initialCodexUsageRowIndex: first?.nextUsageRowIndex ?? 0,
+            initialRequestLedgerState: checkpoint)
+        #expect(parsed.rows.count == (resume ? 1 : 2))
+        #expect(parsed.rows.allSatisfy { $0.pricingMode == "priority" })
     }
 
     private static func cost(serviceTier: String, usageKind: String) throws -> Double {

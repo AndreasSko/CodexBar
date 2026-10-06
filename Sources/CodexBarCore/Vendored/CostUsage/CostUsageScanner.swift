@@ -392,7 +392,8 @@ enum CostUsageScanner {
         var legacyRowIndices: [String: Int] = [:]
         var turnModels: [String: String] = [:]
         var activeTurnID: String?
-        var pendingPriority: Bool?
+        /// Thread settings persist until replaced, including across resumed turns.
+        var threadPriority: Bool?
         var priorityTurnIDs: Set<String>?
         var sessionID: String?
         var pendingLedgerMirrors: Set<String>?
@@ -4828,19 +4829,18 @@ enum CostUsageScanner {
             case .interAgentCommunication:
                 break
             case let .threadSettingsApplied(priority):
-                requestLedger.pendingPriority = priority
+                requestLedger.threadPriority = priority
             case .mirrorBoundary:
                 requestLedger.clearPendingMirrors()
             case let .taskStarted(turnID):
                 requestLedger.clearPendingMirrors()
                 currentTurnID = turnID
-                if requestLedger.pendingPriority == true {
+                if requestLedger.threadPriority == true {
                     if requestLedger.priorityTurnIDs == nil { requestLedger.priorityTurnIDs = [] }
                     requestLedger.priorityTurnIDs?.insert(turnID ?? "")
                 } else {
                     requestLedger.priorityTurnIDs?.remove(turnID ?? "")
                 }
-                requestLedger.pendingPriority = nil
             case let .tokenCount(record):
                 try handleTokenCount(record, sourceEndOffset: sourceEndOffset)
             case let .tokenUsageRecord(record):
@@ -5336,7 +5336,7 @@ enum CostUsageScanner {
             forkAccountingState: forkAccountingState,
             requestLedgerState: requestLedger.responseIDs.isEmpty && requestLedger.legacyRowIndices.isEmpty
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
-                && requestLedger.sessionID == sessionId && requestLedger.pendingPriority == nil
+                && requestLedger.sessionID == sessionId && requestLedger.threadPriority == nil
                 && requestLedger.priorityTurnIDs?.isEmpty != false
                 && requestLedger.lastLedgerTotal == nil && requestLedger.lastLegacyTotal == nil
                 ? nil : requestLedger,
