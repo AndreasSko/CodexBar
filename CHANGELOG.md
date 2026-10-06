@@ -32,6 +32,7 @@
 - Codex: price Priority turns from durable session-log tier evidence across resumed scans, preserving saved trace pricing and existing cost history (#4274, #4276). Thanks @luochen211!
 - Antigravity: estimate recorded GPT-OSS-120B medium usage at Google's Vertex list price, including the first pricing refresh, while keeping unavailable prices unknown (#4258). Thanks @urda!
 - Codex costs: avoid double-counting drifted request-ledger mirrors, including delayed observations after context compaction; keep saved prices through the repair (#4289, #4290). Thanks @gabrielrojasc and @kcharlan!
+- Codex costs: retry one empty time-limited catch-up pass after cooldown and clear dashboard stalls when another scan completes the same history (#4296). Thanks @Yuxin-Qiao!
 
 ## 0.72.0 — 2026-10-04
 

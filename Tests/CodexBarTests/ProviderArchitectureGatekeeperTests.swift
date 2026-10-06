@@ -1278,18 +1278,6 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This provider-specific app branch passes its already-selected identity to a shared helper."),
         SuppressedProviderReference(
             path: "Sources/CodexBar/UsageStore+SpendDashboardCodexCostCatchUp.swift",
-            occurrence: 1,
-            anchor: "self.settings.isCostUsageEffectivelyEnabled(for: .codex),",
-            expectedProviderIDs: ["codex"],
-            reason: "This Codex account projection passes its fixed provider identity to shared spend infrastructure."),
-        SuppressedProviderReference(
-            path: "Sources/CodexBar/UsageStore+SpendDashboardCodexCostCatchUp.swift",
-            occurrence: 1,
-            anchor: "self.isEnabled(.codex)",
-            expectedProviderIDs: ["codex"],
-            reason: "This Codex account projection passes its fixed provider identity to shared spend infrastructure."),
-        SuppressedProviderReference(
-            path: "Sources/CodexBar/UsageStore+SpendDashboardCodexCostCatchUp.swift",
             anchor: "providerConfigRevision: self.settings.providerConfigRevision(for: .codex),",
             expectedProviderIDs: ["codex"],
             reason: "This Codex account projection passes its fixed provider identity to shared spend infrastructure."),
@@ -2970,15 +2958,14 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This exact app-runtime bridge coordinates provider-owned state through the shared controller."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/UsageStore+SpendDashboardCodexCostCatchUp.swift",
-            occurrence: 2,
-            anchor: "self.settings.isCostUsageEffectivelyEnabled(for: .codex),",
+            anchor: "guard self.settings.isCostUsageEffectivelyEnabled(for: .codex), self.isEnabled(.codex) else { return [] }",
             expectedProviderIDs: ["codex"],
             expectedReferenceCount: 2,
-            expectedReferenceFingerprint: ["codex@0", "codex@1"],
+            expectedReferenceFingerprint: ["codex@0", "codex@0"],
             reason: "This exact app-runtime bridge coordinates provider-owned state through the shared controller."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/UsageStore+SpendDashboardCodexCostCatchUp.swift",
-            anchor: "&& self.settings.providerConfigRevision(for: .codex) == context.providerConfigRevision",
+            anchor: "self.settings.providerConfigRevision(for: .codex) == context.providerConfigRevision",
             expectedProviderIDs: ["codex"],
             expectedReferenceCount: 1,
             expectedReferenceFingerprint: ["codex@0"],

@@ -198,6 +198,7 @@ enum CostUsageScanner {
         /// Prefer newest session files first so recent usage lands before catch-up work.
         var preferNewestCodexSessionsFirst: Bool = true
         var codexScanWorkRecorderForTesting: CodexScanWorkRecorder?
+        var codexScanDidYieldBeforeFileAttempt: (@Sendable (Bool) -> Void)?
 
         init(
             codexSessionsRoot: URL? = nil,
@@ -233,6 +234,7 @@ enum CostUsageScanner {
     final class CodexScanBudget: @unchecked Sendable {
         let maxFileBytes: Int64
         let maxBytesPerRefresh: Int64
+        var fileAttempts = 0
         private(set) var bytesConsumed: Int64 = 0
         private(set) var resumedPartialFileCount = 0
         private(set) var deferredByBudgetFileCount = 0
@@ -256,6 +258,10 @@ enum CostUsageScanner {
             } else {
                 self.deadline = nil
             }
+        }
+
+        var yieldedBeforeFileAttempt: Bool {
+            self.fileAttempts == 0 && self.bytesConsumed == 0 && self.deferredByTimeBudgetFileCount > 0
         }
 
         var hasTimeLimit: Bool {
@@ -5978,6 +5984,7 @@ enum CostUsageScanner {
                 maxFileBytes: options.maxCodexSessionFileBytes,
                 maxBytesPerRefresh: options.maxCodexScanBytesPerRefresh,
                 maxDuration: options.maxCodexScanDurationPerRefresh)
+            defer { options.codexScanDidYieldBeforeFileAttempt?(scanBudget.yieldedBeforeFileAttempt) }
             var activeLookbackState = Self.codexActiveLookbackState(
                 cache: cache,
                 roots: plan.roots,
@@ -6678,6 +6685,7 @@ enum CostUsageScanner {
             if context.scanBudget?.shouldStopBeforeNextFile() == true {
                 break
             }
+            context.scanBudget?.fileAttempts += 1
             context.workRecorder?.recordCodexFileScanAttempt(path: Self.codexPathKey(fileURL))
             attemptedPaths.insert(fileURL.path)
             let outcome = try Self.scanCodexFile(
@@ -6712,6 +6720,7 @@ enum CostUsageScanner {
                 if context.scanBudget?.shouldStopBeforeNextFile() == true {
                     break dependencyScan
                 }
+                context.scanBudget?.fileAttempts += 1
                 context.workRecorder?.recordCodexFileScanAttempt(path: Self.codexPathKey(fileURL))
                 scannedPaths.insert(fileURL.path)
                 attemptedPaths.insert(fileURL.path)
