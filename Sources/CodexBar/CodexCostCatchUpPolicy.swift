@@ -75,6 +75,7 @@ struct CodexCostCatchUpPolicy: Sendable {
         let lowPowerModeEnabled: Bool
         let thermalState: ProcessInfo.ThermalState
         var completedPasses: Int = 0
+        var requiresFreshBudget: Bool = false
     }
 
     struct Decision: Sendable, Equatable {
@@ -120,10 +121,14 @@ struct CodexCostCatchUpPolicy: Sendable {
         }
         let activeDuration = max(0, input.previousActiveDuration ?? 0)
         // Cheap discovery pages share one burst; readiness is still checked after every page.
-        if activeDuration < Self.automaticBurstDuration, input.completedPasses < 8 {
+        if !input.requiresFreshBudget,
+           activeDuration < Self.automaticBurstDuration, input.completedPasses < 8
+        {
             return Decision(action: .runAfter(0), targetDutyCycle: dutyCycle)
         }
-        let delay = activeDuration * (1 - dutyCycle) / dutyCycle
+        let chargedDuration = input
+            .requiresFreshBudget ? max(activeDuration, Self.automaticBurstDuration) : activeDuration
+        let delay = chargedDuration * (1 - dutyCycle) / dutyCycle
         return Decision(action: .runAfter(delay), targetDutyCycle: dutyCycle)
     }
 }

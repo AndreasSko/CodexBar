@@ -198,6 +198,7 @@ enum CostUsageScanner {
         /// Prefer newest session files first so recent usage lands before catch-up work.
         var preferNewestCodexSessionsFirst: Bool = true
         var codexScanWorkRecorderForTesting: CodexScanWorkRecorder?
+        var codexScanPassRecorder: CodexScanPassRecorder?
 
         init(
             codexSessionsRoot: URL? = nil,
@@ -1015,6 +1016,7 @@ enum CostUsageScanner {
         let checkCancellation: CancellationCheck?
         let scanBudget: CodexScanBudget?
         let workRecorder: CodexScanWorkRecorder?
+        var passRecorder: CodexScanPassRecorder?
     }
 
     final class CodexCanonicalProjectPathResolver {
@@ -5776,6 +5778,7 @@ enum CostUsageScanner {
         // last published cache (including its freshness timestamp and durable priority cursor)
         // untouched so the next refresh retries validation against the same baseline.
         if plan.priorityValidationPending {
+            options.codexScanPassRecorder?.recordPriorityValidationPending()
             guard cache.roots == plan.rootsFingerprint,
                   cache.timeZoneIdentifier == range.calendar.timeZone.identifier
             else { return CostUsageDailyReport(data: [], summary: nil) }
@@ -5813,6 +5816,7 @@ enum CostUsageScanner {
                 maxFileBytes: options.maxCodexSessionFileBytes,
                 maxBytesPerRefresh: options.maxCodexScanBytesPerRefresh,
                 maxDuration: options.maxCodexScanDurationPerRefresh)
+            options.codexScanPassRecorder?.recordBudget(scanBudget)
             var activeLookbackState = Self.codexActiveLookbackState(
                 cache: cache,
                 roots: plan.roots,
@@ -6513,6 +6517,7 @@ enum CostUsageScanner {
             if context.scanBudget?.shouldStopBeforeNextFile() == true {
                 break
             }
+            context.passRecorder?.recordFileAttempt()
             context.workRecorder?.recordCodexFileScanAttempt(path: Self.codexPathKey(fileURL))
             attemptedPaths.insert(fileURL.path)
             let outcome = try Self.scanCodexFile(
@@ -6547,6 +6552,7 @@ enum CostUsageScanner {
                 if context.scanBudget?.shouldStopBeforeNextFile() == true {
                     break dependencyScan
                 }
+                context.passRecorder?.recordFileAttempt()
                 context.workRecorder?.recordCodexFileScanAttempt(path: Self.codexPathKey(fileURL))
                 scannedPaths.insert(fileURL.path)
                 attemptedPaths.insert(fileURL.path)
@@ -6622,7 +6628,8 @@ enum CostUsageScanner {
             resources: resources,
             checkCancellation: checkCancellation,
             scanBudget: scanBudget,
-            workRecorder: options.codexScanWorkRecorderForTesting)
+            workRecorder: options.codexScanWorkRecorderForTesting,
+            passRecorder: options.codexScanPassRecorder)
     }
 
     static func sortedCodexSessionFilesNewestFirst(

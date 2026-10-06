@@ -57,9 +57,12 @@ public struct CostUsageFetcher: Sendable {
         package let completedFiles: Int
         package let totalFiles: Int
         package let staleSnapshotUpdatedAt: Date?
+        package let lastScanAt: Date?
+        package let completionIsConfirmed: Bool
+        package var passDiagnostics: CodexScanPassDiagnostics?
 
         var historyCoverageIsEstablished: Bool {
-            !self.pending && self.progressKey != "scope-mismatch"
+            !self.pending && self.progressKey != "scope-mismatch" && self.progressKey != "unavailable"
         }
 
         package init(
@@ -69,7 +72,10 @@ public struct CostUsageFetcher: Sendable {
             totalBytes: Int64 = 0,
             completedFiles: Int = 0,
             totalFiles: Int = 0,
-            staleSnapshotUpdatedAt: Date? = nil)
+            staleSnapshotUpdatedAt: Date? = nil,
+            lastScanAt: Date? = nil,
+            completionIsConfirmed: Bool = false,
+            passDiagnostics: CodexScanPassDiagnostics? = nil)
         {
             self.pending = pending
             self.progressKey = progressKey
@@ -78,6 +84,9 @@ public struct CostUsageFetcher: Sendable {
             self.completedFiles = max(0, completedFiles)
             self.totalFiles = max(0, totalFiles)
             self.staleSnapshotUpdatedAt = staleSnapshotUpdatedAt
+            self.lastScanAt = lastScanAt
+            self.completionIsConfirmed = completionIsConfirmed
+            self.passDiagnostics = passDiagnostics
         }
     }
 
@@ -323,7 +332,9 @@ public struct CostUsageFetcher: Sendable {
 
     package func codexScanCatchUpStatus(
         codexHomePath: String? = nil,
-        calendar: Calendar? = nil) async -> CodexScanCatchUpStatus
+        calendar: Calendar? = nil,
+        historyDays: Int? = nil,
+        now: Date = Date()) async -> CodexScanCatchUpStatus
     {
         // Provider-specific by design: Codex exposes bounded background catch-up for its incremental JSONL scanner.
         let options = Self.resolvedScannerOptions(
@@ -332,7 +343,7 @@ public struct CostUsageFetcher: Sendable {
             codexHomePath: codexHomePath)
         return await (try? CostUsageScanExecutor.run { checkCancellation in
             try checkCancellation()
-            return Self.codexScanCatchUpStatus(options: options)
+            return Self.codexScanCatchUpStatus(options: options, historyDays: historyDays, now: now)
         }) ?? CodexScanCatchUpStatus(pending: false, progressKey: "unavailable")
     }
 
@@ -357,20 +368,27 @@ public struct CostUsageFetcher: Sendable {
         let scanOptions = options
         // Provider-specific by design: this catch-up step advances only the Codex incremental scanner.
         return try await CostUsageScanExecutor.runTimed { checkCancellation in
+            var options = scanOptions
+            let recorder = CostUsageScanner.CodexScanPassRecorder()
+            options.codexScanPassRecorder = recorder
             _ = try CostUsageScanner.loadDailyReportCancellable(
                 provider: .codex,
                 since: since,
                 until: now,
                 now: now,
-                options: scanOptions,
+                options: options,
                 checkCancellation: checkCancellation)
             try checkCancellation()
-            return Self.codexScanCatchUpStatus(options: scanOptions)
+            var status = Self.codexScanCatchUpStatus(options: options, historyDays: historyDays, now: now)
+            status.passDiagnostics = recorder.snapshot(durationBudget: options.maxCodexScanDurationPerRefresh)
+            return status
         }
     }
 
     private static func codexScanCatchUpStatus(
-        options: CostUsageScanner.Options) -> CodexScanCatchUpStatus
+        options: CostUsageScanner.Options,
+        historyDays: Int? = nil,
+        now: Date = Date()) -> CodexScanCatchUpStatus
     {
         let roots = CostUsageScanner.codexSessionsRoots(options: options)
         let rootsFingerprint = CostUsageScanner.codexRootsFingerprint(options: options)
@@ -378,7 +396,14 @@ public struct CostUsageFetcher: Sendable {
             cacheRoot: options.cacheRoot,
             calendar: options.calendar,
             purpose: .status)
-        return view.catchUpStatus(roots: roots, rootsFingerprint: rootsFingerprint)
+        let requiredRange = historyDays.map { days in
+            CostUsageScanner.CostUsageDayRange(
+                since: CostReportingPeriod.rolling(days: max(1, days))
+                    .bounds(now: now, calendar: options.calendar).lowerBound,
+                until: now,
+                calendar: options.calendar)
+        }
+        return view.catchUpStatus(roots: roots, rootsFingerprint: rootsFingerprint, requiredRange: requiredRange)
     }
 
     private static let establishedEmptyCodexDailyReport = CostUsageDailyReport(data: [], summary: nil)

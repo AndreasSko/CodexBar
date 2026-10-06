@@ -1,13 +1,25 @@
 import CodexBarCore
 import Foundation
 
-private struct SpendDashboardCodexCostCatchUpContext {
+struct SpendDashboardCodexCostCatchUpContext: Sendable {
     let token: UUID
     let accounts: [CodexSpendScanRequest]
     let historyDays: Int
     let scopeSignature: String
     let providerConfigRevision: UInt64
     let costUsageSettingsRevision: UInt64
+}
+
+struct SpendDashboardCodexCostCatchUpPause: Sendable {
+    let context: SpendDashboardCodexCostCatchUpContext
+    let pausedAt: Date
+    let pendingCacheIdentities: Set<String>
+}
+
+struct SpendDashboardCodexCostCatchUpCompletionState: Sendable {
+    var pause: SpendDashboardCodexCostCatchUpPause?
+    var task: Task<Void, Never>?
+    var token: UUID?
 }
 
 extension UsageStore {
@@ -31,8 +43,11 @@ extension UsageStore {
         }
         // Observation-driven reloads must not undo a stop or repeatedly retry a stalled/failed pass.
         // Explicit Refresh uses startSpendDashboardCodexCostCatchUpIfNeeded directly.
-        guard !self.spendDashboardCodexCostCatchUpStopRequested,
-              !self.spendDashboardCodexCostCatchUpRequiresExplicitResume else { return }
+        guard !self.spendDashboardCodexCostCatchUpStopRequested else { return }
+        if self.spendDashboardCodexCostCatchUpRequiresExplicitResume {
+            self.checkSpendDashboardCodexCostCatchUpCompletion(accounts: accounts)
+            return
+        }
         var mode = preferredMode
             ?? (self.spendDashboardCodexCostCatchUpTask == nil ? .automatic : self.spendDashboardCodexCostCatchUpMode)
         if preferredMode == .accelerated,
@@ -145,6 +160,10 @@ extension UsageStore {
     }
 
     func cancelSpendDashboardCodexCostCatchUp() {
+        self.spendDashboardCodexCostCatchUpCompletion.task?.cancel()
+        self.spendDashboardCodexCostCatchUpCompletion.task = nil
+        self.spendDashboardCodexCostCatchUpCompletion.token = nil
+        self.spendDashboardCodexCostCatchUpCompletion.pause = nil
         self.spendDashboardCodexCostCatchUpTask?.cancel()
         self.spendDashboardCodexCostCatchUpTask = nil
         self.spendDashboardCodexCostCatchUpToken = nil
@@ -179,6 +198,8 @@ extension UsageStore {
         var didChangeCache = false
         var previousActiveDuration: TimeInterval?
         var completedPasses = 0
+        var recovery = CodexCostCatchUpRecovery()
+        var requiresFreshBudget = false
         var (stalledCacheIdentities, seenKeysByCache) =
             (Set<String>(), statuses.mapValues { Set([$0.progressKey]) })
         while Self.spendDashboardCodexCatchUpIsPending(statuses) {
@@ -213,6 +234,7 @@ extension UsageStore {
                     mode: self.spendDashboardCodexCostCatchUpMode,
                     previousActiveDuration: previousActiveDuration,
                     completedPasses: completedPasses,
+                    requiresFreshBudget: requiresFreshBudget,
                     resourceState: self._test_spendDashboardCodexCostCatchUpResourceStateOverride?())
                 switch decision.action {
                 case let .pause(delay, reason):
@@ -231,6 +253,7 @@ extension UsageStore {
                     if delay > 0 || self.spendDashboardCodexCostCatchUpMode == .accelerated {
                         previousActiveDuration = nil
                         completedPasses = 0
+                        requiresFreshBudget = false
                     }
                     try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay, dashboard: true)
                 }
@@ -261,7 +284,21 @@ extension UsageStore {
                 if nextStatus.pending,
                    !seenKeysByCache[account.cacheIdentity, default: []].insert(nextStatus.progressKey).inserted
                 {
-                    stalledCacheIdentities.insert(account.cacheIdentity)
+                    let recovering = recovery.shouldRecover(
+                        scope: account.cacheIdentity,
+                        previousProgressKey: previousStatus?.progressKey,
+                        status: nextStatus)
+                    CodexCostCatchUpRecovery.logRepeatedPass(
+                        worker: "Spend Dashboard",
+                        accountSlot: context.accounts.firstIndex(of: account) ?? 0,
+                        previousProgressKey: previousStatus?.progressKey,
+                        status: nextStatus,
+                        recovering: recovering)
+                    if recovering {
+                        requiresFreshBudget = true
+                    } else {
+                        stalledCacheIdentities.insert(account.cacheIdentity)
+                    }
                 } else {
                     stalledCacheIdentities.remove(account.cacheIdentity)
                 }
@@ -306,7 +343,13 @@ extension UsageStore {
         !Task.isCancelled
             && self.spendDashboardCodexCostCatchUpToken == context.token
             && self.spendDashboardCodexCostCatchUpScopeSignature == context.scopeSignature
-            && self.settings.providerConfigRevision(for: .codex) == context.providerConfigRevision
+            && self.spendDashboardCodexCostCatchUpConfigurationIsCurrent(context)
+    }
+
+    private func spendDashboardCodexCostCatchUpConfigurationIsCurrent(
+        _ context: SpendDashboardCodexCostCatchUpContext) -> Bool
+    {
+        self.settings.providerConfigRevision(for: .codex) == context.providerConfigRevision
             && self.settings.costUsageSettingsRevision == context.costUsageSettingsRevision
             && max(SpendDashboardSource.scanDays, self.settings.costUsageHistoryDays) == context.historyDays
             && self.settings.isCostUsageEffectivelyEnabled(for: .codex)
@@ -314,8 +357,62 @@ extension UsageStore {
             && context.accounts.allSatisfy(SpendDashboardSource.codexAuthFingerprintMatches)
     }
 
+    private func checkSpendDashboardCodexCostCatchUpCompletion(accounts: [CodexSpendScanRequest]) {
+        if let pause = self.spendDashboardCodexCostCatchUpCompletion.pause, pause.context.accounts != accounts {
+            self.spendDashboardCodexCostCatchUpCompletion.task?.cancel()
+            self.spendDashboardCodexCostCatchUpCompletion.task = nil
+            self.spendDashboardCodexCostCatchUpCompletion.token = nil
+            return
+        }
+        guard self.spendDashboardCodexCostCatchUpActivity?.pauseReason == .noProgress,
+              self.spendDashboardCodexCostCatchUpTask == nil,
+              self.spendDashboardCodexCostCatchUpCompletion.task == nil,
+              let pause = self.spendDashboardCodexCostCatchUpCompletion.pause,
+              pause.context.accounts == accounts,
+              self.spendDashboardCodexCostCatchUpConfigurationIsCurrent(pause.context)
+        else { return }
+        let completionToken = UUID()
+        self.spendDashboardCodexCostCatchUpCompletion.token = completionToken
+        self.spendDashboardCodexCostCatchUpCompletion.task = Task(priority: .background) { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.spendDashboardCodexCostCatchUpCompletion.token == completionToken {
+                    self.spendDashboardCodexCostCatchUpCompletion.task = nil
+                    self.spendDashboardCodexCostCatchUpCompletion.token = nil
+                }
+            }
+            // This is a read-only check. It cannot resume a parser or replace a user stop.
+            let statuses = await self.loadSpendDashboardCodexCostCatchUpStatuses(
+                accounts, historyDays: pause.context.historyDays)
+            guard !Task.isCancelled,
+                  self.spendDashboardCodexCostCatchUpCompletion.token == completionToken,
+                  !self.spendDashboardCodexCostCatchUpStopRequested,
+                  self.spendDashboardCodexCostCatchUpTask == nil,
+                  self.spendDashboardCodexCostCatchUpActivity?.pauseReason == .noProgress,
+                  self.spendDashboardCodexCostCatchUpCompletion.pause?.context.token == pause.context.token,
+                  self.spendDashboardCodexCostCatchUpConfigurationIsCurrent(pause.context),
+                  accounts.allSatisfy({ account in
+                      guard let status = statuses[account.cacheIdentity], let lastScanAt = status.lastScanAt else {
+                          return false
+                      }
+                      return !status.pending && status.completionIsConfirmed
+                          &&
+                          (!pause.pendingCacheIdentities.contains(account.cacheIdentity) || lastScanAt > pause
+                              .pausedAt)
+                  })
+            else { return }
+            self.publishSpendDashboardCodexCostCatchUpActivity(
+                statuses: statuses, context: pause.context, phase: .complete, confirmedCompletion: true)
+            self.spendDashboardCodexCostCatchUpCompletion.task = nil
+            self.spendDashboardCodexCostCatchUpCompletion.token = nil
+            self.spendDashboardCodexCostCatchUpCompletion.pause = nil
+            self.spendDashboardCodexCostCatchUpRevision &+= 1
+        }
+    }
+
     private func loadSpendDashboardCodexCostCatchUpStatuses(
-        _ accounts: [CodexSpendScanRequest]) async -> [String: CostUsageFetcher.CodexScanCatchUpStatus]
+        _ accounts: [CodexSpendScanRequest],
+        historyDays: Int? = nil) async -> [String: CostUsageFetcher.CodexScanCatchUpStatus]
     {
         var statuses: [String: CostUsageFetcher.CodexScanCatchUpStatus] = [:]
         for account in accounts {
@@ -327,7 +424,8 @@ extension UsageStore {
                     calendar: self.settings.costUsageBucketCalendar)
                     .codexScanCatchUpStatus(
                         codexHomePath: account.homePath,
-                        calendar: self.settings.costUsageBucketCalendar)
+                        calendar: self.settings.costUsageBucketCalendar,
+                        historyDays: historyDays)
             }
         }
         return statuses
@@ -340,6 +438,9 @@ extension UsageStore {
         previousActiveDuration: TimeInterval?) async throws
         -> CostUsageScanExecutor.TimedResult<CostUsageFetcher.CodexScanCatchUpStatus>
     {
+        let durationBudget = self.spendDashboardCodexCostCatchUpMode
+            .scanDurationPerRefresh(after: previousActiveDuration)
+        self._test_codexCostCatchUpBudgetObserver?(durationBudget)
         let token = self.spendDashboardCodexCostCatchUpToken
         self.spendDashboardCodexCostCatchUpPassIsRunning = true
         defer {
@@ -359,8 +460,7 @@ extension UsageStore {
                 now: now,
                 codexHomePath: account.homePath,
                 historyDays: historyDays,
-                scanDurationPerRefresh: self.spendDashboardCodexCostCatchUpMode
-                    .scanDurationPerRefresh(after: previousActiveDuration),
+                scanDurationPerRefresh: durationBudget,
                 calendar: self.settings.costUsageBucketCalendar)
     }
 
@@ -368,9 +468,20 @@ extension UsageStore {
         statuses: [String: CostUsageFetcher.CodexScanCatchUpStatus],
         context: SpendDashboardCodexCostCatchUpContext,
         phase: CodexCostCatchUpActivity.Phase,
-        pauseReason: CodexCostCatchUpPauseReason? = nil)
+        pauseReason: CodexCostCatchUpPauseReason? = nil,
+        confirmedCompletion: Bool = false)
     {
-        guard self.spendDashboardCodexCostCatchUpToken == context.token else { return }
+        guard self.spendDashboardCodexCostCatchUpToken == context.token
+            || (confirmedCompletion && phase == .complete
+                && self.spendDashboardCodexCostCatchUpTask == nil
+                && self.spendDashboardCodexCostCatchUpCompletion.pause?.context.token == context.token)
+        else { return }
+        if phase == .paused, pauseReason == .noProgress {
+            self.spendDashboardCodexCostCatchUpCompletion.pause = .init(
+                context: context,
+                pausedAt: Date(),
+                pendingCacheIdentities: Set(statuses.compactMap { $0.value.pending ? $0.key : nil }))
+        }
         let values = context.accounts.compactMap { statuses[$0.cacheIdentity] }
         let hasIndeterminatePendingStatus = values.contains {
             $0.pending && $0.totalBytes == 0 && $0.totalFiles == 0

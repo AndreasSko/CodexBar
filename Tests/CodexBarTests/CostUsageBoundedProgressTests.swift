@@ -46,6 +46,8 @@ struct CostUsageBoundedProgressTests {
                 maxDuration: 2,
                 now: { origin.advanced(by: .seconds(clock.value == 0 ? 0 : 3)) })
             clock.increment()
+            let passRecorder = CostUsageScanner.CodexScanPassRecorder()
+            options.codexScanPassRecorder = passRecorder
             let recorder = CostUsageScanner.CodexScanWorkRecorder()
             options.codexScanWorkRecorderForTesting = recorder
             _ = CostUsageControlledClockScanner.loadDailyReport(
@@ -59,6 +61,10 @@ struct CostUsageBoundedProgressTests {
             #expect(saved.files[completedPath]?.codexScanComplete == true)
             #expect(recorder.snapshot().codexCandidateSelectionVisits == 1)
             #expect(recorder.snapshot().codexFileScanAttempts == 0)
+            let diagnostics = passRecorder.snapshot(durationBudget: 2)
+            #expect(diagnostics.yieldedBeforeFileAttempt)
+            #expect(diagnostics.bytesConsumed == 0)
+            #expect(diagnostics.deferredByTime)
             #expect(recorder.snapshot().codexDiscoveryVisits == 0)
         }
         options.codexScanBudgetForTesting = nil

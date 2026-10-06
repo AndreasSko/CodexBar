@@ -120,6 +120,8 @@ extension UsageStore {
     private func runCodexCostCatchUp(context: CodexCostCatchUpContext) async {
         var previousActiveDuration: TimeInterval?
         var completedPasses = 0
+        var recovery = CodexCostCatchUpRecovery()
+        var requiresFreshBudget = false
         while self.codexCostCatchUpContextIsCurrent(context) {
             var status = await self.loadCodexCostCatchUpStatus(codexHomePath: context.codexHomePath)
             self.publishCodexCostCatchUpActivity(
@@ -140,11 +142,14 @@ extension UsageStore {
                         status = publishedStatus
                         guard status.pending else { return }
                     }
-                    try self.checkCodexCostCatchUpContinuation(status: status, context: context)
+                    try self.checkCodexCostCatchUpContinuation(
+                        status: status,
+                        context: context)
                     let decision = self.codexCostCatchUpDecision(
                         mode: self.codexCostCatchUpMode,
                         previousActiveDuration: previousActiveDuration,
                         completedPasses: completedPasses,
+                        requiresFreshBudget: requiresFreshBudget,
                         resourceState: self._test_codexCostCatchUpResourceStateOverride?())
                     switch decision.action {
                     case let .pause(delay, reason):
@@ -160,13 +165,17 @@ extension UsageStore {
                         if delay > 0 || self.codexCostCatchUpMode == .accelerated {
                             previousActiveDuration = nil
                             completedPasses = 0
+                            requiresFreshBudget = false
                         }
                         try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay)
                     }
 
                     try Task.checkCancellation()
-                    try self.checkCodexCostCatchUpContinuation(status: status, context: context)
+                    try self.checkCodexCostCatchUpContinuation(
+                        status: status,
+                        context: context)
 
+                    let previousProgressKey = status.progressKey
                     let result = try await self.advanceCodexCostCatchUp(
                         now: Date(),
                         codexHomePath: context.codexHomePath,
@@ -190,14 +199,26 @@ extension UsageStore {
                         guard status.pending else { return }
                     }
                     if nextStatus.pending, !seenProgressKeys.insert(nextStatus.progressKey).inserted {
-                        self.publishCodexCostCatchUpActivity(
+                        let recovering = recovery.shouldRecover(
+                            scope: context.scopeSignature,
+                            previousProgressKey: previousProgressKey,
+                            status: nextStatus)
+                        CodexCostCatchUpRecovery.logRepeatedPass(
+                            worker: "Menu",
+                            accountSlot: 0,
+                            previousProgressKey: previousProgressKey,
                             status: nextStatus,
-                            context: context,
-                            phase: .paused,
-                            pauseReason: .noProgress)
-                        CodexBarLog.logger(LogCategories.tokenCost).warning(
-                            "Codex cost catch-up stopped because a bounded pass made no progress")
-                        return
+                            recovering: recovering)
+                        if recovering {
+                            requiresFreshBudget = true
+                        } else {
+                            self.publishCodexCostCatchUpActivity(
+                                status: nextStatus,
+                                context: context,
+                                phase: .paused,
+                                pauseReason: .noProgress)
+                            return
+                        }
                     }
                 } catch is CancellationError {
                     return
@@ -345,6 +366,8 @@ extension UsageStore {
         previousActiveDuration: TimeInterval?) async throws
         -> CostUsageScanExecutor.TimedResult<CostUsageFetcher.CodexScanCatchUpStatus>
     {
+        let durationBudget = self.codexCostCatchUpMode.scanDurationPerRefresh(after: previousActiveDuration)
+        self._test_codexCostCatchUpBudgetObserver?(durationBudget)
         self.codexCostCatchUpPassIsRunning = true
         defer { self.codexCostCatchUpPassIsRunning = false }
         if let override = self._test_codexCostCatchUpAdvanceOverride {
@@ -356,7 +379,7 @@ extension UsageStore {
             now: now,
             codexHomePath: codexHomePath,
             historyDays: historyDays,
-            scanDurationPerRefresh: self.codexCostCatchUpMode.scanDurationPerRefresh(after: previousActiveDuration),
+            scanDurationPerRefresh: durationBudget,
             calendar: self.settings.costUsageBucketCalendar)
     }
 
@@ -364,6 +387,7 @@ extension UsageStore {
         mode: CodexCostCatchUpMode,
         previousActiveDuration: TimeInterval?,
         completedPasses: Int = 0,
+        requiresFreshBudget: Bool = false,
         resourceState: (
             powerSource: CodexCostCatchUpPowerSource,
             lowPowerModeEnabled: Bool,
@@ -380,10 +404,12 @@ extension UsageStore {
             powerSource: resourceState.powerSource,
             lowPowerModeEnabled: resourceState.lowPowerModeEnabled,
             thermalState: resourceState.thermalState,
-            completedPasses: completedPasses))
+            completedPasses: completedPasses,
+            requiresFreshBudget: requiresFreshBudget))
         guard mode == .automatic, case let .runAfter(delay) = decision.action else { return decision }
         let interval = BackgroundWorkPowerPolicy.automaticInterval(
-            delay, lowPowerModeEnabled: self.settings.backgroundWorkLowPowerModeEnabled) ?? delay
+            delay,
+            lowPowerModeEnabled: self.settings.backgroundWorkLowPowerModeEnabled) ?? delay
         return .init(action: .runAfter(interval), targetDutyCycle: decision.targetDutyCycle)
     }
 

@@ -400,7 +400,9 @@ extension ReadWorkFixture {
             totalBytes: baseline.codexScanTotalBytes ?? 0,
             completedFiles: baseline.codexScanCompletedFiles ?? 0,
             totalFiles: baseline.codexScanTotalFiles ?? 0,
-            staleSnapshotUpdatedAt: pending ? baseline.codexPreviousReport?.updatedAt : nil)
+            staleSnapshotUpdatedAt: pending ? baseline.codexPreviousReport?.updatedAt : nil,
+            lastScanAt: baseline.lastScanUnixMs > 0
+                ? Date(timeIntervalSince1970: Double(baseline.lastScanUnixMs) / 1000) : nil)
         for purpose in [CostUsageStoreReadPurpose.status, .activity, .report] {
             let view = self.store.syncLoadCodexReadView(calendar: self.calendar, purpose: purpose)
             #expect(view.catchUpStatus(roots: roots, rootsFingerprint: fingerprint) == expectedStatus)

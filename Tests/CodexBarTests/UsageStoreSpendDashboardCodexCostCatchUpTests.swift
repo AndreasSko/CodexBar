@@ -855,3 +855,68 @@ struct UsageStoreSpendDashboardCodexCostCatchUpTests {
         Issue.record("Timed out waiting for Spend Dashboard Codex cost catch-up")
     }
 }
+
+extension UsageStoreSpendDashboardCodexCostCatchUpTests {
+    @Test
+    func `a newer confirmed complete cache clears a no-progress card without scanning`() async throws {
+        let store = try Self.makeStore(suite: "confirmed-completion")
+        defer { store.cancelSpendDashboardCodexCostCatchUp() }
+        let accounts = [Self.account(id: "account", cacheIdentity: "cache-account")]
+        var advanceCount = 0
+        store._test_spendDashboardCodexCostCatchUpStatusOverride = { _ in
+            Self.status(pending: true, key: "unchanged", processedBytes: 25)
+        }
+        store._test_spendDashboardCodexCostCatchUpAdvanceOverride = { _, _, _ in
+            advanceCount += 1
+            return Self.status(pending: true, key: "unchanged", processedBytes: 25)
+        }
+        store._test_spendDashboardCodexCostCatchUpSleepOverride = { _ in await Task.yield() }
+        store._test_spendDashboardCodexCostCatchUpResourceStateOverride = { (.ac, false, .nominal) }
+        store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts, mode: .accelerated)
+        await Self.waitUntil { store.spendDashboardCodexCostCatchUpTask == nil }
+        #expect(store.spendDashboardCodexCostCatchUpActivity?.pauseReason == .noProgress)
+
+        store._test_spendDashboardCodexCostCatchUpStatusOverride = { _ in
+            .init(pending: false, progressKey: "complete", lastScanAt: .distantFuture, completionIsConfirmed: true)
+        }
+        store.synchronizeSpendDashboardCodexCostCatchUp(accounts: accounts)
+        await store.spendDashboardCodexCostCatchUpCompletion.task?.value
+        #expect(store.spendDashboardCodexCostCatchUpActivity?.phase == .complete)
+        #expect(store.spendDashboardCodexCostCatchUpTask == nil)
+        #expect(advanceCount == 1)
+    }
+
+    @Test
+    func `a zero-attempt time deferral receives one throttled fresh budget`() async throws {
+        let store = try Self.makeStore(suite: "time-deferral-recovery")
+        defer { store.cancelSpendDashboardCodexCostCatchUp() }
+        let accounts = [Self.account(id: "account", cacheIdentity: "cache-account")]
+        var advances = 0
+        var sleeps: [TimeInterval] = []
+        store._test_spendDashboardCodexCostCatchUpActiveDuration = 1.999
+        store._test_spendDashboardCodexCostCatchUpStatusOverride = { _ in
+            Self.status(pending: true, key: "initial", processedBytes: 25)
+        }
+        store._test_spendDashboardCodexCostCatchUpAdvanceOverride = { _, _, _ in
+            advances += 1
+            return .init(
+                pending: advances < 3,
+                progressKey: advances < 3 ? "advanced" : "complete",
+                passDiagnostics: .init(
+                    durationBudget: advances == 2 ? 0.001 : 2,
+                    fileAttempts: advances == 2 ? 0 : 1,
+                    bytesConsumed: advances == 2 ? 0 : 1,
+                    deferredByTime: advances == 2))
+        }
+        store._test_spendDashboardCodexCostCatchUpSleepOverride = { delay in
+            sleeps.append(delay)
+            await Task.yield()
+        }
+        store._test_spendDashboardCodexCostCatchUpResourceStateOverride = { (.ac, false, .nominal) }
+        store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts)
+        await Self.waitUntil { store.spendDashboardCodexCostCatchUpTask == nil }
+        #expect(advances == 3)
+        #expect(sleeps.contains { $0 > 0 })
+        #expect(store.spendDashboardCodexCostCatchUpActivity?.phase == .complete)
+    }
+}

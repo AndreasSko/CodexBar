@@ -306,6 +306,7 @@ final class UsageStore {
         Int) async throws -> CostUsageFetcher.CodexScanCatchUpStatus)?
     @ObservationIgnored var _test_codexCostCatchUpSleepOverride: (@MainActor (
         TimeInterval) async throws -> Void)?
+    @ObservationIgnored var _test_codexCostCatchUpBudgetObserver: (@MainActor (TimeInterval) -> Void)?
     @ObservationIgnored var _test_codexCostCatchUpActiveDuration: TimeInterval = 0
     @ObservationIgnored var _test_codexCostCatchUpResourceStateOverride: (@MainActor () -> (
         powerSource: CodexCostCatchUpPowerSource,
@@ -395,6 +396,7 @@ final class UsageStore {
     @ObservationIgnored var spendDashboardCodexCostCatchUpStopRequested = false
     @ObservationIgnored var spendDashboardCodexCostCatchUpPassIsRunning = false
     @ObservationIgnored var spendDashboardCodexCostCatchUpRestartRequested = false
+    @ObservationIgnored var spendDashboardCodexCostCatchUpCompletion = SpendDashboardCodexCostCatchUpCompletionState()
     @ObservationIgnored var forcedRefreshEnrichmentTask: Task<Void, Never>?
     @ObservationIgnored var forcedRefreshEnrichmentToken: UUID?
     @ObservationIgnored var pendingForcedRefreshEnrichmentTask: Task<Void, Never>?
@@ -1001,6 +1003,7 @@ final class UsageStore {
         self.timerTask?.cancel()
         self.tokenRefreshSequenceTask?.cancel()
         self.codexCostCatchUpTask?.cancel()
+        self.spendDashboardCodexCostCatchUpCompletion.task?.cancel()
         self.forcedRefreshEnrichmentTask?.cancel()
         self.pendingForcedRefreshEnrichmentTask?.cancel()
         self.requiredRefreshTask?.cancel()
