@@ -444,7 +444,7 @@ extension CodexBarCLI {
         CodexBar \(version)
 
         Usage:
-          codexbar guard --provider \(ProviderHelp.list)
+          codexbar guard --provider \(ProviderHelp.concreteList)
                         [--min-remaining <percent>] [--window session|weekly]
                         [--timeout <seconds>] [--json] [--pretty] [--fail-open]
                         [--json-output] [--log-level <trace|verbose|debug|info|warning|error|critical>] [-v|--verbose]
