@@ -97,27 +97,6 @@ func spendDashboardHourlyChartAccessibilityValue(hourCount: Int, serviceCount: I
     }
 }
 
-func spendDashboardHourlyPointAccessibilityLabel(
-    providerName: String,
-    hour: Date,
-    timeZone: TimeZone,
-    includeDate: Bool,
-    locale: Locale = codexBarLocalizedLocale()) -> String
-{
-    var timeStyle = Date.FormatStyle().hour().minute().locale(locale)
-    timeStyle.timeZone = timeZone
-    var time = hour.formatted(timeStyle)
-    if let abbreviation = timeZone.abbreviation(for: hour), !abbreviation.isEmpty {
-        time = "\(time) \(abbreviation)"
-    }
-    guard includeDate else {
-        return "\(providerName), \(time)"
-    }
-    var dayStyle = Date.FormatStyle().month(.abbreviated).day().locale(locale)
-    dayStyle.timeZone = timeZone
-    return "\(providerName), \(hour.formatted(dayStyle)), \(time)"
-}
-
 func codexCostCatchUpProgressText(_ activity: CodexCostCatchUpActivity) -> String {
     if activity.totalBytes > 0 {
         let processed = ByteCountFormatter.string(
@@ -649,10 +628,6 @@ enum SpendDashboardTrendSection: Hashable, Identifiable {
         case .hourly: L("Hour")
         }
     }
-}
-
-func spendDashboardAvailableTrendSections(hasHourlyData: Bool) -> [SpendDashboardTrendSection] {
-    hasHourlyData ? [.daily, .hourly] : [.daily]
 }
 
 func spendDashboardHasTokenMix(_ group: SpendDashboardModel.CurrencyGroup) -> Bool {

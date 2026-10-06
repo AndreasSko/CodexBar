@@ -83,8 +83,8 @@ struct SpendDashboardTrendPanel: View {
 
     private var scopeText: String {
         let scope = self.focusedInterval.map { $0.start...$0.end } ?? self.group.chartDomain
-        let days = scope.upperBound.timeIntervalSince(scope.lowerBound) / 86400
-        let grouping = days > 180 ? L("Monthly") : days > 45 ? L("Weekly") : L("Daily")
+        let unit = SpendTrendChartModel.overviewUnit(in: scope, calendar: self.group.calendar)
+        let grouping = unit == .month ? L("Monthly") : unit == .weekOfYear ? L("Weekly") : L("Daily")
         return "\(self.dateText(scope.lowerBound)) – "
             + "\(self.dateText(scope.upperBound.addingTimeInterval(-1))) · \(grouping)"
     }
@@ -213,8 +213,7 @@ struct SpendTrendChart: View {
             }
             if model.segments.isEmpty {
                 ContentUnavailableView(
-                    self.section == .daily && self.group.totalCost == 0 && !self.group.hasPartialCost
-                        ? L("No usage yet") : L("Spend unavailable"),
+                    model.emptyStateTitle(group: self.group, sourceID: self.sourceID),
                     systemImage: "chart.bar.xaxis")
                     .frame(maxWidth: .infinity, minHeight: 210)
             } else {
@@ -294,7 +293,7 @@ struct SpendTrendChart: View {
         }
         .chartLegend(.hidden)
         .chartXScale(domain: model.domain, range: .plotDimension(startPadding: 18, endPadding: 18))
-        .chartYScale(domain: 0...max(0.01, (model.peak?.total ?? 0) * 1.15))
+        .chartYScale(domain: model.yDomain)
         .chartXAxis {
             if self.section == .hourly {
                 AxisMarks(preset: .aligned, values: model.hourlyTicks) { value in
@@ -463,7 +462,7 @@ struct SpendTrendChart: View {
     }
 
     private func tickStride(_ model: SpendTrendChartModel) -> Int {
-        let days = model.visibleDuration / 86400
+        let days = Double(model.visibleDayCount)
         if model.unit == .month { return max(1, Int(ceil(days / 30 / 4))) }
         if model.unit == .weekOfYear { return max(1, Int(ceil(days / 7 / 4))) }
         return days > 14 ? 7 : days > 7 ? 3 : 1
@@ -508,12 +507,13 @@ struct SpendTrendChart: View {
             .map { SpendChartPalette.label($0, providers: self.group.providers) } ?? segment.name
     }
 
-    private func costText(_ cost: Double, sourceID: String? = nil) -> String {
+    func costText(_ cost: Double?, sourceID: String? = nil) -> String {
         let source = (sourceID ?? self.sourceID).flatMap { id in self.group.providers.first { $0.id == id } }
         return spendDashboardMetricText(
             cost: cost,
             tokens: nil,
             currencyCode: self.group.currencyCode,
-            costIsLowerBound: source?.costIsLowerBound ?? self.group.hasPartialCost)
+            costIsLowerBound: source.map { $0.costIsLowerBound || $0.incompleteRequestCount > 0 }
+                ?? self.group.hasPartialCost)
     }
 }

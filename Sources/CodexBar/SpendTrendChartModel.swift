@@ -22,7 +22,7 @@ struct SpendTrendChartModel {
         let date: Date
         let segments: [Segment]
         var total: Double {
-            self.segments.reduce(0) { $0 + $1.cost }
+            self.segments.last?.end ?? 0
         }
 
         var id: Date {
@@ -32,6 +32,7 @@ struct SpendTrendChartModel {
 
     let segments: [Segment]
     let buckets: [Bucket]
+    let total: Double?
     let domain: ClosedRange<Date>
     let scope: ClosedRange<Date>
     let section: SpendDashboardTrendSection
@@ -69,8 +70,7 @@ struct SpendTrendChartModel {
             }
         } else {
             self.scope = overviewInterval.map { $0.start...$0.end } ?? group.chartDomain
-            let days = self.scope.upperBound.timeIntervalSince(self.scope.lowerBound) / 86400
-            self.unit = days > 180 ? .month : days > 45 ? .weekOfYear : .day
+            self.unit = Self.overviewUnit(in: self.scope, calendar: group.calendar)
             let start = group.calendar.dateInterval(of: self.unit, for: self.scope.lowerBound)?.start
                 ?? self.scope.lowerBound
             let end = group.calendar.dateInterval(
@@ -95,7 +95,7 @@ struct SpendTrendChartModel {
         let grouped = Dictionary(grouping: filtered) {
             group.calendar.dateInterval(of: unit, for: $0.date)?.start ?? $0.date
         }
-        self.buckets = grouped.keys.sorted().map { date in
+        self.buckets = grouped.keys.sorted().compactMap { date in
             var end = 0.0
             let sources = Dictionary(grouping: grouped[date] ?? [], by: \.sourceID)
             let segments = sources.keys.sorted().compactMap { sourceID -> Segment? in
@@ -114,17 +114,44 @@ struct SpendTrendChartModel {
                 segment.end = end
                 return segment
             }
-            return Bucket(date: date, segments: segments)
+            return end.isFinite ? Bucket(date: date, segments: segments) : nil
         }
         self.segments = self.buckets.flatMap(\.segments)
+        self.total = self.buckets.count == grouped.count
+            ? SpendDashboardModel.safeCostSum(self.buckets.map(\.total)) : nil
     }
 
     var peak: Bucket? {
         self.buckets.max { $0.total < $1.total }
     }
 
-    var total: Double {
-        self.buckets.reduce(0) { $0 + $1.total }
+    var yDomain: ClosedRange<Double> {
+        let peak = self.peak?.total ?? 0
+        let padded = peak * 1.15
+        return 0...max(0.01, padded.isFinite ? padded : peak)
+    }
+
+    func emptyStateTitle(group: SpendDashboardModel.CurrencyGroup, sourceID: String?) -> String {
+        guard self.section == .daily,
+              self.scope.lowerBound >= group.chartDomain.lowerBound,
+              self.scope.upperBound <= group.chartDomain.upperBound else { return L("Spend unavailable") }
+        let sources = group.providers.filter { sourceID == nil || $0.id == sourceID }
+        let days = Self.reportingDayCount(in: self.scope, calendar: self.calendar)
+        guard !sources.isEmpty, days > 0 else { return L("Spend unavailable") }
+        let periodDays = Self.reportingDayCount(in: group.chartDomain, calendar: self.calendar)
+        if sources.allSatisfy({
+            $0.totalCost == 0 && !$0.costIsLowerBound && $0.incompleteRequestCount == 0
+                && $0.coveredDayCount >= periodDays
+        }) { return L("No usage yet") }
+        let ids = Set(sources.map(\.id))
+        let records = group.dailySummaries.filter { $0.day >= self.scope.lowerBound && $0.day < self.scope.upperBound }
+        let isCoveredZero = records.count == days && records.allSatisfy { record in
+            let rows = record.providers.filter { ids.contains($0.sourceID) }
+            return rows.count == sources.count && rows.allSatisfy {
+                $0.totalCost == 0 && !$0.costIsLowerBound && $0.incompleteRequestCount == 0
+            }
+        }
+        return isCoveredZero ? L("No usage yet") : L("Spend unavailable")
     }
 
     /// Drawable points omit unpriced records; their sum is never an authoritative period total.
@@ -133,12 +160,33 @@ struct SpendTrendChartModel {
     }
 
     var visibleDuration: TimeInterval {
-        let duration = self.domain.upperBound.timeIntervalSince(self.domain.lowerBound)
-        return self.unit == .day ? min(duration, 31 * 86400) : duration
+        guard self.unit == .day,
+              let start = self.calendar.date(byAdding: .day, value: -31, to: self.domain.upperBound)
+        else { return self.domain.upperBound.timeIntervalSince(self.domain.lowerBound) }
+        return self.domain.upperBound.timeIntervalSince(max(
+            self.domain.lowerBound,
+            self.calendar.startOfDay(for: start)))
+    }
+
+    var visibleDayCount: Int {
+        let days = Self.reportingDayCount(in: self.domain, calendar: self.calendar)
+        return self.unit == .day ? min(days, 31) : days
     }
 
     var needsScrolling: Bool {
-        self.unit == .day && self.domain.upperBound.timeIntervalSince(self.domain.lowerBound) > 32 * 86400
+        self.unit == .day && Self.reportingDayCount(in: self.domain, calendar: self.calendar) > 32
+    }
+
+    static func overviewUnit(in scope: ClosedRange<Date>, calendar: Calendar) -> Calendar.Component {
+        let days = Self.reportingDayCount(in: scope, calendar: calendar)
+        return days > 180 ? .month : days > 45 ? .weekOfYear : .day
+    }
+
+    private static func reportingDayCount(in scope: ClosedRange<Date>, calendar: Calendar) -> Int {
+        guard scope.upperBound > scope.lowerBound else { return 0 }
+        return SpendDashboardModel.dayCount(
+            in: scope.lowerBound...max(scope.lowerBound, scope.upperBound.addingTimeInterval(-1)),
+            calendar: calendar)
     }
 
     var hourlyTicks: [Date] {
@@ -239,4 +287,24 @@ enum SpendChartPalette {
         }
         return "\(row.displayName) · \(codexBarLocalizedInteger(index + 1))"
     }
+}
+
+/// Finds the id of the highest-`stackEnd` point per grouping key (day/hour), regardless of how
+/// many providers are stacked in that group. Only that point's bar should render a rounded top.
+func spendTopOfStackIDs<Point, Key: Hashable>(
+    for points: [Point],
+    key: (Point) -> Key,
+    id: (Point) -> String,
+    stackEnd: (Point) -> Double) -> Set<String>
+{
+    var bestByKey: [Key: (id: String, stackEnd: Double)] = [:]
+    for point in points {
+        let pointKey = key(point)
+        let pointStackEnd = stackEnd(point)
+        if let existing = bestByKey[pointKey], existing.stackEnd >= pointStackEnd {
+            continue
+        }
+        bestByKey[pointKey] = (id(point), pointStackEnd)
+    }
+    return Set(bestByKey.values.map(\.id))
 }
