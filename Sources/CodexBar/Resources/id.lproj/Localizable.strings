@@ -1657,6 +1657,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Hanya baca profil %@ yang dipilih. Akun tidak pernah dipilih secara otomatis.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Pengeluaran tercatat";
+"Highest recorded spend" = "Pengeluaran tercatat tertinggi";
 "Previous day" = "Hari sebelumnya";
 "Next day" = "Hari berikutnya";
 "Click to isolate a source. Click again to show all." = "Klik untuk menampilkan satu sumber. Klik lagi untuk menampilkan semua.";

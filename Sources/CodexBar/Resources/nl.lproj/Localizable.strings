@@ -1653,6 +1653,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Lees alleen het geselecteerde %@-profiel. Accounts worden nooit automatisch geselecteerd.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Geregistreerde uitgaven";
+"Highest recorded spend" = "Hoogste geregistreerde uitgaven";
 "Previous day" = "Vorige dag";
 "Next day" = "Volgende dag";
 "Click to isolate a source. Click again to show all." = "Klik om één bron te tonen. Klik opnieuw om alles te tonen.";

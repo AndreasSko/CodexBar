@@ -5,6 +5,44 @@ import Testing
 @testable import CodexBar
 
 struct SpendTrendChartTests {
+    @Test(arguments: [nil, "unpriced"] as [String?])
+    func `priced chart records never become a complete total when another record is unpriced`(
+        sourceID: String?) throws
+    {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 5, hour: 18)))
+        let snapshot = CostUsageTokenSnapshot(
+            sessionTokens: nil,
+            sessionCostUSD: nil,
+            last30DaysTokens: nil,
+            last30DaysCostUSD: nil,
+            daily: [("2026-10-04", 1.0 as Double?), ("2026-10-05", nil)].map { date, cost in
+                CostUsageDailyReport.Entry(
+                    date: date,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    costUSD: cost,
+                    modelsUsed: nil,
+                    modelBreakdowns: nil)
+            },
+            updatedAt: now)
+        let group = try #require(SpendDashboardModel.build(
+            inputs: [.init(id: "unpriced", provider: .codex, displayName: "Demo account", snapshot: snapshot)],
+            requestedDays: 14,
+            now: now,
+            calendar: calendar).groups.first)
+        // A single source with an unknown total does not set the mixed-source partial-cost flag.
+        #expect(group.totalCost == nil)
+        #expect(group.providers.first?.totalCost == nil)
+        #expect(!group.hasPartialCost)
+        let chart = SpendTrendChartModel(group: group, section: .daily, day: nil, sourceID: sourceID)
+        #expect(chart.total == 1)
+        #expect(chart.buckets.count == 1)
+        #expect(chart.recordedSpendLabel == "Recorded spend")
+    }
+
     @Test
     func `hourly view focuses on the latest day without dropping history from the model`() throws {
         let group = try self.group()

@@ -127,6 +127,11 @@ struct SpendTrendChartModel {
         self.buckets.reduce(0) { $0 + $1.total }
     }
 
+    /// Drawable points omit unpriced records; their sum is never an authoritative period total.
+    var recordedSpendLabel: String {
+        self.section == .hourly ? "Recorded hourly spend" : "Recorded spend"
+    }
+
     var visibleDuration: TimeInterval {
         let duration = self.domain.upperBound.timeIntervalSince(self.domain.lowerBound)
         return self.unit == .day ? min(duration, 31 * 86400) : duration

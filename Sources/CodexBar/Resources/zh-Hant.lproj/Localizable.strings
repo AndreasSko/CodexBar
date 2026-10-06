@@ -1685,6 +1685,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "僅讀取所選的 %@ 設定檔。絕不會自動選擇帳號。";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "已記錄支出";
+"Highest recorded spend" = "最高已記錄支出";
 "Previous day" = "前一天";
 "Next day" = "後一天";
 "Click to isolate a source. Click again to show all." = "點擊單獨查看此來源，再次點擊顯示全部。";

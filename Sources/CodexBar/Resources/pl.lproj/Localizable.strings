@@ -1657,6 +1657,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Odczytuj tylko wybrany profil %@. Konta nigdy nie są wybierane automatycznie.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Zarejestrowane wydatki";
+"Highest recorded spend" = "Najwyższe zarejestrowane wydatki";
 "Previous day" = "Poprzedni dzień";
 "Next day" = "Następny dzień";
 "Click to isolate a source. Click again to show all." = "Kliknij, aby wyświetlić jedno źródło. Kliknij ponownie, aby wyświetlić wszystkie.";

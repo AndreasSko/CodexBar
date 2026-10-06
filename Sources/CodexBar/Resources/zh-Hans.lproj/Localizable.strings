@@ -1668,6 +1668,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "仅读取所选的 %@ 配置文件。绝不会自动选择账户。";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "已记录支出";
+"Highest recorded spend" = "最高已记录支出";
 "Previous day" = "前一天";
 "Next day" = "后一天";
 "Click to isolate a source. Click again to show all." = "点击单独查看此来源，再次点击显示全部。";

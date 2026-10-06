@@ -1658,6 +1658,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "قراءة ملف تعريف %@ المحدد فقط. لا يتم اختيار الحسابات تلقائيًا مطلقًا.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "الإنفاق المسجل";
+"Highest recorded spend" = "أعلى إنفاق مسجل";
 "Previous day" = "اليوم السابق";
 "Next day" = "اليوم التالي";
 "Click to isolate a source. Click again to show all." = "انقر لعرض مصدر واحد. انقر مجددًا لعرض الكل.";

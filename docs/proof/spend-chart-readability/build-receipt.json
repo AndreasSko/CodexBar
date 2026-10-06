@@ -1,0 +1,24 @@
+{
+  "kind": "non-shipping full production settings UI with synthetic loader",
+  "base_commit": "371b52501ce88f0a6c1920732d8a6b9bcd9962a2",
+  "executable_sha256": "2d15e60f677d0d87de3e408bc960e8c7d27f151fb814d227941fedd1d8e5776a",
+  "fixture_source_sha256": "778217d0468ede3700eb40728aa3703ac828da313ea2ba738579000f76654a4c",
+  "launch_argument": "--spend-dashboard-app-proof",
+  "route": [
+    "SettingsWindowController",
+    "PreferencesView",
+    "Usage & Spend sidebar",
+    "SpendDashboardPane",
+    "UsageStore.sharedSpendDashboardController",
+    "SpendDashboardTrendPanel"
+  ],
+  "providers": "synthetic Codex A, Codex B, Cursor, Antigravity",
+  "live_provider_requests": false,
+  "real_accounts_or_history": false,
+  "production_entrypoint_instrumentation": "Temporary DEBUG guard; normal provider startup bypassed",
+  "production_source_sha256": {
+    "Sources/CodexBar/SpendDashboardTrendPanel.swift": "faaebad05d780579a7f128f857ef4493e58cedf4ab608ad1b246e463c2e15e2a",
+    "Sources/CodexBar/SpendTrendChartModel.swift": "8c0a2c55ce9a8ef2b44df47ef1db082673af1a843e634bf8f670d772de806bfc",
+    "Tests/CodexBarTests/SpendTrendChartTests.swift": "2a1169384a00e20c6f923cd94618b4a046683d9325069a963b30fdc67ff1d323"
+  }
+}

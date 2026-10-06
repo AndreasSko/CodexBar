@@ -1655,6 +1655,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Chỉ đọc hồ sơ %@ đã chọn. Tài khoản không bao giờ được chọn tự động.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Chi tiêu đã ghi nhận";
+"Highest recorded spend" = "Chi tiêu đã ghi nhận cao nhất";
 "Previous day" = "Ngày trước";
 "Next day" = "Ngày tiếp theo";
 "Click to isolate a source. Click again to show all." = "Nhấp để chỉ xem một nguồn. Nhấp lần nữa để xem tất cả.";

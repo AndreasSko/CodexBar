@@ -1656,6 +1656,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Yalnızca seçilen %@ profilini oku. Hesaplar asla otomatik seçilmez.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Kaydedilen harcama";
+"Highest recorded spend" = "En yüksek kaydedilen harcama";
 "Previous day" = "Önceki gün";
 "Next day" = "Sonraki gün";
 "Click to isolate a source. Click again to show all." = "Tek kaynağı görmek için tıklayın. Tümünü görmek için tekrar tıklayın.";

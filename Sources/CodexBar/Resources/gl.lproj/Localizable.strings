@@ -1653,6 +1653,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Ler só o perfil de %@ seleccionado. As contas nunca se seleccionan automaticamente.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Gasto rexistrado";
+"Highest recorded spend" = "Maior gasto rexistrado";
 "Previous day" = "Día anterior";
 "Next day" = "Día seguinte";
 "Click to isolate a source. Click again to show all." = "Preme para illar unha fonte. Preme de novo para mostrar todas.";

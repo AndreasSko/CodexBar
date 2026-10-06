@@ -1655,6 +1655,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Читать только выбранный профиль %@. Аккаунты никогда не выбираются автоматически.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Учтённые расходы";
+"Highest recorded spend" = "Максимальные учтённые расходы";
 "Previous day" = "Предыдущий день";
 "Next day" = "Следующий день";
 "Click to isolate a source. Click again to show all." = "Нажмите для просмотра одного источника. Нажмите снова для просмотра всех.";

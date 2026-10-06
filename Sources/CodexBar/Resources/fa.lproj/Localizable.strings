@@ -1658,6 +1658,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "فقط نمایهٔ انتخاب‌شدهٔ %@ خوانده می‌شود. حساب‌ها هرگز به‌طور خودکار انتخاب نمی‌شوند.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "هزینه ثبت‌شده";
+"Highest recorded spend" = "بیشترین هزینه ثبت‌شده";
 "Previous day" = "روز قبل";
 "Next day" = "روز بعد";
 "Click to isolate a source. Click again to show all." = "برای نمایش یک منبع کلیک کنید. برای نمایش همه دوباره کلیک کنید.";

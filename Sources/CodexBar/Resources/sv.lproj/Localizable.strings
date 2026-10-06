@@ -1653,6 +1653,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Läs endast den valda %@-profilen. Konton väljs aldrig automatiskt.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Registrerade utgifter";
+"Highest recorded spend" = "Högsta registrerade utgifter";
 "Previous day" = "Föregående dag";
 "Next day" = "Nästa dag";
 "Click to isolate a source. Click again to show all." = "Klicka för att visa en källa. Klicka igen för att visa alla.";

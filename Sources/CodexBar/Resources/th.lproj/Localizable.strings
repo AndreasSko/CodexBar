@@ -1658,6 +1658,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "อ่านเฉพาะโปรไฟล์ %@ ที่เลือกเท่านั้น ระบบจะไม่เลือกบัญชีโดยอัตโนมัติ";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "ค่าใช้จ่ายที่บันทึกไว้";
+"Highest recorded spend" = "ค่าใช้จ่ายที่บันทึกไว้สูงสุด";
 "Previous day" = "วันก่อนหน้า";
 "Next day" = "วันถัดไป";
 "Click to isolate a source. Click again to show all." = "คลิกเพื่อดูแหล่งเดียว คลิกอีกครั้งเพื่อดูทั้งหมด";

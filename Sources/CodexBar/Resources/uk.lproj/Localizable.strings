@@ -1654,6 +1654,8 @@
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Читати лише вибраний профіль %@. Облікові записи ніколи не вибираються автоматично.";
 
 // Spend chart navigation and inspection
+"Recorded spend" = "Зафіксовані витрати";
+"Highest recorded spend" = "Найвищі зафіксовані витрати";
 "Previous day" = "Попередній день";
 "Next day" = "Наступний день";
 "Click to isolate a source. Click again to show all." = "Натисніть для перегляду одного джерела. Натисніть знову для перегляду всіх.";

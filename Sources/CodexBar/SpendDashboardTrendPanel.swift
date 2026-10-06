@@ -243,7 +243,7 @@ struct SpendTrendChart: View {
 
     private func totalSummary(_ model: SpendTrendChartModel) -> some View {
         HStack(spacing: 8) {
-            Text(self.section == .hourly ? L("Recorded hourly spend") : L("Total")).foregroundStyle(.secondary)
+            Text(L(model.recordedSpendLabel)).foregroundStyle(.secondary)
             Text(self.costText(model.total)).font(.headline).monospacedDigit()
         }
     }
@@ -252,7 +252,7 @@ struct SpendTrendChart: View {
     private func peakSummary(_ model: SpendTrendChartModel) -> some View {
         if let peak = model.peak {
             HStack(spacing: 8) {
-                Text(L("Highest spend")).foregroundStyle(.secondary)
+                Text(L("Highest recorded spend")).foregroundStyle(.secondary)
                 Text("\(self.bucketText(peak.date, model: model)) · \(self.costText(peak.total))").monospacedDigit()
             }
         }
@@ -469,7 +469,8 @@ struct SpendTrendChart: View {
             calendar: self.group.calendar,
             timeZone: self.group.timeZone)
         if unit == .month { return date.formatted(format.year(.twoDigits).month(.abbreviated)) }
-        return date.formatted(self.section == .hourly ? format.hour(.twoDigits(amPM: .omitted)) : format.month().day())
+        return date
+            .formatted(self.section == .hourly ? format.hour(.twoDigits(amPM: .abbreviated)) : format.month().day())
     }
 
     private func groupingText(_ model: SpendTrendChartModel) -> String {
