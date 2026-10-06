@@ -30,14 +30,25 @@ final class SpendUILaneRenderTests: XCTestCase {
             let daily = try (0..<90).map { offset in
                 try CostUsageDailyReport.Entry(
                     date: formatter.string(from: XCTUnwrap(calendar.date(byAdding: .day, value: -offset, to: now))),
-                    inputTokens: nil, outputTokens: nil, totalTokens: 1000,
-                    costUSD: Double((offset + account) % 7), modelsUsed: nil, modelBreakdowns: nil)
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: 1000,
+                    costUSD: Double((offset + account) % 7),
+                    modelsUsed: nil,
+                    modelBreakdowns: nil)
             }
             return SpendDashboardModel.ProviderInput(
-                id: id, provider: .codex, displayName: "Demo account",
+                id: id,
+                provider: .codex,
+                displayName: "Demo account",
                 snapshot: CostUsageTokenSnapshot(
-                    sessionTokens: nil, sessionCostUSD: nil, last30DaysTokens: nil, last30DaysCostUSD: nil,
-                    historyDays: 90, daily: daily, updatedAt: now))
+                    sessionTokens: nil,
+                    sessionCostUSD: nil,
+                    last30DaysTokens: nil,
+                    last30DaysCostUSD: nil,
+                    historyDays: 90,
+                    daily: daily,
+                    updatedAt: now))
         }
         let group = try XCTUnwrap(SpendDashboardModel.build(
             inputs: inputs, requestedDays: 90, now: now, calendar: calendar).groups.first)

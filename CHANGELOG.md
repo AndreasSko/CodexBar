@@ -19,6 +19,13 @@
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
+### Fixed
+
+- CLI: accept and deduplicate `both` and `all` in `hooks watch`, and correct provider help for commands that require one provider (#4252). Thanks @vincent-peng!
+- Codex: preserve terminal local-cost catch-up pauses across scheduled refreshes while allowing explicit retries (#4251). Thanks @vincent-peng!
+- Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
+- Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights

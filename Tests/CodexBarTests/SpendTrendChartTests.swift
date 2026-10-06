@@ -88,13 +88,14 @@ struct SpendTrendChartTests {
         #expect(model.buckets.map(\.total) == [2, 6])
     }
 
-    @Test
-    func `missing hours stay missing and are not replaced by the nearest recorded hour`() throws {
-        let group = try self.group()
+    @Test(arguments: [0.0, 1.0])
+    func `missing hours stay distinct from recorded zero and positive amounts`(lateHourCost: Double) throws {
+        let group = try self.group(lateHourCost: lateHourCost)
         let day = try #require(SpendTrendChartModel.focusedDay(nil, group: group))
         let model = SpendTrendChartModel(group: group, section: .hourly, day: day)
         #expect(model.bucket(at: day.addingTimeInterval(11 * 3600)) == nil)
         #expect(model.bucket(at: day.addingTimeInterval(9 * 3600 + 30 * 60))?.total == 10)
+        #expect(model.bucket(at: day.addingTimeInterval(14 * 3600))?.total == lateHourCost * 2)
     }
 
     @Test
@@ -250,7 +251,7 @@ struct SpendTrendChartTests {
         }
     }
 
-    private func group(days: Int = 14) throws -> SpendDashboardModel.CurrencyGroup {
+    private func group(days: Int = 14, lateHourCost: Double = 1) throws -> SpendDashboardModel.CurrencyGroup {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .gmt
         let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 5, hour: 18)))
@@ -271,7 +272,7 @@ struct SpendTrendChartTests {
             let hourly = [
                 CostUsageHourlyEntry(hour: previous.addingTimeInterval(9 * 3600), totalTokens: 100, costUSD: costs[0]),
                 CostUsageHourlyEntry(hour: day.addingTimeInterval(9 * 3600), totalTokens: 100, costUSD: costs[1]),
-                CostUsageHourlyEntry(hour: day.addingTimeInterval(14 * 3600), totalTokens: 100, costUSD: 1),
+                CostUsageHourlyEntry(hour: day.addingTimeInterval(14 * 3600), totalTokens: 100, costUSD: lateHourCost),
             ]
             let snapshot = CostUsageTokenSnapshot(
                 sessionTokens: nil,

@@ -73,7 +73,7 @@ struct ConfigSetSourceOptions: CommanderParsable {
     @OptionGroup
     var common: CLICommonOptions
 
-    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    @Option(name: .long("provider"), help: ProviderHelp.concreteOptionHelp)
     var provider: String?
 
     @Option(name: .long("source"), help: "Persistent source: auto, web, cli, oauth, or api")
