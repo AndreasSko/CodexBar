@@ -535,7 +535,6 @@ private struct SpendActivityDailyGrid: View {
                     .gesture(SpatialTapGesture().onEnded { event in
                         self.handleTap(at: event.location, pitch: pitch)
                     })
-                    .offset(x: gridFrame.minX)
                 }
                 .frame(width: gridFrame.width, height: gridFrame.height)
             }
@@ -819,7 +818,6 @@ private struct SpendActivityWeekGrid: View {
                     self.hoverLocation = nil
                 }
             }
-            .offset(x: gridFrame.minX)
             .onChange(of: visibleRect.minX) { _, _ in self.hoverLocation = nil }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(L("Token activity"))

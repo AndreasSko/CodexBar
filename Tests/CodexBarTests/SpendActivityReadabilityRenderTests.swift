@@ -6,6 +6,45 @@ import XCTest
 
 @MainActor
 final class SpendActivityReadabilityRenderTests: XCTestCase {
+    func test_scrollTargetsKeepCalendarOrderInRightToLeftLayouts() async throws {
+        for direction in [LayoutDirection.leftToRight, .rightToLeft] {
+            let selection = ScrollSelection()
+            let hosting = NSHostingView(rootView: ScrollRevealFixture(selection: selection)
+                .frame(width: 339)
+                .environment(\.layoutDirection, direction))
+            hosting.frame = CGRect(origin: .zero, size: hosting.fittingSize)
+            let window = NSWindow(
+                contentRect: hosting.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = hosting
+            defer { window.close() }
+            window.layoutIfNeeded()
+            try await self.settle(hosting) { !Self.scrollViews(in: hosting).isEmpty }
+            let scroll = try XCTUnwrap(Self.scrollViews(in: hosting).first)
+            try await self.settle(hosting) { abs(scroll.contentView.bounds.minX - 350) < 1 }
+            XCTAssertEqual(scroll.contentView.bounds.minX, 350, accuracy: 1, "\(direction): recent end")
+
+            selection.index = 0
+            try await self.settle(hosting) { abs(scroll.contentView.bounds.minX) < 1 }
+            XCTAssertEqual(scroll.contentView.bounds.minX, 0, accuracy: 1, "\(direction): first week")
+
+            selection.index = 364
+            try await self.settle(hosting) { scroll.contentView.bounds.maxX >= 688 }
+            XCTAssertEqual(scroll.contentView.bounds.minX, 350, accuracy: 1, "\(direction): last week")
+        }
+    }
+
+    private func settle(_ hosting: NSView, until condition: () -> Bool) async throws {
+        for _ in 0..<100 {
+            hosting.layoutSubtreeIfNeeded()
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     func test_navigationButtonsPageInBothDirectionsAndStopAtEnds() throws {
         guard let path = ProcessInfo.processInfo.environment["CODEXBAR_ACTIVITY_READABILITY_PROOF_DIR"] else {
             throw XCTSkip("Enable native activity proof for navigation button validation")
@@ -111,7 +150,8 @@ final class SpendActivityReadabilityRenderTests: XCTestCase {
             let tokens = offset < 100 && offset % 3 != 0 ? (offset % 4 + 1) * 1_000_000 : 0
             return .init(day: day, totalTokens: tokens)
         }
-        for language in ["en", "zh-Hans"] {
+        for language in ["en", "zh-Hans", "ar"] {
+            let direction: LayoutDirection = language == "ar" ? .rightToLeft : .leftToRight
             try CodexBarLocalizationOverride.$appLanguage.withValue(language) {
                 for scheme in [ColorScheme.light, .dark] {
                     for width: CGFloat in [339, 520, 760] {
@@ -121,7 +161,7 @@ final class SpendActivityReadabilityRenderTests: XCTestCase {
                                 points: points,
                                 now: now,
                                 calendar: calendar,
-                                options: RenderOptions(mode: mode, width: width, scheme: scheme),
+                                options: RenderOptions(mode: mode, width: width, scheme: scheme, direction: direction),
                                 output: output.appendingPathComponent("\(name).png"))
                         }
                     }
@@ -137,14 +177,14 @@ final class SpendActivityReadabilityRenderTests: XCTestCase {
                             points: partial,
                             now: now,
                             calendar: calendar,
-                            options: RenderOptions(mode: .daily, width: width, scheme: scheme),
+                            options: RenderOptions(mode: .daily, width: width, scheme: scheme, direction: direction),
                             output: output.appendingPathComponent("\(language)-\(scheme)-\(name).png"))
                     }
                     try self.render(
                         points: points.map { .init(day: $0.day, totalTokens: 0) },
                         now: now,
                         calendar: calendar,
-                        options: RenderOptions(mode: .daily, width: 339, scheme: scheme),
+                        options: RenderOptions(mode: .daily, width: 339, scheme: scheme, direction: direction),
                         output: output.appendingPathComponent("\(language)-\(scheme)-zero.png"))
                 }
             }
@@ -164,6 +204,7 @@ final class SpendActivityReadabilityRenderTests: XCTestCase {
         let view = SpendActivityHeatmapView(points: points, now: now, calendar: calendar)
             .defaultAppStorage(defaults)
             .environment(\.colorScheme, options.scheme)
+            .environment(\.layoutDirection, options.direction)
             .padding(16)
             .background(
                 Color(nsColor: .textBackgroundColor).opacity(0.74),
@@ -257,6 +298,7 @@ final class SpendActivityReadabilityRenderTests: XCTestCase {
         let mode: SpendActivityViewMode
         let width: CGFloat
         let scheme: ColorScheme
+        let direction: LayoutDirection
     }
 
     @Observable

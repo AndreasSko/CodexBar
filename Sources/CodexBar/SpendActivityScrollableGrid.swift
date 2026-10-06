@@ -81,6 +81,8 @@ struct SpendActivityScrollableGrid<Content: View>: View {
                     }
             }
             .defaultScrollAnchor(.trailing)
+            // Canvas columns and scroll targets share left-origin calendar coordinates.
+            .environment(\.layoutDirection, .leftToRight)
             .onChange(of: self.scrollToIndex) { _, index in
                 if let index { reader.scrollTo(index / SpendActivitySeries.dayCount) }
             }
