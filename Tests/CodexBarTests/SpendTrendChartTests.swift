@@ -5,6 +5,29 @@ import Testing
 @testable import CodexBar
 
 struct SpendTrendChartTests {
+    @Test(arguments: ["zh_CN", "en_US", "de_DE", "ar_SA"])
+    func `hour labels retain minutes and a twenty four hour clock across locales`(locale: String) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: locale)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        for (hour, minute, text) in [(0, 0, "00:00"), (9, 0, "09:00"), (13, 5, "13:05"), (23, 59, "23:59")] {
+            let date = try #require(calendar.date(from: DateComponents(
+                year: 2026, month: 10, day: 5, hour: hour, minute: minute)))
+            #expect(SpendTrendChartModel.clockText(date, calendar: calendar) == text)
+            #expect(SpendTrendChartModel.hourText(date, calendar: calendar) == "\(text) UTC+08:00")
+        }
+    }
+
+    @Test(arguments: [("UTC", "UTC"), ("Asia/Kolkata", "UTC+05:30"), ("America/St_Johns", "UTC-03:30")])
+    func `hour labels use the reporting zone and retain fractional UTC offsets`(
+        zone: String, offset: String) throws
+    {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: zone))
+        let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 9)))
+        #expect(SpendTrendChartModel.hourText(date, calendar: calendar) == "09:00 \(offset)")
+    }
+
     @Test(arguments: [nil, "unpriced"] as [String?])
     func `priced chart records never become a complete total when another record is unpriced`(
         sourceID: String?) throws
@@ -131,6 +154,14 @@ struct SpendTrendChartTests {
         let model = SpendTrendChartModel(group: group, section: .hourly, day: day)
         #expect(model.domain.upperBound.timeIntervalSince(day) == Double(hours) * 3600)
         #expect(model.buckets.count == hours)
+        #expect(model.hourlyTicks.map { model.hourlyAxisText($0) }
+            == ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"])
+        #expect(model.hourlyTicks.last == interval.end)
+        #expect(model.hourlyTimeZoneText == (hours == 23 ? "UTC-08:00 → UTC-07:00" : "UTC-07:00 → UTC-08:00"))
+        if hours == 25 {
+            #expect(SpendTrendChartModel.hourText(points[1].hour, calendar: calendar) == "01:00 UTC-07:00")
+            #expect(SpendTrendChartModel.hourText(points[2].hour, calendar: calendar) == "01:00 UTC-08:00")
+        }
         for point in points {
             #expect(model.bucket(at: point.hour.addingTimeInterval(1800))?.date == point.hour)
         }

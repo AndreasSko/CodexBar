@@ -141,6 +141,49 @@ struct SpendTrendChartModel {
         self.unit == .day && self.domain.upperBound.timeIntervalSince(self.domain.lowerBound) > 32 * 86400
     }
 
+    var hourlyTicks: [Date] {
+        let ticks = stride(from: 0, to: 24, by: 4).compactMap { hour in
+            self.calendar.date(bySettingHour: hour, minute: 0, second: 0, of: self.domain.lowerBound)
+        }
+        return ticks.filter { $0 >= self.domain.lowerBound && $0 < self.domain.upperBound }
+            + [self.domain.upperBound]
+    }
+
+    func hourlyAxisText(_ date: Date) -> String {
+        date == self.domain.upperBound ? "24:00" : Self.clockText(date, calendar: self.calendar)
+    }
+
+    var hourlyTimeZoneText: String {
+        let start = Self.utcOffsetText(self.domain.lowerBound, timeZone: self.calendar.timeZone)
+        let end = Self.utcOffsetText(self.domain.upperBound.addingTimeInterval(-1), timeZone: self.calendar.timeZone)
+        return start == end ? start : "\(start) → \(end)"
+    }
+
+    /// Clock notation is language independent; surrounding dates and UI labels remain localized.
+    static func clockText(_ date: Date, calendar: Calendar) -> String {
+        String(
+            format: "%02d:%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            calendar.component(.hour, from: date),
+            calendar.component(.minute, from: date))
+    }
+
+    static func hourText(_ date: Date, calendar: Calendar) -> String {
+        "\(self.clockText(date, calendar: calendar)) \(self.utcOffsetText(date, timeZone: calendar.timeZone))"
+    }
+
+    static func utcOffsetText(_ date: Date, timeZone: TimeZone) -> String {
+        let offset = timeZone.secondsFromGMT(for: date)
+        guard offset != 0 else { return "UTC" }
+        let minutes = abs(offset) / 60
+        return String(
+            format: "UTC%@%02d:%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            offset < 0 ? "-" : "+",
+            minutes / 60,
+            minutes % 60)
+    }
+
     /// No nearest-point fallback: hovering a gap must not silently show a different hour's spend.
     func bucket(at date: Date) -> Bucket? {
         let start = self.calendar.dateInterval(of: self.unit, for: date)?.start

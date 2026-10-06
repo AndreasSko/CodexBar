@@ -36,17 +36,26 @@ final class SpendTrendChartRenderTests: XCTestCase {
             requestedDays: 365,
             now: now,
             calendar: calendar).groups.first)
-        for (name, section, width, appearance, chartGroup) in [
-            ("02-daily-overview", SpendDashboardTrendSection.daily, 760.0, NSAppearance.Name.aqua, group),
-            ("03-hourly-day", .hourly, 760, .aqua, group),
-            ("04-narrow-hourly", .hourly, 480, .aqua, group),
-            ("05-dark-hourly", .hourly, 760, .darkAqua, group),
-            ("06-dark-long-range", .daily, 760, .darkAqua, longGroup),
-            ("07-narrow-long-range", .daily, 480, .darkAqua, longGroup),
-            ("08-year-overview", .daily, 760, .aqua, yearGroup),
-            ("09-component-icons", .daily, 760, .darkAqua, longGroup),
+        for (name, section, width, appearance, chartGroup, language, locale) in [
+            (
+                "02-daily-overview",
+                SpendDashboardTrendSection.daily,
+                760.0,
+                NSAppearance.Name.aqua,
+                group,
+                "zh-Hans",
+                "zh_CN"),
+            ("03-hourly-day", .hourly, 760, .aqua, group, "zh-Hans", "zh_CN"),
+            ("04-narrow-hourly", .hourly, 480, .aqua, group, "zh-Hans", "zh_CN"),
+            ("05-dark-hourly", .hourly, 760, .darkAqua, group, "zh-Hans", "zh_CN"),
+            ("06-dark-long-range", .daily, 760, .darkAqua, longGroup, "zh-Hans", "zh_CN"),
+            ("07-narrow-long-range", .daily, 480, .darkAqua, longGroup, "zh-Hans", "zh_CN"),
+            ("08-year-overview", .daily, 760, .aqua, yearGroup, "zh-Hans", "zh_CN"),
+            ("09-component-icons", .daily, 760, .darkAqua, longGroup, "zh-Hans", "zh_CN"),
+            ("10-english-hourly", .hourly, 760, .aqua, group, "en", "en_US"),
+            ("11-german-narrow-hourly", .hourly, 480, .darkAqua, group, "de", "de_DE"),
         ] {
-            try await CodexBarLocalizationOverride.$appLanguage.withValue("zh-Hans") {
+            try await CodexBarLocalizationOverride.$appLanguage.withValue(language) {
                 let view = VStack(alignment: .leading, spacing: 16) {
                     SpendDashboardTrendPanel(
                         group: chartGroup,
@@ -57,7 +66,7 @@ final class SpendTrendChartRenderTests: XCTestCase {
                     }
                 }
                 .padding(20).frame(width: width)
-                .environment(\.locale, Locale(identifier: "zh_CN"))
+                .environment(\.locale, Locale(identifier: locale))
                 .background(Color(nsColor: .windowBackgroundColor))
                 let hosting = NSHostingView(rootView: view)
                 hosting.appearance = NSAppearance(named: appearance)

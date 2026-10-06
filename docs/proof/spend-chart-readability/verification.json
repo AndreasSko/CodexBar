@@ -2,11 +2,12 @@
   "all_eleven_observed_transitions_pass": true,
   "source_hashes_match": true,
   "fixture_hash_matches": true,
+  "hourly_utc_offsets_observed": true,
   "screenshot_bytes_match_retained_originals": true,
   "image_metadata_is_dimensions_and_color_space_only": true,
   "screenshots": {
     "01-settings-entry.jpg": {
-      "sha256": "408a0fa5ca2430a9f8fcf3bc291f7f7355721c0cbf709d6d033e4abc19aef4e0",
+      "sha256": "5f39d2ab126d0bc32b8103409e95722fd23bcb93ea7835f75bba9632080b7b4d",
       "dimensions": [
         2120,
         1608
@@ -17,7 +18,7 @@
       }
     },
     "02-usage-spend-entry.jpg": {
-      "sha256": "49ca0e9bf9fe4e75284e679adea1eb24352439eedd76e840aa15f54c1f148dcf",
+      "sha256": "683e455fc5e81536196e3cc4ce87344708aa0d4f6c0ba7a7310ba497190e1419",
       "dimensions": [
         2120,
         1608
@@ -28,7 +29,7 @@
       }
     },
     "03-weekly-overview.jpg": {
-      "sha256": "48e2135dfd915f327477aad735022c3d5b649c041e6e94f38cb8ed21e4d1d6fb",
+      "sha256": "6029e89c7f7ee2f565448c4eebe771093f77cd5d8da0f002145e73676cb0bc5c",
       "dimensions": [
         2120,
         1608
@@ -39,7 +40,7 @@
       }
     },
     "04-account-isolated.jpg": {
-      "sha256": "c1814ea2f8d72ed9bae40a042a55ee2403649446ccee7affcaeb6a1f7daf15d2",
+      "sha256": "43393134f647c95730833e90d3b79e5a518977cfc432802e1d99135be62c837d",
       "dimensions": [
         2120,
         1608
@@ -50,7 +51,7 @@
       }
     },
     "05-filter-reset.jpg": {
-      "sha256": "75844f79848c67b5322afefc297e0dae5a1e1cbf42282b4e1cced72535592f16",
+      "sha256": "a989b549c3de3a1aca7cc55782c046ef349a792900aca07d0a9950ae350aa0d0",
       "dimensions": [
         2120,
         1608
@@ -61,7 +62,7 @@
       }
     },
     "06-week-to-days.jpg": {
-      "sha256": "5cb5362eafe68d6af45c3ce1dee0523ca4f08770bc3c0a4a43cf257d838b1ed9",
+      "sha256": "91479123ae6320922c7c5eae67a4809ab5795d90cbfaebe83d27f59c114a4a2b",
       "dimensions": [
         2120,
         1608
@@ -72,7 +73,7 @@
       }
     },
     "07-day-to-hours.jpg": {
-      "sha256": "a3fb9c6560021044f243605c3d7065b14595bd7e96c7ee0f6e79206916475756",
+      "sha256": "7e9cbf88248bf8e9d9ae1bd2b19f6fb24d1511dc11d1cb45f54607d462fae204",
       "dimensions": [
         2120,
         1608
@@ -83,7 +84,7 @@
       }
     },
     "08-previous-day.jpg": {
-      "sha256": "a34a1a8140158c467dec5611a3f88e329356677ce7a99893278169afc36f9521",
+      "sha256": "f5dc292ce2baebfb97f08a6ccf61785296215a1d11a09d3a76d4c390acf1478e",
       "dimensions": [
         2120,
         1608
@@ -94,7 +95,7 @@
       }
     },
     "09-next-day.jpg": {
-      "sha256": "de319ecb05e5979c481f26d08201566f0a5e047b4d5337577117e775b8df178e",
+      "sha256": "3c2a486c4684812d42c017f432be584c79ed3397c6f976ec526daafecb4b4098",
       "dimensions": [
         2120,
         1608
@@ -105,7 +106,7 @@
       }
     },
     "10-date-menu-selected.jpg": {
-      "sha256": "ad8ff1e12dfac1474942a2d86a613e0165531c090683aa4da0b49b4e688fc503",
+      "sha256": "031b11d2f373822202b841bb914facb45df19ed450a170054d333e84b34d47ab",
       "dimensions": [
         2120,
         1608

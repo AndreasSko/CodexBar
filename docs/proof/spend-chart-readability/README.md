@@ -28,7 +28,7 @@ The [runtime transcript](interaction-transcript.json) contains actual accessibil
 | Select Oct 5 from the date menu | Latest recorded day; Next day is disabled | [10](screenshots/10-date-menu-selected.jpg) |
 | Open/dismiss hourly inspection menu | Focused date and exact amounts persist | Transcript step 11 |
 
-English hour ticks visibly include AM/PM. Provider icons share a 20-point slot, with transparent brand artwork padding compensated; different Codex accounts retain distinct source colors.
+Hour ticks use `00:00` through `24:00` in every language. The hourly view shows its reporting UTC offset, and the amount inspector includes the offset for each hour so repeated daylight-saving hours remain distinct. Dates and surrounding UI retain their selected-language formatting. Provider icons share a 20-point slot, with transparent brand artwork padding compensated; different Codex accounts retain distinct source colors.
 
 ## Reproduce
 

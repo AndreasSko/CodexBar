@@ -204,6 +204,13 @@ struct SpendTrendChart: View {
     var body: some View {
         let model = self.model
         VStack(alignment: .leading, spacing: 10) {
+            if self.section == .hourly {
+                Text(model.hourlyTimeZoneText)
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .help(self.group.timeZone.identifier)
+                    .accessibilityLabel("\(L("Statistics time zone")): \(model.hourlyTimeZoneText)")
+                    .accessibilityIdentifier("spend-trend-time-zone")
+            }
             if model.segments.isEmpty {
                 ContentUnavailableView(
                     self.section == .daily && self.group.totalCost == 0 && !self.group.hasPartialCost
@@ -290,11 +297,16 @@ struct SpendTrendChart: View {
         .chartYScale(domain: 0...max(0.01, (model.peak?.total ?? 0) * 1.15))
         .chartXAxis {
             if self.section == .hourly {
-                AxisMarks(values: self.hourlyTicks(model)) { value in
+                AxisMarks(preset: .aligned, values: model.hourlyTicks) { value in
                     AxisTick()
-                    AxisValueLabel {
+                    AxisValueLabel(
+                        centered: false,
+                        anchor: value.as(Date.self) == model.domain.upperBound ? .topTrailing
+                            : value.as(Date.self) == model.domain.lowerBound ? .topLeading : .top)
+                    {
                         if let date = value.as(Date.self) {
-                            Text(self.axisText(date, unit: model.unit))
+                            Text(model.hourlyAxisText(date))
+                                .monospacedDigit()
                                 .font(.callout).foregroundStyle(Color.primary.opacity(0.85)).fixedSize()
                         }
                     }
@@ -457,20 +469,13 @@ struct SpendTrendChart: View {
         return days > 14 ? 7 : days > 7 ? 3 : 1
     }
 
-    private func hourlyTicks(_ model: SpendTrendChartModel) -> [Date] {
-        stride(from: 0, to: 24, by: 4).compactMap { hour in
-            self.group.calendar.date(bySettingHour: hour, minute: 0, second: 0, of: model.domain.lowerBound)
-        }
-    }
-
     private func axisText(_ date: Date, unit: Calendar.Component) -> String {
         let format = Date.FormatStyle(
             locale: codexBarLocalizedLocale(),
             calendar: self.group.calendar,
             timeZone: self.group.timeZone)
         if unit == .month { return date.formatted(format.year(.twoDigits).month(.abbreviated)) }
-        return date
-            .formatted(self.section == .hourly ? format.hour(.twoDigits(amPM: .abbreviated)) : format.month().day())
+        return date.formatted(format.month().day())
     }
 
     private func groupingText(_ model: SpendTrendChartModel) -> String {
@@ -493,12 +498,9 @@ struct SpendTrendChart: View {
             locale: codexBarLocalizedLocale(),
             calendar: self.group.calendar,
             timeZone: self.group.timeZone).year().month(.abbreviated).day()
-        let text = date.formatted(self.section == .hourly ? format.hour().minute() : format)
-        if self.section == .hourly,
-           self.group.calendar.dateInterval(of: .day, for: date)?.duration != 86400,
-           let abbreviation = self.group.timeZone.abbreviation(for: date)
-        { return "\(text) \(abbreviation)" }
-        return text
+        let text = date.formatted(format)
+        return self.section == .hourly
+            ? "\(text) · \(SpendTrendChartModel.hourText(date, calendar: self.group.calendar))" : text
     }
 
     private func sourceText(_ segment: SpendTrendChartModel.Segment) -> String {
