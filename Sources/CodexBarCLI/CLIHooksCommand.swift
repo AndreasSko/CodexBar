@@ -86,11 +86,14 @@ extension CodexBarCLI {
                 kind: .args)
         }
 
-        let provider: UsageProvider = switch Self.decodeHooksTestProviderName(from: values) {
-        case let .success(provider):
-            provider
-        case let .failure(error):
-            Self.exit(code: .failure, message: error.localizedDescription, output: output, kind: .args)
+        guard let rawProvider = values.options["provider"]?.last,
+              let provider = ProviderDescriptorRegistry.cliNameMap[rawProvider.lowercased()]
+        else {
+            Self.exit(
+                code: .failure,
+                message: "Unknown or missing provider. Use --provider <name>.",
+                output: output,
+                kind: .args)
         }
 
         let event = Self.sampleHookEvent(type: eventType, provider: provider.rawValue)
@@ -144,19 +147,6 @@ extension CodexBarCLI {
         }
         let succeeded = results.allSatisfy(\.success)
         Self.exit(code: succeeded ? .success : .failure, output: output, kind: .runtime)
-    }
-
-    /// Validates the single concrete provider `hooks test` targets. Unlike `hooks watch`,
-    /// `both`/`all` are invalid here because a sample event belongs to exactly one provider.
-    static func decodeHooksTestProviderName(
-        from values: ParsedValues) -> Result<UsageProvider, CLIArgumentError>
-    {
-        guard let rawProvider = values.options["provider"]?.last,
-              let provider = ProviderDescriptorRegistry.cliNameMap[rawProvider.lowercased()]
-        else {
-            return .failure(CLIArgumentError("Unknown or missing provider. Use --provider <name>."))
-        }
-        return .success(provider)
     }
 
     /// A representative event for `hooks test`: quota events report high usage so a

@@ -96,6 +96,23 @@ Usage source picker:
 - Reusing OpenCode OAuth enables remote account quota, not OpenCode session token/cost ingestion. See
   [OpenCode with Codex or OpenAI](opencode.md#using-opencode-with-codex-or-openai) for the current history boundary.
 
+### Managed account CLI (macOS)
+
+Use `codexbar codex-accounts list --json` to find managed UUIDs and the current system-identity match,
+then `codexbar codex-accounts promote <exact-uuid-or-email>` to promote an account explicitly. Duplicate
+emails require the UUID. The app and CLI share the same preservation and workspace checks: displaced
+live credentials are saved before an owner-only atomic replacement, and detected changes to either
+auth file abort the replacement. A nonblocking process lock serializes participating account writers
+and is released automatically after a crash. External Codex processes do not share that lock.
+
+CLI promotion reads local files only and never requests Keychain access or starts login. It leaves
+the app's display selection and running Codex processes alone; `CODEX_HOME` selects the live destination.
+That destination must not alias a managed home, because the swap would overwrite its preserved credentials.
+It does not renew expired credentials or enable unscoped fallback for managed workspaces. Continue to
+use the affected row's **Reauthenticate** action or ordinary `codex login` scoped to that managed home
+and intended workspace. A future CLI renewal command needs staged login and identity/workspace
+validation before committing; `promote` is not a renewal workaround. See [CLI details](cli.md#managed-codex-accounts-macos).
+
 ### Advanced profile-home accounts
 - Managed Codex accounts remain the default multi-account path.
 - Advanced users can add existing Codex homes to `~/.codexbar/config.json` with
@@ -429,6 +446,16 @@ the lookup keeps folder labels rather than choosing a potentially ambiguous name
 Duplicate project labels show their paths for disambiguation. **Hide personal information** replaces the labels
 with numbered projects and hides those paths, including tooltips. Dashboard-v1 and widget cost summaries contain
 aggregate values only, with no project names or directory paths.
+
+Independent desktop chats appear in a separate **Independent chats** section, using saved thread titles or a
+neutral chat label instead of generated workspace folder names. Every contributing thread, including older files
+from moved threads, must have an explicit marker in the selected Codex home's desktop state. Registered project
+roots and current or legacy assignments veto stale markers; missing, malformed, or conflicting ownership keeps
+the Projects fallback. A null project ID or an unregistered CLI folder alone never establishes chat ownership.
+Project names and ownership share a bounded SQLite snapshot per database per refresh (1,024 roots and 4,096
+candidate threads); desktop state reads are capped at 8 MiB. This leaves identities, totals, caches, and dashboard
+and widget schemas unchanged. Privacy mode uses numbered chat labels and hides titles and paths through the
+existing display identity projection.
 
 Codex session rows show the local thread title when available, with the project, model, and last-activity date
 beneath it. Untitled sessions use a shortened session ID. Titles come from `session_index.jsonl`, with the local

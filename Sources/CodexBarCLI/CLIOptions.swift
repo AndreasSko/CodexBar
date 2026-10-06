@@ -116,11 +116,11 @@ enum OutputFormat: String, ExpressibleFromArgument {
 
 enum ProviderHelp {
     static var list: String {
-        (self.concreteNames + ["both", "all"]).joined(separator: "|")
+        self.concreteList + "|both|all"
     }
 
     static var concreteList: String {
-        self.concreteNames.joined(separator: "|")
+        ProviderDescriptorRegistry.all.map(\ .cli.name).joined(separator: "|")
     }
 
     static var optionHelp: String {
@@ -129,10 +129,6 @@ enum ProviderHelp {
 
     static var concreteOptionHelp: String {
         "Provider to query: \(self.concreteList)"
-    }
-
-    private static var concreteNames: [String] {
-        ProviderDescriptorRegistry.all.map(\ .cli.name)
     }
 }
 

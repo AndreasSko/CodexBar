@@ -149,6 +149,7 @@ sources and setup guide. The [provider ID list](provider-ids.md) is generated fr
   - Choose exactly one of `--provider <id>` or `--all`; provider support comes from shared browser-cookie metadata rather than a fixed CLI list.
   - Prompt-capable Chromium imports require `--allow-keychain-prompt`. Without it, the command fails before cache mutation with an interactive-retry hint.
   - A six-hour Keychain-denial cooldown is bypassed only by that explicit acknowledgment flag. Output never includes cookie values.
+  - Classified provider failures distinguish rejected sessions, permissions, rate limits, outages, network errors, and unreadable responses. Missing credentials retain the browser sign-in hint; disabled or denied Keychain access takes precedence. Hints never echo raw provider error messages.
   - Providers configured for Manual or Off cookie sources are skipped.
 - `codexbar guard --provider <id>` gates automation on one provider's remaining quota.
   - `--min-remaining <percent>` sets the inclusive threshold (default: `10`; valid range: `0...100`).
@@ -206,7 +207,7 @@ sources and setup guide. The [provider ID list](provider-ids.md) is generated fr
   Without it, hook rules only ever fire from the macOS app, so a headless install can configure hooks that never run.
   - `--interval <seconds>`: poll period. Default `300`, minimum `60`; a smaller value is rejected rather than
     clamped, because each tick fetches every selected provider.
-  - `--provider <id|both|all>`: restrict polling; repeatable. Defaults to every enabled provider.
+  - `--provider <id|both|all>`: restrict polling; repeatable. Defaults to every enabled provider. `both` selects the primary providers; `all` selects every registered provider, including providers not enabled in the config.
   - `--format json`/`--json`/`--pretty`: emit each attempted event as JSON, excluding throttled candidates.
   - Events are edge-triggered against the previous poll, so a condition that merely persists (a saturated window,
     an ongoing outage) does not re-fire every tick. State is in-memory only: a restart re-establishes baselines and
@@ -288,11 +289,21 @@ codexbar config validate --format json --pretty
 codexbar config dump --pretty
 printf '%s' "$OPENAI_ADMIN_KEY" | codexbar config set-api-key --provider openai --stdin
 codexbar config enable --provider grok
+codexbar config set-source --provider claude --source cli
+codexbar config set-source --provider claude --source auto
 codexbar cache clear --cookies
 codexbar cache clear --cookies --provider claude
 codexbar cache clear --all --format json --pretty
 codexbar cookie refresh --provider opencodego --allow-keychain-prompt
 ```
+
+`config set-source` writes the provider's `source` in the resolved config file, using the same
+store as Settings. It accepts the provider names and aliases used by `config enable`, and rejects
+sources not offered by that provider's fetch plan. `--source auto` removes the override. Provider
+enablement, credentials, and other config fields are preserved. JSON output includes `provider`,
+`displayName`, `enabled`, `source`, and `configPath`; `source` reports `auto` after clearing an override.
+Invalid arguments are rejected before reading or writing the config, leaving any existing file byte-identical.
+Successful writes use the shared store's normal defaults and JSON formatting; setter output contains no credentials.
 
 ### Sample output (text)
 ```
@@ -370,6 +381,11 @@ Note: Using CLI fallback
 }
 ```
 
+Grok purchased Extra Usage Credits appear in usage JSON as `usage.providerCost.balance` with
+`currencyCode: "USD"` when the CLI proxy supplies a valid wallet. The amount is dollars (`1446` cents → `14.46`),
+separate from quota percentages; zero is retained and unavailable or invalid balances are omitted. The balance-only
+`used`/`limit` fields are zero and do not describe spending or a budget. See [Grok](grok.md#purchased-credits-in-cli-json).
+
 ## Exit codes
 - 0: success
 - 2: provider missing (binary not on PATH)
@@ -399,3 +415,36 @@ non-zero only when it cannot produce a valid snapshot document.
 - OpenAI web requires a signed-in `chatgpt.com` session in a supported browser or a manual cookie header. No passwords are stored; CodexBar reuses cookies.
 - Safari cookie import may require granting CodexBar Full Disk Access (System Settings → Privacy & Security → Full Disk Access).
 - The `openaiDashboard` JSON field is normally sourced from the app’s cached dashboard snapshot; `--source auto|web` refreshes it live via WebKit using a per-account cookie store.
+
+## Managed Codex accounts (macOS)
+
+`codexbar codex-accounts list --json` lists managed account UUIDs, emails, and whether each readable
+saved identity matches the current system authentication. It never emits tokens or private home paths.
+
+`codexbar codex-accounts promote <uuid-or-email>` explicitly promotes one managed account to system
+authentication. Use the exact UUID when several accounts share an email. Promotion preserves the
+current live credentials in their managed account (or imports that account) before publishing the
+target's authentication through the private atomic writer. Missing, unreadable, conflicting, or
+workspace-mismatched state fails without replacing live authentication. Participating app/CLI
+account-store writers share a nonblocking process lock and report contention rather than waiting for
+each other. The operating system releases the lock if a process exits or crashes; do not delete the
+lock file. A changed live or selected managed auth file detected before replacement requires retrying
+the operation. External writers do not share this lock, so avoid running `codex login` concurrently.
+
+This command does not add accounts, sign in, rotate accounts automatically, change the app's display
+selection, or restart existing Codex processes. Already-running processes may retain their old identity.
+External Codex clients do not participate in CodexBar's process lock.
+
+Both commands use local account metadata and auth files only: they do not access Keychain, import
+browser cookies, or make provider requests. `CODEX_HOME` selects the system destination; the managed
+account list still comes from CodexBar's account store for the current macOS user.
+The destination must be separate from every managed home, including symlink aliases, so preservation
+cannot be overwritten by the promotion itself. If it is a managed home, unset `CODEX_HOME` or choose
+a separate live home before promoting.
+
+Promotion does not renew expired credentials. Use **Reauthenticate** on the affected managed row in
+Settings → Providers → Codex, or run `CODEX_HOME='/absolute/path/to/that/managed/home' codex login`
+with that account's existing home and select the intended workspace. Ordinary browser login remains
+available when device-code login is disabled. There is no `codex-accounts reauth` command or automatic
+managed-workspace renewal: a safe CLI flow also needs staged login, post-login identity/workspace
+validation, and a locked commit that rejects a removed or changed account.

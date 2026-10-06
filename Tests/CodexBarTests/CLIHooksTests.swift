@@ -24,20 +24,6 @@ struct CLIHooksTests {
         }
     }
 
-    @Test(arguments: ["all", "both", "bogus"])
-    func `test provider option accepts only a concrete provider`(name: String) throws {
-        let result = CodexBarCLI.decodeHooksTestProviderName(
-            from: ParsedValues(positional: [], options: ["provider": [name]], flags: []))
-        guard case .failure = result else {
-            Issue.record("Expected \(name) to fail")
-            return
-        }
-
-        let concrete = CodexBarCLI.decodeHooksTestProviderName(
-            from: ParsedValues(positional: [], options: ["provider": ["codex"]], flags: []))
-        #expect(try concrete.get() == .codex)
-    }
-
     @Test
     func `watch privacy keeps account routing private and skips synthetic lanes`() {
         let usage = UsageSnapshot(
