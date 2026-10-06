@@ -18,6 +18,10 @@ assert text.count(marker) == 1
 entry.write_text(text.replace(marker, "        if ActivityDashboardRuntimeProof.runIfRequested() {\n            return\n        }\n" + marker))
 stores = (root / "Tests/CodexBarTests/TestStores.swift").read_text().split("#if os(macOS)\n@MainActor\nfunc testStatusBar", 1)[0]
 stores = stores.replace("@testable import CodexBar\n", "")
+setter = "    override func set(_ value: Any?, forKey defaultName: String) {\n        self.lock.withLock { self.values[defaultName] = value }\n    }"
+notifying_setter = "    override func set(_ value: Any?, forKey defaultName: String) {\n        self.willChangeValue(forKey: defaultName)\n        self.lock.withLock { self.values[defaultName] = value }\n        self.didChangeValue(forKey: defaultName)\n    }"
+assert stores.count(setter) == 1
+stores = stores.replace(setter, notifying_setter)
 zai = (root / "Tests/CodexBarTests/ZaiTokenStoreTestSupport.swift").read_text().replace("@testable import CodexBar\n", "")
 (root / "Sources/CodexBar/ActivityRuntimeProofTestStores.swift").write_text("#if DEBUG\n" + stores.rstrip() + "\n\n" + zai.lstrip() + "\n#endif\n")
 PYTHON

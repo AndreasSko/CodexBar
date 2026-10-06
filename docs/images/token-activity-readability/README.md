@@ -44,8 +44,16 @@ CODEXBAR_ACTIVITY_READABILITY_PROOF_DIR="$PWD/.build/activity-proof" \
 
 The final focused run passed 85 Swift Testing tests and all 3 enabled native XCTest cases. The screenshot matrix produced 80 images across Chinese/English, Light/Dark mode, 339/520/760-point widths, all three activity modes, partial coverage, and zero activity. Native mouse events changed the 339-point viewport offsets through `350, 26, 0, 0, 325, 350, 350`: both ends are reachable, and clicking the disabled end controls does not move the viewport.
 
-`make check` passed. A complete `make test` run on source commit `47479f3a0eaf82ffb0081a4fa41dbdc36dc1abe4` exited successfully: all 143 groups completed. The first pass completed 142 groups; group 134 timed out and the repository script recovered it by running all 12 selections individually. The [sanitized receipt](full-test-receipt.json) records that retry instead of claiming a clean first pass.
+`make check` passed. The complete repository suite on final product commit `f3a75a5c974fbcc9d01e9318850154187d4d3bed` passed all **143/143 groups on the first attempt**, using the repository's inventory-verified direct runner with four workers (`python3 Scripts/ci_swift_test_by_suite.py --direct-workers 4`). It verified all 13,837 test methods before execution; no groups were filtered out, and no failures, retries or timeouts occurred. The earlier standard `make test` run also completed all 143 groups, with one group recovered through the script's 12 isolated retries. Both runs are recorded in the [sanitized receipt](full-test-receipt.json).
 
-The unchanged cached-title performance test passed its original 50 ms budget in that complete run. The clean upstream base also passed its full 83-test renderer suite on the same host. Another isolated PR renderer run failed the budget at 85.7 ms, so timing variability remains observed and its exact cause is undetermined; the renderer source and test are byte-identical to the base. No test or threshold was relaxed.
+The unchanged cached-title performance test passed its original 50 ms budget in both complete runs. A clean upstream-base renderer suite also passed 83/83 tests on the same host. Another isolated PR renderer run failed the budget at 85.7 ms, so timing variability remains observed and its exact cause is undetermined; renderer source and test are byte-identical to the base. No test or threshold was relaxed.
 
-The [full-app synthetic proof launcher](runtime/README.md) builds a separate packaged app with the complete production Usage & Spend pane. It is a reproducible setup artifact; the complete-app interactive capture is pending because the host locked before paging and date-inspection recording finished. Installed-app trackpad and VoiceOver operation remain unverified. No original user screenshot or real account history is included in this evidence.
+The final focused Swift Testing selection passed 85 tests. The three enabled native XCTest cases passed on an unchanged isolated rerun; the initial native run had one asynchronous navigation-click assertion fail. The full-app evidence separately verifies actual UI button clicks, boundaries, date inspection, keyboard reveal, and selection.
+
+## Integrated runtime evidence
+
+The [fresh complete-app proof](runtime/README.md) includes paging, keyboard date reveal, tooltip/date selection, Light mode, wide layout, mode switching and exposed accessibility actions. The final accessibility adjustment places virtual day/week descriptions on the inner chart, so the scroll area's earlier/recent controls remain accessible.
+
+![Complete Dark-mode dashboard with recent token activity](runtime/dark-recent.jpg)
+
+All public evidence uses explicitly synthetic history. Raw originals and machine-specific logs remain local; public window captures have ancillary metadata removed without changing the encoded raster. Physical trackpad and spoken VoiceOver sessions remain unverified.

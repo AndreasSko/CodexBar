@@ -9,7 +9,7 @@ import SwiftUI
 enum ActivityDashboardRuntimeProof {
     static func runIfRequested() -> Bool {
         guard CommandLine.arguments.contains("--activity-dashboard-proof")
-            || Bundle.main.bundleIdentifier == "org.codex.proof.activity.readability" else { return false }
+            || Bundle.main.bundleIdentifier?.hasPrefix("org.codex.proof.activity.") == true else { return false }
         let environment = ProcessInfo.processInfo.environment
         guard SettingsStore.isRunningTests,
               environment["CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS"] == "1",
@@ -34,7 +34,6 @@ enum ActivityDashboardRuntimeProof {
         private var controller: SpendDashboardController?
         private var settings: SettingsStore?
         private var store: UsageStore?
-        private var snapshotCount = 0
         private var timer: Timer?
 
         init(output: URL) { self.output = output }
@@ -113,7 +112,6 @@ enum ActivityDashboardRuntimeProof {
                     Text("SYNTHETIC HISTORY · NO PERSONAL DATA")
                         .font(.caption.weight(.semibold))
                     HStack {
-                        Button("Snapshot") { self.capture() }
                         Button("Dark") { window.appearance = NSAppearance(named: .darkAqua) }
                         Button("Light") { window.appearance = NSAppearance(named: .aqua) }
                         Button("Narrow") { window.setContentSize(NSSize(width: 435, height: 820)) }
@@ -131,25 +129,7 @@ enum ActivityDashboardRuntimeProof {
             self.window = window
         }
 
-        private func capture() {
-            guard let view = self.window?.contentView,
-                  let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)
-            else { return }
-            view.effectiveAppearance.performAsCurrentDrawingAppearance {
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-            }
-            self.snapshotCount += 1
-            let name = String(format: "dashboard-%02d.png", self.snapshotCount)
-            do {
-                guard let data = bitmap.representation(using: .png, properties: [:]) else { return }
-                try data.write(to: self.output.appendingPathComponent(name))
-                self.recordState(snapshot: name)
-            } catch {
-                fatalError("Could not save synthetic runtime proof: \(error)")
-            }
-        }
-
-        private func recordState(snapshot: String? = nil) {
+        private func recordState() {
             guard let controller = self.controller, let window = self.window,
                   let view = window.contentView else { return }
             let scrolls = Self.scrollViews(in: view).map { scroll -> [String: Any] in
@@ -177,7 +157,7 @@ enum ActivityDashboardRuntimeProof {
                 "selectedDay": controller.selectedDay.map {
                     Self.dayKey($0, calendar: self.settings!.costUsageBucketCalendar)
                 } ?? "none",
-                "snapshot": snapshot ?? "",
+                "activityMode": self.settings?.userDefaults.string(forKey: "spendActivityViewMode") ?? "daily",
                 "windowContentWidth": view.bounds.width,
                 "scrollViews": scrolls,
             ]
