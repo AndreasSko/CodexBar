@@ -299,6 +299,11 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     checkpoints until each file is refreshed.
   - Native Codex logs parse `event_msg` token_count entries and `turn_context` model markers; when both are present,
     `turn_context` is authoritative for the model bucket.
+  - Native session `thread_settings_applied.thread_settings.service_tier` evidence applies to the following
+    `task_started` turn, using the existing published Fast multipliers. Pending settings and known Priority turns
+    survive incremental scans and SQLite reopening. Unknown or missing tiers retain the Standard fallback;
+    subagents do not inherit a parent tier. Live or saved Priority trace evidence remains authoritative, including
+    after trace pruning. Compatible stores retain history while older parser revisions reparse within the scan budget.
   - Direct forks preserve the inherited origin of cumulative counters when resolving parent snapshots, including
     intermediate sessions that are empty at the child's fork time. Repeated inherited snapshots contribute no
     new usage; descendants count only their deltas. Ancestry remains a cache dependency, so ancestor changes
@@ -380,7 +385,7 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     They contribute no usage and reparse from the start if they grow. Usage-bearing duplicates and incomplete fragments
     keep their existing accounting and retry rules. Existing 0.56.4 cost caches are adopted without rebuilding
     stored usage, retained reports, or partial-scan checkpoints.
-  - On macOS and Linux, local Priority/Fast pricing evidence is read from the host's Codex SQLite trace database.
+  - On macOS and Linux, local Priority/Fast pricing evidence comes from native session settings and the host's Codex SQLite trace database.
     Priority trace scans resume after ordinary log pruning when enough distributed content anchors still match;
     changed source rows, replaced databases, or insufficient matching anchors require a fresh scan. Temporary
     trace-database failures retain the last validated report pricing and leave scan freshness unchanged for retry.
