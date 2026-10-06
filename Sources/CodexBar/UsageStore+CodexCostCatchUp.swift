@@ -24,9 +24,10 @@ private enum CodexCostCatchUpPublicationError: LocalizedError {
 extension UsageStore {
     func startCodexCostCatchUpIfNeeded(afterRefreshing provider: UsageProvider) {
         guard provider == .codex else { return }
-        let explicitResume = ProviderInteractionContext.current == .userInitiated
-            || !self.codexCostCatchUpRequiresExplicitResume
-        guard !self.codexCostCatchUpStopRequested, explicitResume else { return }
+        if self.codexCostCatchUpStopRequested || self.codexCostCatchUpActivity?.requiresExplicitResume == true {
+            guard ProviderInteractionContext.current == .userInitiated,
+                  self.codexCostCatchUpTask == nil else { return }
+        }
         self.startCodexCostCatchUpIfNeeded(mode: .automatic)
     }
 
@@ -78,23 +79,12 @@ extension UsageStore {
                     self.codexCostCatchUpScopeSignature = nil
                     let restartRequested = self.codexCostCatchUpRestartRequested
                     self.codexCostCatchUpRestartRequested = false
-                    if restartRequested, !self.codexCostCatchUpRequiresExplicitResume {
+                    if restartRequested, self.codexCostCatchUpActivity?.requiresExplicitResume != true {
                         self.startCodexCostCatchUpIfNeeded(mode: self.codexCostCatchUpMode)
                     }
                 }
             }
             await self.runCodexCostCatchUp(context: context)
-        }
-    }
-
-    private var codexCostCatchUpRequiresExplicitResume: Bool {
-        guard let activity = self.codexCostCatchUpActivity,
-              activity.phase == .paused else { return false }
-        switch activity.pauseReason {
-        case .user, .noProgress, .error:
-            return true
-        case .lowPower, .thermal, .none:
-            return false
         }
     }
 
@@ -114,17 +104,8 @@ extension UsageStore {
         self.codexCostCatchUpStopRequested = true
         self.codexCostCatchUpRestartRequested = false
         guard !self.codexCostCatchUpPassIsRunning else { return }
-        if let activity = self.codexCostCatchUpActivity {
-            self.codexCostCatchUpActivity = CodexCostCatchUpActivity(
-                phase: .paused,
-                mode: activity.mode,
-                processedBytes: activity.processedBytes,
-                totalBytes: activity.totalBytes,
-                completedFiles: activity.completedFiles,
-                totalFiles: activity.totalFiles,
-                pauseReason: .user,
-                staleSnapshotUpdatedAt: activity.staleSnapshotUpdatedAt)
-        }
+        self.codexCostCatchUpActivity?.phase = .paused
+        self.codexCostCatchUpActivity?.pauseReason = .user
         self.codexCostCatchUpTask?.cancel()
         self.codexCostCatchUpTask = nil
         self.codexCostCatchUpToken = nil

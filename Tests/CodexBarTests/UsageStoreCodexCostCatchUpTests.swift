@@ -480,8 +480,8 @@ struct UsageStoreCodexCostCatchUpTests {
         #expect(store.codexCostCatchUpActivity?.phase == .paused)
     }
 
-    @Test
-    func `an observation-driven refresh resumes a resource-limited catch-up pause`() async throws {
+    @Test(arguments: [false, true])
+    func `an observation-driven refresh resumes a resource-limited catch-up pause`(thermal: Bool) async throws {
         let store = try Self.makeStore(suite: "resource-pause-refresh")
         defer { store.cancelCodexCostCatchUp() }
         store._test_cachedCodexTokenSnapshotLoaderOverride = { _, _, _ in nil }
@@ -489,27 +489,27 @@ struct UsageStoreCodexCostCatchUpTests {
             .init(pending: true, progressKey: "unchanged")
         }
         store._test_codexCostCatchUpResourceStateOverride = {
-            (.ac, true, .nominal)
+            (.ac, !thermal, thermal ? .serious : .nominal)
         }
         var sleeps = 0
         store._test_codexCostCatchUpSleepOverride = { delay in
             guard delay > 0 else { return }
             sleeps += 1
-            #expect(store.codexCostCatchUpActivity?.pauseReason == .lowPower)
+            #expect(store.codexCostCatchUpActivity?.pauseReason == (thermal ? .thermal : .lowPower))
             throw CancellationError()
         }
 
         store.startCodexCostCatchUpIfNeeded()
         await Self.waitUntil { store.codexCostCatchUpTask == nil }
         #expect(store.codexCostCatchUpActivity?.phase == .paused)
-        #expect(store.codexCostCatchUpActivity?.pauseReason == .lowPower)
+        #expect(store.codexCostCatchUpActivity?.pauseReason == (thermal ? .thermal : .lowPower))
 
         store.startCodexCostCatchUpIfNeeded(afterRefreshing: .codex)
 
         #expect(store.codexCostCatchUpTask != nil)
         await Self.waitUntil { store.codexCostCatchUpTask == nil }
         #expect(sleeps == 2)
-        #expect(store.codexCostCatchUpActivity?.pauseReason == .lowPower)
+        #expect(store.codexCostCatchUpActivity?.pauseReason == (thermal ? .thermal : .lowPower))
     }
 
     @Test(arguments: [false, true])
@@ -776,6 +776,15 @@ struct UsageStoreCodexCostCatchUpTests {
         #expect(store.codexCostCatchUpActivity?.phase == .paused)
         #expect(store.codexCostCatchUpActivity?.pauseReason == .user)
         #expect(store.codexCostCatchUpActivity?.fractionCompleted == 0.5)
+
+        store.startCodexCostCatchUpIfNeeded(afterRefreshing: .codex)
+        #expect(store.codexCostCatchUpTask == nil)
+        #expect(store.codexCostCatchUpActivity?.pauseReason == .user)
+        await ProviderInteractionContext.$current.withValue(.userInitiated) {
+            store.startCodexCostCatchUpIfNeeded(afterRefreshing: .codex)
+        }
+        #expect(store.codexCostCatchUpTask != nil)
+        store.cancelCodexCostCatchUp()
     }
 
     @Test
@@ -786,6 +795,9 @@ struct UsageStoreCodexCostCatchUpTests {
         store.codexCostCatchUpRestartRequested = true
 
         store.stopCodexCostCatchUp()
+        ProviderInteractionContext.$current.withValue(.userInitiated) {
+            store.startCodexCostCatchUpIfNeeded(afterRefreshing: .codex)
+        }
 
         #expect(store.codexCostCatchUpStopRequested)
         #expect(!store.codexCostCatchUpRestartRequested)

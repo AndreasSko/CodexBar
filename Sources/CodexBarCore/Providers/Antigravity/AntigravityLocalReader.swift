@@ -271,15 +271,16 @@ enum AntigravityLocalReader {
         let inherited = label.flatMap { conflicts.contains($0) ? nil : models[$0] }
         let model = self.normalizeModelID(event.turn.model ?? inherited ?? "unknown")
         let date = Date(timeIntervalSince1970: Double(timestamp) / 1000)
+        let day = CostUsageLocalDay.key(from: date, calendar: calendar)
+        let unattributedZero = total == 0 && model == "unknown"
         let cost = pricing.flatMap {
-            self.costUSD(
+            unattributedZero ? 0 : self.costUSD(
                 pricing: $0,
                 model: model,
                 date: date,
                 usage: usage,
                 cacheWrite: event.cacheWrite)
         }
-        let day = CostUsageLocalDay.key(from: date, calendar: calendar)
         return .init(
             date: day,
             inputTokens: input,
@@ -291,7 +292,7 @@ enum AntigravityLocalReader {
             requestCount: 1,
             costUSD: cost,
             modelsUsed: nil,
-            modelBreakdowns: [.init(
+            modelBreakdowns: unattributedZero ? [] : [.init(
                 modelName: model,
                 costUSD: cost,
                 totalTokens: total,
@@ -428,11 +429,7 @@ enum AntigravityLocalReader {
     }
 
     private static func sumCosts(_ lhs: Double?, _ rhs: Double?) -> Double? {
-        switch (lhs, rhs) {
-        case let (lhs?, rhs?): lhs + rhs
-        case let (lhs?, nil): lhs
-        case let (nil, rhs?): rhs
-        case (nil, nil): nil
-        }
+        if let lhs, let rhs { return lhs + rhs }
+        return lhs ?? rhs
     }
 }
