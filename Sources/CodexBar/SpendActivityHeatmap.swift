@@ -540,6 +540,26 @@ private struct SpendActivityDailyGrid: View {
                 .frame(width: gridFrame.width, height: gridFrame.height)
             }
             .onChange(of: visibleRect.minX) { _, _ in self.hoveredIndex = nil }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(L("Token activity"))
+            .accessibilityValue(self.accessibilityValue)
+            .accessibilityChildren {
+                ForEach(self.series.daily.indices.filter(self.series.isVisible), id: \.self) { index in
+                    if let date = self.series.date(at: index) {
+                        Text(self.accessibilityDescription(at: index, date: date))
+                    }
+                }
+            }
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    self.moveKeyboardSelectionChronologically(by: 1)
+                case .decrement:
+                    self.moveKeyboardSelectionChronologically(by: -1)
+                @unknown default:
+                    break
+                }
+            }
         }
         .focusable()
         .focusEffectDisabled()
@@ -548,26 +568,6 @@ private struct SpendActivityDailyGrid: View {
         .onChange(of: self.isKeyboardFocused) { _, isFocused in
             if isFocused, self.keyboardIndex == nil {
                 self.keyboardIndex = self.lastVisibleIndex
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L("Token activity"))
-        .accessibilityValue(self.accessibilityValue)
-        .accessibilityChildren {
-            ForEach(self.series.daily.indices.filter(self.series.isVisible), id: \.self) { index in
-                if let date = self.series.date(at: index) {
-                    Text(self.accessibilityDescription(at: index, date: date))
-                }
-            }
-        }
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                self.moveKeyboardSelectionChronologically(by: 1)
-            case .decrement:
-                self.moveKeyboardSelectionChronologically(by: -1)
-            @unknown default:
-                break
             }
         }
     }
@@ -821,14 +821,14 @@ private struct SpendActivityWeekGrid: View {
             }
             .offset(x: gridFrame.minX)
             .onChange(of: visibleRect.minX) { _, _ in self.hoverLocation = nil }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L("Token activity"))
-        .accessibilityValue(self.accessibilityValue)
-        .accessibilityChildren {
-            ForEach(self.activity.values.indices.filter(self.isVisible), id: \.self) { index in
-                if let weekStart = self.series.weekStartDate(at: index) {
-                    Text(self.accessibilityDescription(at: index, weekStart: weekStart))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(L("Token activity"))
+            .accessibilityValue(self.accessibilityValue)
+            .accessibilityChildren {
+                ForEach(self.activity.values.indices.filter(self.isVisible), id: \.self) { index in
+                    if let weekStart = self.series.weekStartDate(at: index) {
+                        Text(self.accessibilityDescription(at: index, weekStart: weekStart))
+                    }
                 }
             }
         }
