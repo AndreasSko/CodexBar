@@ -1,0 +1,13 @@
+{
+  "productionHead": "ab054c7b8a3c328b0fa1d507442f7cfa34f3e1e2",
+  "debugProofOverlay": true,
+  "overlaySHA256": "80d9c3002529cee79e951f8632ea3ff11ede3b24cf4b74b93661d875d96e06d6",
+  "productionViewsModified": false,
+  "application": "CodexBar.app",
+  "productionFilesSHA256": {
+    "Sources/CodexBar/ProviderBrandIcon.swift": "b6d23903da8d8cb11b3728c2de6bee527f49cdddbd033158b06e24c2c1f0930d",
+    "Sources/CodexBar/SpendDashboardProviderBreakdown.swift": "d96694f0e0ff98acabed4ebe328d6b5ab43b839a1234354f78fe45bca1d13cf9",
+    "Sources/CodexBar/PreferencesSpendDashboardPane.swift": "10072188d46aab6729796d9a026b325f1604ed947641a92c5e5a74e88d47dce5",
+    "Sources/CodexBar/SettingsWindowController.swift": "0c3d2d063538c6a4a0a95bea0bd987339edc5001d3f1c36f4cd8981861dbb698"
+  }
+}

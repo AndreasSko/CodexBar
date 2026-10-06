@@ -1,0 +1,26 @@
+{
+  "appearance": "NSAppearanceNameDarkAqua",
+  "applicationBundle": "CodexBar.app",
+  "bundledResourceLookup": true,
+  "entrypoint": "SettingsWindowController.open",
+  "groups": 1,
+  "icons": [
+    {
+      "brandTemplate": false,
+      "childTemplate": true,
+      "provider": "claude"
+    },
+    {
+      "brandTemplate": false,
+      "childTemplate": true,
+      "provider": "codex"
+    },
+    {
+      "brandTemplate": true,
+      "childTemplate": true,
+      "provider": "cursor"
+    }
+  ],
+  "selectedPane": "usageSpend",
+  "syntheticOnly": true
+}

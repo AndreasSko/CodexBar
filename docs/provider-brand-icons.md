@@ -80,3 +80,7 @@ CODEXBAR_BRAND_ICON_PROOF_DIR=docs/screenshots/usage-spend-brand-icons \
 The screenshot fixtures use synthetic usage data and an unrelated purple tint to reveal accidental
 brand tinting. Model aggregation and monochrome child icons retain the existing provider association;
 no model-to-vendor identity inference is added.
+
+For packaged application verification, use the [native proof launcher](screenshots/usage-spend-brand-icons/native/README.md).
+It opens the production settings window with isolated synthetic inputs and exercises app-bundle
+resource selection in both appearances. It does not run authenticated provider transports.
