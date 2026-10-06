@@ -3,7 +3,7 @@ setup: a real Codex history (~/.codex sessions and archived sessions, read in pl
        real 0.72.0 cost cache (copied 2026-10-05T04:54:27-0300); each run starts from the same copy in a temporary cache root
 calendar: America/Santiago; window: 30 days ending 2026-10-05; pricing catalog: the cached models.dev copy, no refresh
 redaction: dollar amounts replaced with $•••; dayCost "$" means a cost is present
-affected days: codex-auto-review has tokens but no catalog price, beside priced models on the same day
+affected days: an unpriced model has tokens but no catalog price, beside priced models on the same day
 
 == upstream main 93abfbe22
 Codex API-equivalent estimate (not billed)

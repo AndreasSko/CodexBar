@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Antigravity: use agy's consumer OAuth client for new Google sign-ins and ask affected accounts to sign in again instead of showing placeholder 100% quotas (#4293). Thanks @oldcai!
 - Usage & Spend: retain known daily request counts when another source cannot count requests, showing the subtotal with ≥ while wholly unavailable counts remain a dash; partial costs do not erase request totals (#4295). Thanks @Yuxin-Qiao!
 - Codex costs: a request with unknown historical pricing no longer hides the estimate for the other requests of its model and day. The day shows the priced subtotal as a partial estimate with its unpriced request count, and a day with an unpriced model is no longer reported as fully priced (#4273, #4278, #4279). Thanks @gabrielrojasc and @luochen211!
 - Claude: label a CLI `/usage` subscription notice without quota data as a configuration issue instead of an authentication failure in logs and diagnostics (#4225, related to #4083). Thanks @sudoHG!
