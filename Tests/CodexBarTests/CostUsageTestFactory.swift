@@ -90,3 +90,72 @@ extension CostUsageScanner {
             codexBufferedUnresolvedForkLines: codexBufferedUnresolvedForkLines)
     }
 }
+
+extension CostUsageScanner {
+    static func needsCodexPricingMetadata(_ usage: CostUsageFileUsage) -> Bool {
+        !(usage.codexRows?.isEmpty ?? true)
+            && (usage.codexCostCacheComplete != true || self.needsCodexModeSplitCache(usage))
+    }
+}
+
+extension CostUsageScanner {
+    static func parseCodexFile(
+        fileURL: URL,
+        range: CostUsageDayRange,
+        startOffset: Int64 = 0,
+        initialModel: String? = nil,
+        initialTotals: CostUsageCodexTotals? = nil,
+        initialRawTotalsBaseline: CostUsageCodexTotals? = nil,
+        initialHasDivergentTotals: Bool = false,
+        initialCodexTurnID: String? = nil,
+        initialCodexUsageRowIndex: Int = 0,
+        inheritedTotalsResolver: ((String, String) -> CodexForkBaseline)? = nil) -> CodexParseResult
+    {
+        let throwingResolver: ((String, String) throws -> CodexForkBaseline)? = inheritedTotalsResolver
+            .map { resolver in
+                { sessionId, timestamp in resolver(sessionId, timestamp) }
+            }
+        return (
+            try? Self.parseCodexFileCancellable(
+                fileURL: fileURL,
+                range: range,
+                startOffset: startOffset,
+                initialModel: initialModel,
+                initialTotals: initialTotals,
+                initialRawTotalsBaseline: initialRawTotalsBaseline,
+                initialHasDivergentTotals: initialHasDivergentTotals,
+                initialCodexTurnID: initialCodexTurnID,
+                initialCodexUsageRowIndex: initialCodexUsageRowIndex,
+                inheritedTotalsResolver: throwingResolver,
+                checkCancellation: nil)) ?? CodexParseResult(
+            days: [:],
+            parsedBytes: startOffset,
+            scanTargetSize: startOffset,
+            lastModel: initialModel,
+            lastTotals: initialTotals,
+            lastCountedTotals: initialTotals,
+            lastRawTotalsBaseline: initialRawTotalsBaseline,
+            lastRawTotalsWatermark: initialRawTotalsBaseline,
+            seenRawTotals: [],
+            hasDivergentTotals: initialHasDivergentTotals,
+            hasInterleavedTotals: false,
+            lastCodexTurnID: initialCodexTurnID,
+            sessionId: nil,
+            forkedFromId: nil,
+            dependsOnParentTotals: false,
+            projectPath: nil,
+            codexSession: CostUsageCodexSessionMetadata(
+                sessionId: nil,
+                forkedFromId: nil,
+                cwd: nil,
+                title: nil,
+                startedAtUnixMs: nil,
+                latestActivityUnixMs: nil),
+            rows: [],
+            nextUsageRowIndex: initialCodexUsageRowIndex,
+            tokenSnapshots: [],
+            jsonlResumeState: nil,
+            bufferedSubagentLines: nil,
+            bufferedUnresolvedForkLines: nil)
+    }
+}

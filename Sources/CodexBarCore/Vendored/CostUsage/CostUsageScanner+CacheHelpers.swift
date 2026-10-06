@@ -123,11 +123,6 @@ extension CostUsageScanner {
 
     // MARK: - File cache construction
 
-    static func needsCodexPricingMetadata(_ usage: CostUsageFileUsage) -> Bool {
-        !(usage.codexRows?.isEmpty ?? true)
-            && (usage.codexCostCacheComplete != true || self.needsCodexModeSplitCache(usage))
-    }
-
     static func needsCodexPricingMetadata(_ usage: CostUsageFileUsage, range: CostUsageDayRange) -> Bool {
         guard usage.codexCostCacheComplete != true || self.needsCodexModeSplitCache(usage) else {
             return false
@@ -221,16 +216,6 @@ extension CostUsageScanner {
         }
     }
 
-    static func codexMergedCostMap(
-        _ existing: [String: [String: Int64]]?,
-        deltaRows: [CodexUsageRow],
-        context: CodexFileScanContext) -> [String: [String: Int64]]?
-    {
-        self.mergeMaps(
-            existing,
-            self.codexCostNanos(rows: deltaRows, range: context.range))
-    }
-
     static func codexCostNanos(
         rows: [CodexUsageRow],
         range: CostUsageDayRange) -> [String: [String: Int64]]?
@@ -297,7 +282,7 @@ extension CostUsageScanner {
         rows: [CodexUsageRow],
         sessionId: String?) -> [CodexUsageRow]?
     {
-        var merged = (existing ?? []).filter { self.hasStableCodexRowIdentity($0) }
+        var merged = (existing ?? []).filter { $0.eventIndex != nil }
         let existingKeys = Set(merged.map { Self.codexUsageRowKey(sessionId: sessionId, row: $0) })
         for row in rows where !existingKeys.contains(Self.codexUsageRowKey(sessionId: sessionId, row: row)) {
             merged.append(row)
@@ -305,17 +290,9 @@ extension CostUsageScanner {
         return merged.isEmpty ? nil : merged
     }
 
-    static func hasStableCodexRowIdentity(_ row: CodexUsageRow) -> Bool {
-        row.eventIndex != nil
-    }
-
-    static func codexRowsNeedIdentityRescan(_ rows: [CodexUsageRow]) -> Bool {
-        rows.contains { !Self.hasStableCodexRowIdentity($0) }
-    }
-
     static func cachedCodexRowsNeedIdentityRescan(_ usage: CostUsageFileUsage) -> Bool {
         let rows = usage.codexRows ?? []
-        return (!usage.days.isEmpty && rows.isEmpty) || Self.codexRowsNeedIdentityRescan(rows)
+        return (!usage.days.isEmpty && rows.isEmpty) || rows.contains { $0.eventIndex == nil }
     }
 
     static func nextCodexUsageRowIndex(_ rows: [CodexUsageRow]?) -> Int {
@@ -765,14 +742,7 @@ extension CostUsageScanner {
             return false
         }
         let migrated = Self.codexFileUsageWithPricingMetadata(cached, context: context)
-        let cachedSessionMetadata = migrated.codexSession ?? CostUsageCodexSessionMetadata(
-            sessionId: migrated.sessionId,
-            forkedFromId: migrated.forkedFromId,
-            cwd: nil,
-            title: nil,
-            startedAtUnixMs: nil,
-            latestActivityUnixMs: nil)
-        let codexSession = cachedSessionMetadata.merging(delta.codexSession)
+        let codexSession = Self.codexRescanSessionMetadata(cached: migrated, parsed: delta.codexSession)
         let sessionId = codexSession.sessionId ?? delta.sessionId ?? cached.sessionId
         let projectPath = delta.projectPath ?? cached.projectPath
         let forkBaselineDependencyKey = Self.codexForkBaselineDependencyKey(
@@ -878,10 +848,8 @@ extension CostUsageScanner {
             canonicalProjectPath: canonicalProjectPath,
             codexCostCacheComplete: true,
             codexSession: codexSession.isEmpty ? nil : codexSession,
-            codexCostNanos: Self.codexMergedCostMap(
-                migratedCached.codexCostNanos,
-                deltaRows: uniqueRows,
-                context: context),
+            codexCostNanos: Self.mergeMaps(
+                migratedCached.codexCostNanos, Self.codexCostNanos(rows: uniqueRows, range: context.range)),
             codexStandardTokens: Self.mergeMaps(
                 migratedCached.codexStandardTokens,
                 modeTokens.standard),

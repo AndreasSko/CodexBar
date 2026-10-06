@@ -355,6 +355,31 @@ enum CostUsageScanner {
         var ledgerLegacyPricingKeys: [Int: CodexSourcePricingKey] = [:]
     }
 
+    /// An observation's turn and request size with its time, for pairing a ledger record with its token_count mirror
+    /// when their cumulative counters diverge (for example after a resume).
+    struct CodexNearMirror: Codable, Equatable {
+        /// Codex usually writes both events for one response within a few seconds.
+        static let windowMilliseconds: Int64 = 5000
+
+        let key: String?
+        let timestampMs: Int64
+        /// Both counters advancing by exactly this request proves continuity even after compaction changes their
+        /// offset.
+        let counterAdvance: CounterAdvance
+
+        enum CounterAdvance: String, Codable {
+            case unknown, bounded, exact, intervening
+        }
+
+        func matches(_ other: CodexNearMirror?, allowDelayed: Bool = false) -> Bool {
+            guard let key = self.key, let other, other.key == key,
+                  self.counterAdvance != .intervening else { return false }
+            return abs(other.timestampMs - self.timestampMs) <= Self.windowMilliseconds
+                || (allowDelayed && self.timestampMs >= other.timestampMs
+                    && self.counterAdvance == .exact && other.counterAdvance == .exact)
+        }
+    }
+
     struct CodexRequestLedgerState: Codable, Equatable {
         var responseIDs: Set<String> = []
         var mirroredResponses: [String: String]? = [:]
@@ -369,6 +394,12 @@ enum CostUsageScanner {
         var pendingLedgerPricingResponseID: String?
         var pendingLegacyMirrors: Set<String>?
         var pendingLegacyRowIndex: Int?
+        var pendingLedgerNearMirror: CodexNearMirror?
+        var pendingLegacyNearMirror: CodexNearMirror?
+        /// Each side's latest cumulative counter. When the second observation of a near pair advanced its counter by
+        /// more than its own usage, that counter saw another request in between, so the pair is two requests.
+        var lastLedgerTotal: CostUsageCodexTotals?
+        var lastLegacyTotal: CostUsageCodexTotals?
         var countedUsage: CostUsageCodexTotals?
 
         mutating func clearPendingMirrors(when shouldClear: Bool = true) {
@@ -378,12 +409,29 @@ enum CostUsageScanner {
             self.pendingLedgerPricingResponseID = nil
             self.pendingLegacyMirrors = nil
             self.pendingLegacyRowIndex = nil
+            self.pendingLedgerNearMirror = nil
+            self.pendingLegacyNearMirror = nil
         }
 
-        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?) -> String? {
+        mutating func rememberLegacyCounter(_ total: CostUsageCodexTotals?, when accepted: Bool) {
+            if let total, accepted { self.lastLegacyTotal = total }
+        }
+
+        mutating func beginLegacyObservation(
+            keys: Set<String>?,
+            snapshot: String?,
+            near: CodexNearMirror?) -> String?
+        {
+            // An already-owned snapshot cannot become a different pending response's mirror.
+            if let snapshot, let owner = self.mirroredResponses?[snapshot], owner != self.pendingLedgerResponseID {
+                return nil
+            }
             defer { self.clearPendingMirrors() }
-            guard let keys, let pending = self.pendingLedgerMirrors, !keys.isDisjoint(with: pending),
+            guard let keys, let pending = self.pendingLedgerMirrors,
                   let snapshot, let responseID = self.pendingLedgerResponseID else { return nil }
+            guard self.mirroredResponses?[snapshot] == responseID
+                || !keys.isDisjoint(with: pending)
+                || near?.matches(self.pendingLedgerNearMirror, allowDelayed: true) == true else { return nil }
             self.rememberMirrors([snapshot], responseID: responseID)
             return self.pendingLedgerPricingResponseID
         }
@@ -405,6 +453,8 @@ enum CostUsageScanner {
     struct CodexPricingEvidence: Codable, Equatable {
         let pricingModel: String?
         let pricingMode: String?
+        /// Explicit unknown pricing blocks recovery from another observation of the request.
+        var isUnpriced: Bool?
     }
 
     struct CodexUsageRow: Codable, Equatable {
@@ -910,26 +960,8 @@ enum CostUsageScanner {
     static func codexTokenCheckpoints(
         for events: [CostUsageCodexTokenSnapshot]) -> [CostUsageCodexTokenCheckpoint]
     {
-        guard !events.isEmpty else { return [] }
-        var accumulator = CodexSnapshotAccumulator()
-        var checkpoints: [CostUsageCodexTokenCheckpoint] = []
-        var lastCheckpointOffset: Int64 = 0
-
-        for (eventIndex, event) in events.enumerated() {
-            _ = accumulator.apply(last: event.last, total: event.total)
-            guard let endOffset = event.endOffset else { continue }
-            let reachedStride = endOffset - lastCheckpointOffset >= Self.codexTokenCheckpointStride
-            let isLastEvent = eventIndex == events.index(before: events.endIndex)
-            guard reachedStride || isLastEvent else { continue }
-            checkpoints.append(CostUsageCodexTokenCheckpoint(
-                eventIndex: eventIndex,
-                timestamp: event.timestamp,
-                endOffset: endOffset,
-                state: accumulator.state))
-            lastCheckpointOffset = endOffset
-        }
-
-        return checkpoints
+        self.appendingCodexTokenCheckpoints(
+            events, to: [], startingEventIndex: 0, initialState: CodexSnapshotAccumulator().state)
     }
 
     /// Extends sparse checkpoints from the persisted terminal accumulator. Only the appended
@@ -3458,6 +3490,8 @@ enum CostUsageScanner {
         case taskStarted(turnID: String?)
         case tokenCount(CodexTokenCountRecord)
         case tokenUsageRecord(CodexRequestUsageRecord)
+        /// Bare usage is counted immediately; replay only its effect on mirror adjacency.
+        case mirrorBoundary
 
         var boundaryTokenCount: CodexTokenCountRecord? {
             switch self {
@@ -3475,7 +3509,7 @@ enum CostUsageScanner {
 
         var requiresValidTimestamp: Bool {
             switch self {
-            case .sessionMeta:
+            case .sessionMeta, .mirrorBoundary:
                 false
             case .turnContext, .interAgentCommunication, .threadSettingsApplied, .taskStarted, .tokenCount,
                  .tokenUsageRecord:
@@ -3489,6 +3523,8 @@ enum CostUsageScanner {
         let ordinal: Int?
         let endOffset: Int64?
         let line: CodexFastLine
+        /// Only the original owned observation carries this evidence into deferred fork resolution.
+        var ledgerMirror: CodexNearMirror?
 
         init(lineIndex: Int, ordinal: Int?, endOffset: Int64? = nil, line: CodexFastLine) {
             self.lineIndex = lineIndex
@@ -3982,66 +4018,6 @@ enum CostUsageScanner {
             checkCancellation: checkCancellation)?.isSubagentThread == true
     }
 
-    static func parseCodexFile(
-        fileURL: URL,
-        range: CostUsageDayRange,
-        startOffset: Int64 = 0,
-        initialModel: String? = nil,
-        initialTotals: CostUsageCodexTotals? = nil,
-        initialRawTotalsBaseline: CostUsageCodexTotals? = nil,
-        initialHasDivergentTotals: Bool = false,
-        initialCodexTurnID: String? = nil,
-        initialCodexUsageRowIndex: Int = 0,
-        inheritedTotalsResolver: ((String, String) -> CodexForkBaseline)? = nil) -> CodexParseResult
-    {
-        let throwingResolver: ((String, String) throws -> CodexForkBaseline)? = inheritedTotalsResolver
-            .map { resolver in
-                { sessionId, timestamp in resolver(sessionId, timestamp) }
-            }
-        return (
-            try? Self.parseCodexFileCancellable(
-                fileURL: fileURL,
-                range: range,
-                startOffset: startOffset,
-                initialModel: initialModel,
-                initialTotals: initialTotals,
-                initialRawTotalsBaseline: initialRawTotalsBaseline,
-                initialHasDivergentTotals: initialHasDivergentTotals,
-                initialCodexTurnID: initialCodexTurnID,
-                initialCodexUsageRowIndex: initialCodexUsageRowIndex,
-                inheritedTotalsResolver: throwingResolver,
-                checkCancellation: nil)) ?? CodexParseResult(
-            days: [:],
-            parsedBytes: startOffset,
-            scanTargetSize: startOffset,
-            lastModel: initialModel,
-            lastTotals: initialTotals,
-            lastCountedTotals: initialTotals,
-            lastRawTotalsBaseline: initialRawTotalsBaseline,
-            lastRawTotalsWatermark: initialRawTotalsBaseline,
-            seenRawTotals: [],
-            hasDivergentTotals: initialHasDivergentTotals,
-            hasInterleavedTotals: false,
-            lastCodexTurnID: initialCodexTurnID,
-            sessionId: nil,
-            forkedFromId: nil,
-            dependsOnParentTotals: false,
-            projectPath: nil,
-            codexSession: CostUsageCodexSessionMetadata(
-                sessionId: nil,
-                forkedFromId: nil,
-                cwd: nil,
-                title: nil,
-                startedAtUnixMs: nil,
-                latestActivityUnixMs: nil),
-            rows: [],
-            nextUsageRowIndex: initialCodexUsageRowIndex,
-            tokenSnapshots: [],
-            jsonlResumeState: nil,
-            bufferedSubagentLines: nil,
-            bufferedUnresolvedForkLines: nil)
-    }
-
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     static func parseCodexFileCancellable(
         fileURL: URL,
@@ -4119,16 +4095,16 @@ enum CostUsageScanner {
 
         func mirrorKey(
             turnID: String?,
-            usage: CostUsageCodexTotals,
+            usage: CostUsageCodexTotals?,
             total: CostUsageCodexTotals?,
             timestamp: String?) -> String
         {
             var components: [String] = [
                 turnID ?? "",
-                String(usage.input),
-                String(usage.cached),
-                String(usage.output),
-                String(usage.reasoning ?? 0),
+                usage.map { String($0.input) } ?? "",
+                usage.map { String($0.cached) } ?? "",
+                usage.map { String($0.output) } ?? "",
+                usage.map { String($0.reasoning ?? 0) } ?? "",
             ]
             components.append(total.map { String($0.input) } ?? "")
             components.append(total.map { String($0.cached) } ?? "")
@@ -4149,25 +4125,68 @@ enum CostUsageScanner {
             return keys
         }
 
+        func nearMirror(
+            turnID: String?,
+            usage: CostUsageCodexTotals,
+            total: CostUsageCodexTotals?,
+            previous: CostUsageCodexTotals?,
+            timestamp: String) -> CodexNearMirror?
+        {
+            guard let timestampMs = unixMilliseconds(from: timestamp) else { return nil }
+            // Keep counter evidence without a turn, but never match such observations by size and time.
+            let key = turnID.flatMap { turn in
+                turn.isEmpty ? nil : [turn, String(usage.input), String(usage.cached), String(usage.output)]
+                    .joined(separator: "\u{1F}")
+            }
+            let advance: CodexNearMirror.CounterAdvance
+            if let previous, let total {
+                let delta = [
+                    total.input - previous.input,
+                    total.cached - previous.cached,
+                    total.output - previous.output,
+                ]
+                let expected = [usage.input, usage.cached, usage.output]
+                advance = delta == expected ? .exact :
+                    (zip(delta, expected).contains { $0 > $1 } ? .intervening : .bounded)
+            } else {
+                advance = .unknown
+            }
+            return CodexNearMirror(key: key, timestampMs: timestampMs, counterAdvance: advance)
+        }
+
         func observeLegacyMirror(
             usage: CostUsageCodexTotals?,
             turnID: String?,
             total: CostUsageCodexTotals?,
-            timestamp: String) -> (snapshot: String, adjacent: Set<String>, owningResponseID: String?)?
+            timestamp: String)
+            -> (snapshot: String, adjacent: Set<String>, near: CodexNearMirror?, owningResponseID: String?)?
         {
             guard let usage else { return nil }
             let snapshot = mirrorKey(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
             let adjacent = adjacentMirrorKeys(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
-            let owningResponseID = requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot)
-            return (snapshot, adjacent, owningResponseID)
+            let near = nearMirror(
+                turnID: turnID,
+                usage: usage,
+                total: total,
+                previous: requestLedger.lastLegacyTotal,
+                timestamp: timestamp)
+            let owningResponseID = requestLedger.beginLegacyObservation(
+                keys: adjacent,
+                snapshot: snapshot,
+                near: near)
+            return (snapshot, adjacent, near, owningResponseID)
         }
 
-        func handleRequestLedger(_ record: CodexRequestUsageRecord, endOffset: Int64?) {
+        func handleRequestLedger(
+            _ record: CodexRequestUsageRecord,
+            endOffset: Int64?,
+            deferredMirror: CodexNearMirror?) -> CodexNearMirror?
+        {
             guard !suppressUnownedCopiedPrefix, record.threadID == sessionId,
                   record.sessionID == nil || record.sessionID == (requestLedger.sessionID ?? sessionId),
                   let day = Self.dayKeyFromTimestamp(record.timestamp, calendar: range.calendar)
                   ?? Self.dayKeyFromParsedISO(record.timestamp, calendar: range.calendar)
-            else { return }
+            else { return nil }
             let usage = record.usage
             let responseID = record.responseID
             let timestamp = record.timestamp
@@ -4185,17 +4204,33 @@ enum CostUsageScanner {
             let mirror = keys.first(where: { requestLedger.legacyRowIndices[$0] != nil })
             let adjacentKeys = adjacentMirrorKeys(
                 turnID: turnID, usage: usage, total: record.threadTotal, timestamp: timestamp)
-            let adjacentIndex = requestLedger.pendingLegacyMirrors?.isDisjoint(with: adjacentKeys) == false
-                ? requestLedger.pendingLegacyRowIndex : nil
+            // A verbatim copy cannot discard an original observation still awaiting its mirror.
+            let pendingOriginal = requestLedger.pendingLedgerResponseID == responseID
+                && requestLedger.pendingLedgerMirrors == adjacentKeys ? requestLedger.pendingLedgerNearMirror : nil
+            let near = isReplay ? deferredMirror ?? pendingOriginal : nearMirror(
+                turnID: turnID,
+                usage: usage,
+                total: record.threadTotal,
+                previous: requestLedger.lastLedgerTotal,
+                timestamp: timestamp)
+            // Only original observations advance the ledger counter, including their deferred processing.
+            if !isReplay || deferredMirror != nil { requestLedger.lastLedgerTotal = record.threadTotal }
+            // A token_count written before its ledger record pairs only inside the window; the distinct-request
+            // protection for equal sizes depends on that order.
+            // A replay is already counted, so it never claims a different request by size and time alone.
+            let matchesAdjacent = requestLedger.pendingLegacyMirrors?.isDisjoint(with: adjacentKeys) == false
+                || near?.matches(requestLedger.pendingLegacyNearMirror) == true
+            let adjacentIndex = matchesAdjacent ? requestLedger.pendingLegacyRowIndex : nil
             let mirrorIndex = mirror.flatMap { requestLedger.legacyRowIndices[$0] } ?? adjacentIndex
-            requestLedger.pendingLegacyMirrors = nil
-            requestLedger.pendingLegacyRowIndex = nil
-            requestLedger.pendingLedgerMirrors = mirrorIndex == nil ? adjacentKeys : nil
-            requestLedger.pendingLedgerResponseID = mirrorIndex == nil ? responseID : nil
+            let hasMirror = mirrorIndex != nil
+            requestLedger.clearPendingMirrors()
+            requestLedger.pendingLedgerMirrors = hasMirror ? nil : adjacentKeys
+            requestLedger.pendingLedgerResponseID = hasMirror ? nil : responseID
+            requestLedger.pendingLedgerNearMirror = hasMirror ? nil : near
             // Only the original observation (including a verbatim duplicate) can donate saved legacy pricing.
             let ownsPricing = !isReplay || (rows.last { $0.responseID == responseID }
                 ?? retainedRows.values.first { $0.responseID == responseID })?.requestMirrorKeys?.first == keys.first
-            requestLedger.pendingLedgerPricingResponseID = mirrorIndex == nil && ownsPricing ? responseID : nil
+            requestLedger.pendingLedgerPricingResponseID = !hasMirror && ownsPricing ? responseID : nil
             let legacyRow = mirrorIndex.flatMap { index in
                 rows.first(where: { $0.eventIndex == index }) ?? retainedRows[index]
             }
@@ -4209,9 +4244,9 @@ enum CostUsageScanner {
                       !base.output.addingReportingOverflow(usage.output).overflow,
                       !Self.codexAddTotals(base, usage).input.addingReportingOverflow(
                           Self.codexAddTotals(base, usage).output).overflow
-                else { return }
+                else { return nil }
             }
-            requestLedger.rememberMirrors(keys, responseID: responseID)
+            if !hasUnresolvedForkBaseline { requestLedger.rememberMirrors(keys, responseID: responseID) }
             requestLedger.responseIDs.insert(responseID)
 
             if let index = mirrorIndex, let legacy = legacyRow {
@@ -4228,14 +4263,23 @@ enum CostUsageScanner {
                     rowSourceEndOffsets.removeValue(forKey: index)
                 }
             }
-            guard !isReplay else { return }
+            defer {
+                if let legacyRow {
+                    rememberMirroredLegacyPricingKey(
+                        responseID: responseID,
+                        legacyRow: legacyRow,
+                        mirror: (keys[0], ownsPricing ? responseID : nil))
+                }
+            }
+            // Borrowed pending evidence must not become a replay record's own persisted evidence.
+            guard !isReplay else { return deferredMirror }
             let model = record.model
                 ?? turnID.flatMap { requestLedger.turnModels[$0] }
                 ?? (turnID == currentTurnID || turnID == requestLedger.activeTurnID
                     ? Self.codexModelEvidence(currentModel) : nil)
                 ?? CostUsagePricing.codexUnattributedModel
             requestLedger.countedUsage = Self.codexAddTotals(base, usage)
-            let ledgerIndex = appendUsage(
+            appendUsage(
                 usage,
                 day: day,
                 model: model,
@@ -4245,13 +4289,9 @@ enum CostUsageScanner {
                 mirrorKeys: keys,
                 retainedPricing: legacyRow,
                 endOffset: endOffset)
-            if let legacyRow, legacyRow.model == CostUsagePricing.normalizeCodexModel(model),
-               let legacyKey = CodexSourcePricingKey(legacyRow)
-            {
-                ledgerLegacyPricingKeys[ledgerIndex] = legacyKey
-            }
             observeTimestamp(timestamp)
             lastAcceptedTokenTimestamp = timestamp
+            return near
         }
 
         /// An older parser saved this mirrored token_count observation as its own row. Keep its key on the
@@ -4343,13 +4383,15 @@ enum CostUsageScanner {
             totals: CostUsageCodexTotals,
             modelEvidence: String?,
             timestamp: String?,
-            sourceEndOffset: Int64)
+            sourceEndOffset: Int64) -> Bool
         {
             let resolvedTimestamp = timestamp ?? lastAcceptedTokenTimestamp
             guard let dayKey = resolvedTimestamp.flatMap({
                 Self.dayKeyFromTimestamp($0) ?? Self.dayKeyFromParsedISO($0)
-            }) else { return }
+            }) else { return false }
 
+            // A counted request between two observations means they are not adjacent mirrors.
+            requestLedger.clearPendingMirrors()
             observeTimestamp(resolvedTimestamp)
             let model = Self.codexModelEvidence(modelEvidence)
                 ?? Self.codexModelEvidence(currentModel)
@@ -4364,6 +4406,7 @@ enum CostUsageScanner {
             if let resolvedTimestamp {
                 lastAcceptedTokenTimestamp = resolvedTimestamp
             }
+            return true
         }
 
         func observeTimestamp(_ timestamp: String?) {
@@ -4455,6 +4498,10 @@ enum CostUsageScanner {
                 // A same-leaf restart may add metadata that was absent from the initial record.
                 // Enrich missing fork/project fields without allowing an ancestor to replace identity.
                 guard CodexSubagentRolloutShape.sameConcreteSessionID(metadata.sessionId, sessionId) else { return }
+                // A resumed session starts new requests and may restart its counters.
+                requestLedger.clearPendingMirrors()
+                requestLedger.lastLedgerTotal = nil
+                requestLedger.lastLegacyTotal = nil
                 isSubagentThread = isSubagentThread || metadata.isSubagentThread
                 if requestLedger.sessionID == nil {
                     requestLedger.sessionID = metadata.requestSessionID ?? metadata.sessionId
@@ -4510,13 +4557,26 @@ enum CostUsageScanner {
             let total = record.total
             let last = record.last
             let mirrorTurnID = record.turnID ?? currentTurnID ?? requestLedger.activeTurnID
+            // Keep the observed identity even when usage must wait for a verified parent baseline.
+            let observationKey = mirrorKey(
+                turnID: mirrorTurnID, usage: last, total: total, timestamp: record.timestamp)
+            if (total != nil && requestLedger.legacyRowIndices[observationKey] != nil)
+                || (last == nil && requestLedger.mirroredResponses?[observationKey] != nil) { return }
+            // Parent resolution can reveal a preceding mirror. Do not bind a later observation first.
+            guard !hasUnresolvedForkBaseline else {
+                requestLedger.clearPendingMirrors()
+                return
+            }
+            let originalResponseID = requestLedger.pendingLedgerNearMirror != nil
+                ? requestLedger.pendingLedgerResponseID : nil
             var mirror = observeLegacyMirror(
                 usage: last, turnID: mirrorTurnID, total: total, timestamp: record.timestamp)
             defer { requestLedger.clearPendingMirrors(when: mirror == nil) }
-            // A cumulative fork counter is not attributable until either the parent snapshot or
-            // a trustworthy child-owned suffix establishes the inherited baseline. Publishing
-            // best-effort `last` rows here can replay billions of copied-prefix tokens.
-            guard !hasUnresolvedForkBaseline else { return }
+            // An owned response proves a new counter origin even if its raw total was seen before.
+            let owner = mirror.flatMap { requestLedger.mirroredResponses?[$0.snapshot] }
+            requestLedger.rememberLegacyCounter(
+                total,
+                when: originalResponseID != nil && owner == originalResponseID)
             if let total, let last {
                 raiseInheritedBaselineIfContinuedCounter(total: total, last: last)
             }
@@ -4585,6 +4645,7 @@ enum CostUsageScanner {
             }
             let watermarkBaseline = tracker.watermark ?? rawTotalsBaseline
             defer {
+                requestLedger.rememberLegacyCounter(total, when: owner == nil)
                 if let adjustedTotal {
                     tracker.commitObserved(adjustedTotal)
                 }
@@ -4692,14 +4753,13 @@ enum CostUsageScanner {
 
             let deltaUsage = CostUsageCodexTotals(
                 input: deltaInput, cached: deltaCached, output: deltaOutput, reasoning: deltaReasoning)
-            if mirror == nil {
-                mirror = observeLegacyMirror(
-                    usage: deltaUsage, turnID: mirrorTurnID, total: total, timestamp: record.timestamp)
-            }
+            mirror = mirror ?? observeLegacyMirror(
+                usage: deltaUsage, turnID: mirrorTurnID, total: total, timestamp: record.timestamp)
 
             // Observe legacy counters even when the ledger owns the row. Later legacy-only events
             // still need their original baseline and replay/containment protection.
             if let key = mirror?.snapshot, let responseID = requestLedger.mirroredResponses?[key] {
+                requestLedger.rememberMirrors([observationKey], responseID: responseID)
                 rememberMirroredLegacyPricingKey(
                     responseID: responseID,
                     legacyRow: CodexUsageRow(
@@ -4718,20 +4778,29 @@ enum CostUsageScanner {
             if deltaInput == 0, deltaCached == 0, deltaOutput == 0 {
                 return
             }
+            let mirrorKeys = mirror.map { [$0.snapshot] + (last == nil ? [observationKey] : []) }
             let eventIndex = appendUsage(
                 deltaUsage,
                 day: dayKey,
                 model: model,
                 timestamp: record.timestamp,
                 turnID: record.turnID ?? currentTurnID,
-                mirrorKeys: mirror.map { [$0.snapshot] },
+                mirrorKeys: mirrorKeys,
                 endOffset: sourceEndOffset)
-            if let key = mirror?.snapshot { requestLedger.legacyRowIndices[key] = eventIndex }
+            for key in mirrorKeys ?? [] {
+                requestLedger.legacyRowIndices[key] = eventIndex
+            }
             requestLedger.pendingLegacyMirrors = mirror?.adjacent
             requestLedger.pendingLegacyRowIndex = eventIndex
+            requestLedger.pendingLegacyNearMirror = mirror?.near
         }
 
-        func processFastLine(_ fastLine: CodexFastLine, sourceEndOffset: Int64?) throws {
+        @discardableResult
+        func processFastLine(
+            _ fastLine: CodexFastLine,
+            sourceEndOffset: Int64?,
+            deferredMirror: CodexNearMirror? = nil) throws -> CodexNearMirror?
+        {
             switch fastLine {
             case let .sessionMeta(metadata):
                 try handleSessionMetadata(metadata)
@@ -4754,6 +4823,8 @@ enum CostUsageScanner {
                 break
             case let .threadSettingsApplied(priority):
                 requestLedger.pendingPriority = priority
+            case .mirrorBoundary:
+                requestLedger.clearPendingMirrors()
             case let .taskStarted(turnID):
                 requestLedger.clearPendingMirrors()
                 currentTurnID = turnID
@@ -4767,8 +4838,12 @@ enum CostUsageScanner {
             case let .tokenCount(record):
                 try handleTokenCount(record, sourceEndOffset: sourceEndOffset)
             case let .tokenUsageRecord(record):
-                handleRequestLedger(record, endOffset: sourceEndOffset)
+                return handleRequestLedger(
+                    record,
+                    endOffset: sourceEndOffset,
+                    deferredMirror: deferredMirror)
             }
+            return nil
         }
 
         let maxLineBytes = 256 * 1024
@@ -4795,13 +4870,16 @@ enum CostUsageScanner {
             }
         }
         if let initialBufferedUnresolvedForkLines, startOffset > 0 {
+            let ledgerBeforeResolution = requestLedger
             for buffered in initialBufferedUnresolvedForkLines {
                 guard case let .sessionMeta(metadata) = buffered.line else { continue }
                 try handleSessionMetadata(metadata)
             }
+            requestLedger = ledgerBeforeResolution
             if !hasUnresolvedForkBaseline {
                 for buffered in initialBufferedUnresolvedForkLines {
-                    try processFastLine(buffered.line, sourceEndOffset: buffered.endOffset)
+                    try processFastLine(
+                        buffered.line, sourceEndOffset: buffered.endOffset, deferredMirror: buffered.ledgerMirror)
                 }
                 bufferedUnresolvedForkLines = nil
             }
@@ -4813,7 +4891,7 @@ enum CostUsageScanner {
             ordinal: Int?,
             endOffset: Int64) throws
         {
-            let bufferedLine = Self.CodexBufferedFastLine(
+            var bufferedLine = Self.CodexBufferedFastLine(
                 lineIndex: lineIndex,
                 ordinal: ordinal,
                 endOffset: endOffset,
@@ -4828,7 +4906,7 @@ enum CostUsageScanner {
             if pendingSubagentLines != nil {
                 pendingSubagentLines?.append(bufferedLine)
             } else {
-                try processFastLine(fastLine, sourceEndOffset: endOffset)
+                bufferedLine.ledgerMirror = try processFastLine(fastLine, sourceEndOffset: endOffset)
                 if hasUnresolvedForkBaseline {
                     if bufferedUnresolvedForkLines == nil {
                         bufferedUnresolvedForkLines = []
@@ -4912,11 +4990,20 @@ enum CostUsageScanner {
                                   obj["type"] == nil,
                                   let bare = Self.codexBareUsage(from: obj)
                             else { return }
-                            handleBareUsage(
+                            if handleBareUsage(
                                 totals: bare.totals,
                                 modelEvidence: bare.model,
                                 timestamp: obj["timestamp"] as? String,
                                 sourceEndOffset: line.endOffset)
+                            {
+                                let boundary = CodexBufferedFastLine(
+                                    lineIndex: lineIndex,
+                                    ordinal: nil,
+                                    endOffset: line.endOffset,
+                                    line: .mirrorBoundary)
+                                pendingSubagentLines?.append(boundary)
+                                bufferedUnresolvedForkLines?.append(boundary)
+                            }
                         }
                         return
                     }
@@ -4997,7 +5084,7 @@ enum CostUsageScanner {
             // Unlike an ordinary rollout, a subagent prefix is not independently publishable:
             // later lineage metadata can reclassify already-buffered totals as copied history.
             let hasUnconsumedPhysicalTail = effectiveTargetSize < currentFileSize
-            if let pendingSubagentLines,
+            if var subagentLines = pendingSubagentLines,
                parsedBytes >= effectiveTargetSize,
                jsonlResumeState == nil,
                !hasUnconsumedPhysicalTail
@@ -5005,7 +5092,7 @@ enum CostUsageScanner {
                 // Same-leaf metadata can fill lineage fields after the opening record. Collect it
                 // before replay so copied-prefix totals never run once on the wrong baseline, and
                 // so an owned-suffix filter cannot discard the only fork identifier.
-                for buffered in pendingSubagentLines {
+                for buffered in subagentLines {
                     guard case let .sessionMeta(metadata) = buffered.line,
                           CodexSubagentRolloutShape.sameConcreteSessionID(metadata.sessionId, sessionId)
                     else { continue }
@@ -5025,7 +5112,7 @@ enum CostUsageScanner {
                         observeCwd(metadata.projectPath)
                     }
                 }
-                let observations = pendingSubagentLines.compactMap { buffered -> CodexSubagentRolloutShape
+                let observations = subagentLines.compactMap { buffered -> CodexSubagentRolloutShape
                     .Observation? in
                     let kind: CodexSubagentRolloutShape.Observation.Kind
                     switch buffered.line {
@@ -5038,7 +5125,7 @@ enum CostUsageScanner {
                     case .tokenCount, .tokenUsageRecord:
                         guard let record = buffered.line.boundaryTokenCount else { return nil }
                         kind = .tokenCount(total: record.total, last: record.last)
-                    case .taskStarted, .threadSettingsApplied:
+                    case .taskStarted, .threadSettingsApplied, .mirrorBoundary:
                         return nil
                     }
                     return Self.CodexSubagentRolloutShape.Observation(
@@ -5056,18 +5143,18 @@ enum CostUsageScanner {
                 let explicitStartOrdinal = subagentHistoryStartOrdinal.flatMap { $0 >= 0 ? $0 : nil }
                 let explicitOwnedSuffix: CodexSubagentRolloutShape.CodexSubagentOwnedSuffix? = {
                     guard let startOrdinal = explicitStartOrdinal,
-                          let firstOwnedLine = pendingSubagentLines.first(where: {
+                          let firstOwnedLine = subagentLines.first(where: {
                               ($0.ordinal ?? Int.min) >= startOrdinal
                           })
                     else { return nil }
 
-                    var inheritedTotal = pendingSubagentLines
+                    var inheritedTotal = subagentLines
                         .prefix(while: { ($0.ordinal ?? Int.min) < startOrdinal })
                         .compactMap { buffered -> CostUsageCodexTotals? in
                             buffered.line.boundaryTokenCount?.total
                         }
                         .last
-                    let firstOwnedToken = pendingSubagentLines.first { buffered in
+                    let firstOwnedToken = subagentLines.first { buffered in
                         guard (buffered.ordinal ?? Int.min) >= startOrdinal,
                               let record = buffered.line.boundaryTokenCount
                         else { return false }
@@ -5164,14 +5251,17 @@ enum CostUsageScanner {
                         })),
                     ])
                 try configureForkAccountingIfReady()
-                for buffered in pendingSubagentLines
-                    where ownedSuffix.map({ buffered.lineIndex >= $0.startLineIndex }) ?? true
+                for index in subagentLines.indices
+                    where ownedSuffix.map({ subagentLines[index].lineIndex >= $0.startLineIndex }) ?? true
                 {
+                    let buffered = subagentLines[index]
                     if case .tokenCount = buffered.line,
                        let firstTokenLineIndex = ownedSuffix?.firstTokenLineIndex,
                        buffered.lineIndex < firstTokenLineIndex { continue }
-                    try processFastLine(buffered.line, sourceEndOffset: buffered.endOffset)
+                    subagentLines[index].ledgerMirror = try processFastLine(
+                        buffered.line, sourceEndOffset: buffered.endOffset, deferredMirror: buffered.ledgerMirror)
                 }
+                pendingSubagentLines = subagentLines
             }
         } catch is CancellationError {
             throw CancellationError()
@@ -5242,6 +5332,7 @@ enum CostUsageScanner {
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
                 && requestLedger.sessionID == sessionId && requestLedger.pendingPriority == nil
                 && requestLedger.priorityTurnIDs?.isEmpty != false
+                && requestLedger.lastLedgerTotal == nil && requestLedger.lastLegacyTotal == nil
                 ? nil : requestLedger,
             replacedLegacyRowIndices: replacedLegacyRowIndices,
             ledgerLegacyPricingKeys: ledgerLegacyPricingKeys)

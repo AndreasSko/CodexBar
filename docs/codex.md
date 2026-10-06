@@ -401,15 +401,30 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
 - Owned `token_usage_record` responses recover usage after resumed-session counter resets. Each response is counted
   once on its event date, with matching legacy `token_count` observations reconciled rather than added again.
   Exact mirrors include their timestamps, so repeated counters cannot erase an earlier legacy-only request.
-  Adjacent observations also need a matching timestamp or thread cumulative total; equal request sizes alone do not
-  establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
+  Adjacent observations pair when their timestamp or thread cumulative total matches. If counters drift after a
+  resume or compaction, observations in the same known turn with identical input, cached, and output tokens can
+  pair within five seconds, provided the second counter has not advanced past that request's usage. A delayed
+  ledger-first mirror also pairs when both counters advanced by exactly that request since their preceding
+  observations, including the first response after compaction. A token_count written before its ledger record uses
+  the bounded window. New turns, session resumes, and counted bare usage separate pending observations; these
+  boundaries also survive buffered replay. Deferred forks retain the original owned response's continuity evidence
+  and match legacy observations in log order after verifying the parent baseline. Total-only observations keep their
+  source identity without guessing usage. Identical copies preserve an outstanding match, and older observations
+  remain recognized after leaving the bounded counter history; replays cannot claim another nearby request.
+  Unowned last-usage-only rows remain independent when no cumulative counter proves they are repeated observations.
+  Parser revision 9 reparses existing files once to remove those duplicates while retaining saved prices; a file with
+  saved unpriced rows and no reusable saved prices is reparsed with its rows unpriced rather than at current prices.
+  An explicit unknown price on the owned row also blocks a priced duplicate from supplying an estimate.
+  Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while
   matching saved pricing survives replacement of an older legacy page. Parser upgrades look up that pricing with the
   replaced legacy row's own timestamp, because the owned response and its token_count mirror are usually recorded
   a few hundred milliseconds apart; bounded upgrades restore it to a retained ledger row when a later slice reaches
-  the mirror. Stores from 0.72.0 (`ed735dc27ffa70d9`) are adopted with their rows and markers unchanged, because a
-  stored marker does not record whether it came from that release's timestamp mismatch or from invalidated evidence.
+  the mirror. Only the original observation, including a verbatim duplicate, supplies saved pricing; a later replay
+  can deduplicate without donating its price. Stores from 0.72.0 (`ed735dc27ffa70d9`) and the saved-pricing fix
+  (`99d920977063318a`) are adopted without rebuilding. Existing unknown-price markers stay unknown during reparsing:
+  they do not record whether they came from the timestamp mismatch or from invalidated evidence.
   `codexbar cache clear --cost` rebuilds such a cache from the session logs.
   Thread and execution-session identities are validated separately; copied child history remains excluded by the
   existing subagent boundaries. Cached tails retain these identities across refreshes and SQLite reopen.
