@@ -244,9 +244,7 @@ package final class CodexAccountPromotionTransaction {
         return .liveSystem
     }
 
-    /// The executor may have copied displaced live credentials into a managed home before the drift
-    /// checks above ran. Re-verify that copy before the live swap removes the last original, so a
-    /// racing external writer cannot silently erase the preserved account.
+    /// Preservation must still be intact when the swap removes the original credentials.
     private func verifyPreservedLiveAuth(
         executionResult: CodexAccountPromotionResult.DisplacedLiveDisposition,
         expectedData: Data?) throws
@@ -257,8 +255,6 @@ package final class CodexAccountPromotionTransaction {
         case .none: nil
         }
         guard let preservedAccountID else { return }
-        // The executor committed this record; if a lock-bypassing store writer removed it, the
-        // preserved copy's location can no longer be trusted — fail closed instead of swapping.
         guard let preservedAccount = try self.store.loadAccounts().account(id: preservedAccountID)
         else {
             throw CodexAccountPromotionError.displacedLiveManagedAccountConflict

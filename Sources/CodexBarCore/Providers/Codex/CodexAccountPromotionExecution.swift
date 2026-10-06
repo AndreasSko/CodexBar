@@ -152,14 +152,21 @@ package struct CodexDisplacedLivePreservationExecutor {
             return .imported(managedAccountID: importedAccount.account.id)
         }
 
-        guard let existingManagedAccount = self.repairDestination(
-            in: persistedManagedAccounts,
-            for: importedAccount.account,
-            excludingTargetID: excludingTargetID)
+        let candidates = ManagedCodexAccountSet(
+            version: persistedManagedAccounts.version,
+            accounts: persistedManagedAccounts.accounts.filter { $0.id != excludingTargetID })
+        guard let existingManagedAccount = candidates.account(
+            email: importedAccount.account.email,
+            providerAccountID: importedAccount.account.effectiveWorkspaceAccountID)
         else {
             throw CodexAccountPromotionError.managedStoreCommitFailed
         }
-        try self.validateRepairDestination(existingManagedAccount, for: importedAccount.account)
+        try self.validateDestinationAuth(
+            homeURL: URL(fileURLWithPath: existingManagedAccount.managedHomePath, isDirectory: true),
+            identity: CodexIdentityResolver.resolve(
+                accountId: importedAccount.account.providerAccountID, email: importedAccount.account.email),
+            email: importedAccount.account.email,
+            allowsUnreadable: true)
 
         let repairedManagedAccount = ManagedCodexAccount(
             id: existingManagedAccount.id,
@@ -184,64 +191,6 @@ package struct CodexDisplacedLivePreservationExecutor {
         }
 
         return .alreadyManaged(managedAccountID: existingManagedAccount.id)
-    }
-
-    private func validateRepairDestination(
-        _ existingManagedAccount: ManagedCodexAccount,
-        for importedAccount: ManagedCodexAccount) throws
-    {
-        let importedIdentity: CodexIdentity = if let providerAccountID = importedAccount.providerAccountID {
-            .providerAccount(id: providerAccountID)
-        } else {
-            .emailOnly(normalizedEmail: importedAccount.email)
-        }
-        let homeURL = URL(fileURLWithPath: existingManagedAccount.managedHomePath, isDirectory: true)
-        let authData: Data?
-        do {
-            authData = try self.authMaterialReader.readAuthData(homeURL: homeURL)
-        } catch {
-            // The record will rewire and this home may be deleted — refuse to discard bytes we
-            // could not inspect.
-            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
-        }
-        guard let authData,
-              (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
-              let authIdentity = try? PreparedPromotionContextBuilder.runtimeAccount(from: authData)
-        else {
-            // Missing or unreadable auth is the repair case already accepted by the planner.
-            return
-        }
-
-        guard CodexIdentityMatcher.matches(
-            authIdentity.identity,
-            lhsEmail: authIdentity.email,
-            importedIdentity,
-            rhsEmail: importedAccount.email)
-        else {
-            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
-        }
-    }
-
-    private func repairDestination(
-        in persistedManagedAccounts: ManagedCodexAccountSet,
-        for importedAccount: ManagedCodexAccount,
-        excludingTargetID: UUID) -> ManagedCodexAccount?
-    {
-        let candidates = ManagedCodexAccountSet(
-            version: persistedManagedAccounts.version,
-            accounts: persistedManagedAccounts.accounts.filter { $0.id != excludingTargetID })
-        if let workspaceAccountID = importedAccount.effectiveWorkspaceAccountID {
-            return candidates.account(
-                email: importedAccount.email,
-                providerAccountID: workspaceAccountID)
-        }
-
-        let normalizedEmail = importedAccount.email
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        return candidates.accounts.first {
-            $0.email == normalizedEmail && $0.effectiveWorkspaceAccountID == nil
-        }
     }
 
     private func refreshExistingManagedAccount(
@@ -292,14 +241,14 @@ package struct CodexDisplacedLivePreservationExecutor {
                 throw CodexAccountPromotionError.displacedLiveImportFailed
             }
 
-            try self.validateRefreshDestinationAuth(
-                destination: destination,
+            try self.validateDestinationAuth(
                 homeURL: refreshedHomeURL,
-                liveAuthIdentity: liveAuthIdentity)
+                identity: liveAuthIdentity.identity,
+                email: liveAuthIdentity.email,
+                allowsUnreadable: destination.authIdentity == nil)
             try self.fileManager.createDirectory(at: refreshedHomeURL, withIntermediateDirectories: true)
             try self.writeManagedAuthData(liveAuthMaterial.rawData, to: refreshedHomeURL)
-            // The preserved copy must still be intact before the record commits to it; until the
-            // live swap lands, this home holds the only remaining displaced-live credentials.
+            // Verify the preserved bytes before publishing their fingerprint in the account store.
             guard (try? self.authMaterialReader.readAuthData(homeURL: refreshedHomeURL)) == liveAuthMaterial
                 .rawData
             else {
@@ -319,46 +268,31 @@ package struct CodexDisplacedLivePreservationExecutor {
         }
     }
 
-    /// Re-reads the repair/refresh destination just before it is overwritten. The planner snapshot is
-    /// built seconds earlier (workspace resolution performs network calls) and external `codex` writers
-    /// do not share the managed-account lock, so the destination may have gained credentials for a
-    /// different account in the meantime. Mirrors `validateRepairDestination`.
-    private func validateRefreshDestinationAuth(
-        destination: PreparedStoredManagedAccount,
+    /// External Codex writers do not share our lock; validate every destination again before replacing it.
+    private func validateDestinationAuth(
         homeURL: URL,
-        liveAuthIdentity: PreparedIdentity) throws
+        identity: CodexIdentity,
+        email: String?,
+        allowsUnreadable: Bool) throws
     {
         let authData: Data?
         do {
             authData = try self.authMaterialReader.readAuthData(homeURL: homeURL)
         } catch {
-            // A throwing read is unreadable drift, not an absent file.
-            if case .readable = destination.homeState {
-                throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
-            }
-            return
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
         }
-        guard let authData else {
-            // Missing auth cannot hold credentials to preserve; recreate is safe.
-            return
-        }
+        guard let authData else { return }
         guard (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
               let authIdentity = try? PreparedPromotionContextBuilder.runtimeAccount(from: authData)
         else {
-            // Unreadable auth is the repair case already accepted by the planner, but a destination
-            // that was readable at plan time has drifted — fail closed rather than overwrite
-            // unidentifiable bytes.
-            if case .readable = destination.homeState {
-                throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
-            }
-            return
+            if allowsUnreadable { return }
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
         }
-
         guard CodexIdentityMatcher.matches(
             authIdentity.identity,
             lhsEmail: authIdentity.email,
-            liveAuthIdentity.identity,
-            rhsEmail: liveAuthIdentity.email)
+            identity,
+            rhsEmail: email)
         else {
             throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
         }

@@ -40,14 +40,9 @@ final class CodexAccountPromotionTestContainer {
         try FileManager.default.createDirectory(at: self.managedHomesURL, withIntermediateDirectories: true)
         _ = try self.fileStore.ensureFileExists()
 
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        defaults.set(true, forKey: "providerDetectionCompleted")
-        self.settings = SettingsStore(
-            userDefaults: defaults,
-            configStore: testConfigStore(suiteName: suiteName),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore())
+        self.settings = testSettingsStore(suiteName: suiteName, userDefaults: InMemoryUserDefaults(), prepareDefaults: {
+            $0.set(true, forKey: "providerDetectionCompleted")
+        })
         self.settings._test_activeManagedCodexAccount = nil
         self.settings._test_activeManagedCodexRemoteHomePath = nil
         self.settings._test_unreadableManagedCodexAccountStore = false
@@ -142,15 +137,23 @@ final class CodexAccountPromotionTestContainer {
         useAuthAccountIDAsPersistedProviderAccountID: Bool = true,
         workspaceLabel: String? = nil,
         workspaceAccountID: String? = nil,
-        plan: String = "Pro") throws -> ManagedCodexAccount
+        plan: String = "Pro",
+        legacyRecord: Bool = false,
+        writeAuthFile: Bool = true) throws -> ManagedCodexAccount
     {
         let homeURL = self.managedHomesURL.appendingPathComponent(id.uuidString, isDirectory: true)
         let createdAt = Date().timeIntervalSince1970
-        let authData = try self.writeOAuthAuthFile(
-            homeURL: homeURL,
-            email: authEmail ?? persistedEmail,
-            plan: plan,
-            accountID: authAccountID)
+        let authData: Data?
+        if writeAuthFile {
+            authData = try self.writeOAuthAuthFile(
+                homeURL: homeURL,
+                email: authEmail ?? persistedEmail,
+                plan: plan,
+                accountID: authAccountID)
+        } else {
+            try FileManager.default.createDirectory(at: homeURL, withIntermediateDirectories: true)
+            authData = nil
+        }
         let persistedProviderAccountIDValue: String? =
             if useAuthAccountIDAsPersistedProviderAccountID {
                 persistedProviderAccountID ?? authAccountID
@@ -160,47 +163,14 @@ final class CodexAccountPromotionTestContainer {
         return ManagedCodexAccount(
             id: id,
             email: persistedEmail,
-            providerAccountID: persistedProviderAccountIDValue,
+            providerAccountID: legacyRecord ? nil : persistedProviderAccountIDValue,
             workspaceLabel: workspaceLabel,
-            workspaceAccountID: workspaceAccountID ?? authAccountID,
-            authFingerprint: CodexAuthFingerprint.fingerprint(data: authData),
+            workspaceAccountID: legacyRecord ? nil : workspaceAccountID ?? authAccountID,
+            authFingerprint: legacyRecord ? nil : authData.map { CodexAuthFingerprint.fingerprint(data: $0) },
             managedHomePath: homeURL.path,
             createdAt: createdAt,
             updatedAt: createdAt,
             lastAuthenticatedAt: createdAt)
-    }
-
-    /// Writes a managed home with auth material but returns a legacy record that predates
-    /// provider/workspace tracking, so `effectiveWorkspaceAccountID` stays nil.
-    @discardableResult
-    func legacyManagedAccount(
-        id: UUID = UUID(),
-        persistedEmail: String,
-        authEmail: String? = nil,
-        authAccountID: String? = nil,
-        plan: String = "Pro",
-        writeAuthFile: Bool = true) throws -> ManagedCodexAccount
-    {
-        let homeURL = self.managedHomesURL.appendingPathComponent(id.uuidString, isDirectory: true)
-        if writeAuthFile {
-            _ = try self.writeOAuthAuthFile(
-                homeURL: homeURL,
-                email: authEmail ?? persistedEmail,
-                plan: plan,
-                accountID: authAccountID)
-        } else {
-            try FileManager.default.createDirectory(at: homeURL, withIntermediateDirectories: true)
-        }
-        return ManagedCodexAccount(
-            id: id,
-            email: persistedEmail,
-            providerAccountID: nil,
-            workspaceLabel: nil,
-            workspaceAccountID: nil,
-            managedHomePath: homeURL.path,
-            createdAt: 1,
-            updatedAt: 1,
-            lastAuthenticatedAt: nil)
     }
 
     func persistAccounts(_ accounts: [ManagedCodexAccount]) throws {

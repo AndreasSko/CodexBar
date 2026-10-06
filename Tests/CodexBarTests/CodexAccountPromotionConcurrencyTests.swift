@@ -58,24 +58,25 @@ struct CodexAccountPromotionConcurrencyTests {
         #expect(try container.loadAccounts().accounts.count == 1)
     }
 
-    @Test
-    func `preserved live copy is re-verified before the swap destroys the last original`() async throws {
+    @Test(arguments: [false, true])
+    func `preserved live copy is reverified before the swap removes the original`(importNew: Bool) async throws {
         let container = try CodexAccountPromotionTestContainer(suiteName: "promotion-preserved-clobbered")
         defer { container.tearDown() }
         let target = try container.createManagedAccount(
             persistedEmail: "target@example.com", authAccountID: "acct-target")
         let destination = try container.createManagedAccount(
             persistedEmail: "original@example.com", authAccountID: "acct-original")
-        try container.persistAccounts([destination, target])
+        try container.persistAccounts(importNew ? [target] : [destination, target])
         let originalLive = try container.writeLiveOAuthAuthFile(
             email: "original@example.com", accountID: "acct-original")
         let foreignAuthData = try container.managedAuthData(for: target)
+        let destinationHome = URL(fileURLWithPath: destination.managedHomePath, isDirectory: true)
+        if importNew { try FileManager.default.removeItem(at: destinationHome) }
         let swapper = RecordingCodexLiveAuthSwapper()
-        // The second target-auth read is the post-execution drift check; it models an external
-        // writer clobbering the preserved copy after the executor wrote it but before the swap.
+        // The target's second read happens after preservation on both main and the fixed path.
         let transaction = CodexAccountPromotionTransaction(
             store: container.fileStore,
-            homeFactory: container.homeFactory,
+            homeFactory: FixedManagedHomeFactory(base: container.homeFactory, stagedHomeURL: destinationHome),
             authMaterialReader: RacingAuthMaterialReader(
                 triggerHomePath: target.managedHomePath,
                 triggerOnRead: 2,
@@ -89,46 +90,7 @@ struct CodexAccountPromotionConcurrencyTests {
         }
         #expect(swapper.swapCallCount == 0)
         #expect(try container.liveAuthData() == originalLive)
-        let accounts = try container.loadAccounts().accounts
-        let persistedDestination = try #require(accounts.first(where: { $0.id == destination.id }))
-        #expect(try container.managedAuthData(for: persistedDestination) == foreignAuthData)
-    }
-
-    @Test
-    func `imported live copy is re-verified before the swap destroys the last original`() async throws {
-        let container = try CodexAccountPromotionTestContainer(suiteName: "promotion-imported-clobbered")
-        defer { container.tearDown() }
-        let target = try container.createManagedAccount(
-            persistedEmail: "target@example.com", authAccountID: "acct-target")
-        try container.persistAccounts([target])
-        let originalLive = try container.writeLiveOAuthAuthFile(
-            email: "original@example.com", accountID: "acct-original")
-        let foreignAuthData = try container.managedAuthData(for: target)
-        let stagedHomeURL = container.managedHomesURL
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let swapper = RecordingCodexLiveAuthSwapper()
-        // Live auth is a new account with no managed destination: the plan imports it into the
-        // staged home, so the pre-swap verify must catch a clobber of that only remaining copy.
-        let transaction = CodexAccountPromotionTransaction(
-            store: container.fileStore,
-            homeFactory: FixedManagedHomeFactory(
-                base: container.homeFactory,
-                stagedHomeURL: stagedHomeURL),
-            authMaterialReader: RacingAuthMaterialReader(
-                triggerHomePath: target.managedHomePath,
-                triggerOnRead: 2,
-                victimHomePath: stagedHomeURL.path,
-                replacementData: foreignAuthData),
-            liveAuthSwapper: swapper,
-            baseEnvironment: container.baseEnvironment)
-
-        await #expect(throws: CodexAccountPromotionError.displacedLiveManagedAccountConflict) {
-            try await transaction.promoteManagedAccount(id: target.id)
-        }
-        #expect(swapper.swapCallCount == 0)
-        #expect(try container.liveAuthData() == originalLive)
-        #expect(try Data(contentsOf: CodexAuthFingerprint.authFileURL(homePath: stagedHomeURL.path))
-            == foreignAuthData)
+        #expect(try container.managedAuthData(for: destination) == foreignAuthData)
     }
 
     private static func expectBusy(service: CodexAccountPromotionService, id: UUID) async {

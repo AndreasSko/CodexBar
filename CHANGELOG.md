@@ -18,6 +18,11 @@
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
+### Fixed
+
+- Codex: reject account promotion when legacy saved credentials conflict or a preservation destination changes before the live swap (#4301). Thanks @vincent-peng!
+- Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+
 ## 0.72.0 — 2026-10-04
 
 ### Highlights
