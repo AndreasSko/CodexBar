@@ -196,7 +196,15 @@ package struct CodexDisplacedLivePreservationExecutor {
             .emailOnly(normalizedEmail: importedAccount.email)
         }
         let homeURL = URL(fileURLWithPath: existingManagedAccount.managedHomePath, isDirectory: true)
-        guard let authData = try? self.authMaterialReader.readAuthData(homeURL: homeURL),
+        let authData: Data?
+        do {
+            authData = try self.authMaterialReader.readAuthData(homeURL: homeURL)
+        } catch {
+            // The record will rewire and this home may be deleted — refuse to discard bytes we
+            // could not inspect.
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+        }
+        guard let authData,
               (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
               let authIdentity = try? PreparedPromotionContextBuilder.runtimeAccount(from: authData)
         else {
@@ -284,9 +292,19 @@ package struct CodexDisplacedLivePreservationExecutor {
                 throw CodexAccountPromotionError.displacedLiveImportFailed
             }
 
-            try self.validateRefreshDestinationAuth(refreshedHomeURL, liveAuthIdentity: liveAuthIdentity)
+            try self.validateRefreshDestinationAuth(
+                destination: destination,
+                homeURL: refreshedHomeURL,
+                liveAuthIdentity: liveAuthIdentity)
             try self.fileManager.createDirectory(at: refreshedHomeURL, withIntermediateDirectories: true)
             try self.writeManagedAuthData(liveAuthMaterial.rawData, to: refreshedHomeURL)
+            // The preserved copy must still be intact before the record commits to it; until the
+            // live swap lands, this home holds the only remaining displaced-live credentials.
+            guard (try? self.authMaterialReader.readAuthData(homeURL: refreshedHomeURL)) == liveAuthMaterial
+                .rawData
+            else {
+                throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+            }
             try self.store.storeAccounts(ManagedCodexAccountSet(
                 version: latestManagedAccounts.version,
                 accounts: latestManagedAccounts.accounts.map { account in
@@ -306,14 +324,33 @@ package struct CodexDisplacedLivePreservationExecutor {
     /// do not share the managed-account lock, so the destination may have gained credentials for a
     /// different account in the meantime. Mirrors `validateRepairDestination`.
     private func validateRefreshDestinationAuth(
-        _ homeURL: URL,
+        destination: PreparedStoredManagedAccount,
+        homeURL: URL,
         liveAuthIdentity: PreparedIdentity) throws
     {
-        guard let authData = try? self.authMaterialReader.readAuthData(homeURL: homeURL),
-              (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
+        let authData: Data?
+        do {
+            authData = try self.authMaterialReader.readAuthData(homeURL: homeURL)
+        } catch {
+            // A throwing read is unreadable drift, not an absent file.
+            if case .readable = destination.homeState {
+                throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+            }
+            return
+        }
+        guard let authData else {
+            // Missing auth cannot hold credentials to preserve; recreate is safe.
+            return
+        }
+        guard (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
               let authIdentity = try? PreparedPromotionContextBuilder.runtimeAccount(from: authData)
         else {
-            // Missing or unreadable auth is the repair case already accepted by the planner.
+            // Unreadable auth is the repair case already accepted by the planner, but a destination
+            // that was readable at plan time has drifted — fail closed rather than overwrite
+            // unidentifiable bytes.
+            if case .readable = destination.homeState {
+                throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+            }
             return
         }
 

@@ -211,6 +211,33 @@ struct CodexAccountPromotionPlanningTests {
     }
 
     @Test
+    func `planner still repairs an email only live auth into a legacy record with a missing home`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionPlanningTests-email-only-repair")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let legacyManaged = try container.legacyManagedAccount(
+            persistedEmail: "alpha@example.com",
+            writeAuthFile: false)
+        try container.persistAccounts([target, legacyManaged])
+        _ = try container.writeLiveOAuthAuthFile(email: "alpha@example.com")
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+
+        switch plan {
+        case let .repairExisting(destination, reason):
+            #expect(destination.persisted.id == legacyManaged.id)
+            #expect(reason == .persistedLegacyEmailMatch)
+        case .none, .reject, .importNew, .refreshExisting:
+            Issue.record("Expected legacy email repair plan")
+        }
+    }
+
+    @Test
     func `planner imports when same email belongs to a different provider account workspace`() async throws {
         let container = try CodexAccountPromotionTestContainer(
             suiteName: "CodexAccountPromotionPlanningTests-import",

@@ -187,6 +187,9 @@ package final class CodexAccountPromotionTransaction {
         guard try self.authMaterialReader.readAuthData(homeURL: context.live.homeURL) == expectedLiveData else {
             throw CodexAccountPromotionError.liveAuthChangedDuringPromotion
         }
+        try self.verifyPreservedLiveAuth(
+            executionResult: executionResult,
+            expectedData: expectedLiveData)
         do {
             try self.liveAuthSwapper.swapLiveAuthData(targetAuthMaterial.rawData, liveHomeURL: context.live.homeURL)
         } catch {
@@ -239,6 +242,31 @@ package final class CodexAccountPromotionTransaction {
         }
 
         return .liveSystem
+    }
+
+    /// The executor may have copied displaced live credentials into a managed home before the drift
+    /// checks above ran. Re-verify that copy before the live swap removes the last original, so a
+    /// racing external writer cannot silently erase the preserved account.
+    private func verifyPreservedLiveAuth(
+        executionResult: CodexAccountPromotionResult.DisplacedLiveDisposition,
+        expectedData: Data?) throws
+    {
+        guard let expectedData else { return }
+        let preservedAccountID: UUID? = switch executionResult {
+        case let .alreadyManaged(id), let .imported(id): id
+        case .none: nil
+        }
+        guard let preservedAccountID else { return }
+        // The executor committed this record; if a lock-bypassing store writer removed it, the
+        // preserved copy's location can no longer be trusted — fail closed instead of swapping.
+        guard let preservedAccount = try self.store.loadAccounts().account(id: preservedAccountID)
+        else {
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+        }
+        let preservedHomeURL = URL(fileURLWithPath: preservedAccount.managedHomePath, isDirectory: true)
+        guard (try? self.authMaterialReader.readAuthData(homeURL: preservedHomeURL)) == expectedData else {
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
+        }
     }
 
     private func requiredTargetAuthMaterial(from target: PreparedStoredManagedAccount) throws -> PreparedAuthMaterial {

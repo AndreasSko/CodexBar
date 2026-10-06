@@ -493,6 +493,54 @@ final class RecordingCodexLiveAuthSwapper: CodexLiveAuthSwapping, @unchecked Sen
     }
 }
 
+/// Reads through to disk, but once the trigger home has been read `triggerOnRead` times it rewrites
+/// the victim home's auth.json — modeling an external writer landing between two promotion steps.
+final class RacingAuthMaterialReader: CodexAuthMaterialReading, @unchecked Sendable {
+    private let base = DefaultCodexAuthMaterialReader()
+    let triggerHomePath: String
+    let triggerOnRead: Int
+    let victimHomePath: String
+    let replacementData: Data
+    private var triggerReads = 0
+
+    init(triggerHomePath: String, triggerOnRead: Int, victimHomePath: String, replacementData: Data) {
+        self.triggerHomePath = triggerHomePath
+        self.triggerOnRead = triggerOnRead
+        self.victimHomePath = victimHomePath
+        self.replacementData = replacementData
+    }
+
+    func readAuthData(homeURL: URL) throws -> Data? {
+        if homeURL.path == self.triggerHomePath {
+            self.triggerReads += 1
+            if self.triggerReads == self.triggerOnRead {
+                try self.replacementData.write(
+                    to: CodexAuthFingerprint.authFileURL(homePath: self.victimHomePath),
+                    options: .atomic)
+            }
+        }
+        return try self.base.readAuthData(homeURL: homeURL)
+    }
+}
+
+/// Deterministic home factory so a test can point the racing reader at the staged import home
+/// before the executor creates it.
+final class FixedManagedHomeFactory: ManagedCodexHomeProducing, @unchecked Sendable {
+    let stagedHomeURL: URL
+    private let base: ManagedCodexHomeFactory
+
+    init(base: ManagedCodexHomeFactory, stagedHomeURL: URL) {
+        self.base = base
+        self.stagedHomeURL = stagedHomeURL
+    }
+
+    func makeHomeURL() -> URL { self.stagedHomeURL }
+
+    func validateManagedHomeForDeletion(_ url: URL) throws {
+        try self.base.validateManagedHomeForDeletion(url)
+    }
+}
+
 enum PromotionTestError: Error, Equatable {
     case storeWriteFailed
     case swapFailed
