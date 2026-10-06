@@ -1294,17 +1294,11 @@ private struct SpendDailyLedgerRow: View {
     }
 
     private var tokensText: String {
-        self.countText(self.summary.totalTokens, format: UsageFormatter.tokenCountString)
+        spendDashboardLedgerTokenText(self.summary)
     }
 
     private var requestsText: String {
-        self.countText(self.summary.requestCount, format: codexBarLocalizedInteger)
-    }
-
-    private func countText(_ count: Int?, format: (Int) -> String) -> String {
-        guard let count else { return "—" }
-        let text = format(count)
-        return self.summary.hasPartialCounts ? "≥\(text)" : text
+        spendDashboardLedgerRequestText(self.summary)
     }
 
     private var accessibilityLabel: String {
@@ -1593,6 +1587,31 @@ func spendDashboardLedgerCostText(_ summary: SpendDashboardModel.DailySummary, c
     guard let cost = summary.totalCost else { return "—" }
     let formatted = UsageFormatter.currencyString(cost, currencyCode: currencyCode)
     return summary.hasPartialCost ? "~\(formatted)" : formatted
+}
+
+func spendDashboardLedgerTokenText(_ summary: SpendDashboardModel.DailySummary) -> String {
+    spendDashboardLedgerCountText(
+        summary.totalTokens,
+        isLowerBound: summary.hasPartialCounts,
+        format: UsageFormatter.tokenCountString)
+}
+
+func spendDashboardLedgerRequestText(_ summary: SpendDashboardModel.DailySummary) -> String {
+    // A missing source count makes only the request total a floor. Token totals keep their own flag.
+    spendDashboardLedgerCountText(
+        summary.requestCount,
+        isLowerBound: summary.hasPartialCounts || summary.requestsAreLowerBound,
+        format: codexBarLocalizedInteger)
+}
+
+func spendDashboardLedgerCountText(
+    _ count: Int?,
+    isLowerBound: Bool,
+    format: (Int) -> String) -> String
+{
+    guard let count else { return "—" }
+    let text = format(count)
+    return isLowerBound ? "≥\(text)" : text
 }
 
 func spendDashboardGroupTokenText(_ group: SpendDashboardModel.CurrencyGroup) -> String {
