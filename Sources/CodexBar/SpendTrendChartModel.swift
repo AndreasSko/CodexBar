@@ -184,8 +184,11 @@ struct SpendTrendChartModel {
 
     private static func reportingDayCount(in scope: ClosedRange<Date>, calendar: Calendar) -> Int {
         guard scope.upperBound > scope.lowerBound else { return 0 }
+        // Ordinality can advance before midnight on DST days; compare day starts.
+        let first = calendar.startOfDay(for: scope.lowerBound)
+        let last = calendar.startOfDay(for: max(scope.lowerBound, scope.upperBound.addingTimeInterval(-1)))
         return SpendDashboardModel.dayCount(
-            in: scope.lowerBound...max(scope.lowerBound, scope.upperBound.addingTimeInterval(-1)),
+            in: first...last,
             calendar: calendar)
     }
 
