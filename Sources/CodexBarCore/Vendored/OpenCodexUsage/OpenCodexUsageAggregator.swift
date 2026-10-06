@@ -30,8 +30,6 @@ enum OpenCodexUsageAggregator {
         var models: [String: ModelAccumulator] = [:]
     }
 
-    typealias HourAccumulator = CostUsageTemporalTotals
-
     /// Aggregates OpenCodex usage entries into a per-window token/cost snapshot.
     ///
     /// Pricing context is resolved once per call and shared by every entry: `modelsDevCatalog` is the models.dev
@@ -81,7 +79,7 @@ enum OpenCodexUsageAggregator {
 
         var daysByKey: [String: DayAccumulator] = [:]
         var sessions: [String: SessionAccumulator] = [:]
-        var hoursByStart: [Date: HourAccumulator] = [:]
+        var hoursByStart: [Date: CostUsageTemporalTotals] = [:]
         // `windowed` is sorted by timestamp, so the day/hour memos hit on almost every entry; a miss only costs one
         // Calendar interval lookup. Price once per entry and reuse it for the day, session and hour merges.
         var windowTokens = CostUsageDailyReport.OptionalCountAccumulator()
@@ -107,8 +105,8 @@ enum OpenCodexUsageAggregator {
             sessions[sessionID] = session
 
             let hour = hourMemo.start(for: entry.timestamp, calendar: calendar)
-            var hourBucket = hoursByStart[hour] ?? HourAccumulator()
-            Self.merge(entry, cost: cost, into: &hourBucket)
+            var hourBucket = hoursByStart[hour] ?? CostUsageTemporalTotals()
+            hourBucket.add(totalTokens: entry.resolvedTotalCount.value, costUSD: cost)
             hoursByStart[hour] = hourBucket
         }
 
@@ -138,7 +136,7 @@ enum OpenCodexUsageAggregator {
         }
 
         let hourly = hoursByStart.keys.sorted().map { hour in
-            let bucket = hoursByStart[hour] ?? HourAccumulator()
+            let bucket = hoursByStart[hour] ?? CostUsageTemporalTotals()
             return bucket.hourlyEntry(hour: hour)
         }
 
@@ -216,14 +214,6 @@ enum OpenCodexUsageAggregator {
         var model = session.models[entry.model] ?? ModelAccumulator()
         self.merge(entry, cost: cost, into: &model)
         session.models[entry.model] = model
-    }
-
-    private static func merge(
-        _ entry: OpenCodexUsageEntry,
-        cost: Double?,
-        into hour: inout HourAccumulator)
-    {
-        hour.add(totalTokens: entry.resolvedTotalCount.value, costUSD: cost)
     }
 
     private static func merge(

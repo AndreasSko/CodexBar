@@ -10,66 +10,6 @@ import XCTest
 ///   CODEXBAR_SPEND_PROOF_DIR=.github/pr-proof swift test --filter SpendDashboardScreenshotRenderTests
 @MainActor
 final class SpendDashboardScreenshotRenderTests: XCTestCase {
-    func test_renderModelHistoryWarningScreenshots() throws {
-        guard let dir = ProcessInfo.processInfo.environment["CODEXBAR_MODEL_HISTORY_PROOF_DIR"] else {
-            throw XCTSkip("Set CODEXBAR_MODEL_HISTORY_PROOF_DIR for synthetic model-history warning screenshots.")
-        }
-        let directory = URL(fileURLWithPath: dir, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let now = try XCTUnwrap(Self.gmtCalendar.date(from: DateComponents(year: 2026, month: 8, day: 29)))
-        let known = Self.entry(day: "2026-08-29", cost: 1.2, tokens: 1200, model: "fixture-known")
-        let missing = CostUsageDailyReport.Entry(
-            date: "2026-08-29",
-            inputTokens: nil,
-            outputTokens: nil,
-            totalTokens: nil,
-            costUSD: nil,
-            modelsUsed: ["fixture-pending"],
-            modelBreakdowns: [.init(
-                modelName: "fixture-pending", costUSD: nil, totalTokens: nil, incompleteRequestCount: 1)])
-        let unpriced = Self.entry(day: "2026-08-29", cost: nil, tokens: 2400, model: "fixture-unpriced")
-        let unpricedSnapshot = CostUsageTokenSnapshot(
-            sessionTokens: nil,
-            sessionCostUSD: nil,
-            last30DaysTokens: 2400,
-            last30DaysCostUSD: nil,
-            historyDays: 7,
-            historyCoverageIsEstablished: true,
-            daily: [unpriced],
-            updatedAt: now)
-        let model = SpendDashboardModel.build(
-            inputs: [
-                .init(
-                    provider: .codex,
-                    displayName: "Example source",
-                    snapshot: Self.snapshot(entries: [known, missing], historyDays: 7, now: now)),
-                .init(provider: .antigravity, displayName: "Example source", snapshot: unpricedSnapshot),
-            ],
-            requestedDays: 7,
-            now: now,
-            calendar: Self.gmtCalendar)
-        let group = try XCTUnwrap(model.groups.first)
-        let breakdowns = spendDashboardProviderBreakdowns(group)
-        XCTAssertEqual(breakdowns.first { $0.provider == .codex }?.modelHistoryWarning, .incompleteUsage)
-        XCTAssertEqual(breakdowns.first { $0.provider == .codex }?.models.count, 2)
-        XCTAssertEqual(breakdowns.first { $0.provider == .antigravity }?.modelHistoryWarning, .unpriced)
-        for language in ["en", "zh-Hans"] {
-            let data = try CodexBarLocalizationOverride.$appLanguage.withValue(language) {
-                let view = VStack(alignment: .leading, spacing: 16) {
-                    Text("Synthetic example / 虚构示例")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    SpendProviderBreakdownRows(group: group)
-                }
-                .padding(24)
-                .frame(width: 760)
-                .background(Color(nsColor: .windowBackgroundColor))
-                return try XCTUnwrap(Self.pngData(for: AnyView(view)))
-            }
-            try data.write(to: directory.appendingPathComponent("model-history-warnings-\(language).png"))
-        }
-    }
-
     func test_renderIndependentChatScreenshots() throws {
         guard let dir = ProcessInfo.processInfo.environment["CODEXBAR_SPEND_CHAT_PROOF_DIR"] else {
             throw XCTSkip("Set CODEXBAR_SPEND_CHAT_PROOF_DIR for synthetic independent-chat screenshots.")

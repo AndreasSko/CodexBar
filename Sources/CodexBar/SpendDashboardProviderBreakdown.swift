@@ -2,24 +2,6 @@ import AppKit
 import CodexBarCore
 import SwiftUI
 
-enum SpendModelHistoryWarning: Equatable {
-    case incompleteUsage
-    case unpriced
-    case partial
-
-    var title: String {
-        switch self {
-        case .incompleteUsage: L("Incomplete")
-        case .unpriced: L("Unpriced")
-        case .partial: L("Partial model breakdown")
-        }
-    }
-
-    var symbolName: String {
-        self == .unpriced ? "info.circle" : "exclamationmark.triangle"
-    }
-}
-
 struct SpendProviderBreakdown: Identifiable, Equatable {
     let provider: UsageProvider
     let displayName: String
@@ -31,7 +13,6 @@ struct SpendProviderBreakdown: Identifiable, Equatable {
     let hasPartialTokens: Bool
     let hasPartialCost: Bool
     let hasPartialModelHistory: Bool
-    let modelHistoryWarning: SpendModelHistoryWarning?
     let modelCount: Int
 
     var id: String {
@@ -91,8 +72,6 @@ func spendDashboardProviderBreakdowns(
             hasPartialCost: incompleteRequestCount > 0 || costs.count < subscriptions.count ||
                 (totalCost == nil && !costs.isEmpty) || subscriptions.contains(where: \.costIsLowerBound),
             hasPartialModelHistory: group.incompleteModelProviders.contains(provider),
-            modelHistoryWarning: spendDashboardProviderModelWarning(
-                group: group, provider: provider, subscriptions: subscriptions, models: models),
             modelCount: models.count)
     }
     .sorted { lhs, rhs in
@@ -109,40 +88,6 @@ func spendDashboardProviderBreakdowns(
             }
         }
     }
-}
-
-private func spendDashboardProviderModelWarning(
-    group: SpendDashboardModel.CurrencyGroup,
-    provider: UsageProvider,
-    subscriptions: [SpendDashboardModel.ProviderRow],
-    models: [SpendDashboardModel.ModelRow]) -> SpendModelHistoryWarning?
-{
-    guard group.incompleteModelProviders.contains(provider) else { return nil }
-    if models.contains(where: { $0.incompleteRequestCount > 0 }) { return .incompleteUsage }
-
-    let sourceTokens: [Int?]
-    let sourceCountsArePartial: Bool
-    // Model rows can describe a selected day while the source rows still describe the whole window.
-    // Compare coverage within that same scope before calling the warning a pricing-only gap.
-    if let selectedDay = group.selectedDay {
-        let sources = group.dailySummaries.first { $0.day == selectedDay }?.providers
-            .filter { $0.provider == provider } ?? []
-        sourceTokens = sources.map(\.totalTokens)
-        sourceCountsArePartial = sources.contains { $0.countsAreLowerBound || $0.incompleteRequestCount > 0 }
-    } else {
-        sourceTokens = subscriptions.map(\.totalTokens)
-        sourceCountsArePartial = subscriptions.contains { $0.tokensAreLowerBound || $0.incompleteRequestCount > 0 }
-    }
-    let modelTokens = models.compactMap(\.totalTokens)
-    guard !sourceCountsArePartial,
-          sourceTokens.allSatisfy({ $0.map { $0 >= 0 } == true }),
-          modelTokens.count == models.count,
-          modelTokens.allSatisfy({ $0 >= 0 }),
-          let totalTokens = spendDashboardProviderTokenSum(sourceTokens.compactMap(\.self)),
-          spendDashboardProviderTokenSum(modelTokens) == totalTokens,
-          models.contains(where: { $0.totalCost == nil })
-    else { return .partial }
-    return .unpriced
 }
 
 func spendDashboardBreakdownMetricText(
@@ -250,7 +195,7 @@ struct SpendProviderBreakdownRows: View {
             }
 
             if !breakdown.models.isEmpty {
-                self.subsectionLabel(L("Models"), warning: breakdown.modelHistoryWarning)
+                self.subsectionLabel(L("Models"), showsPartialWarning: breakdown.hasPartialModelHistory)
                 let models = self.expandedProviders.contains(breakdown.provider)
                     ? breakdown.models : Array(breakdown.models.prefix(spendProviderModelDisplayLimit))
                 ForEach(Array(models.enumerated()), id: \.element.id) { index, row in
@@ -312,13 +257,13 @@ struct SpendProviderBreakdownRows: View {
         }
     }
 
-    private func subsectionLabel(_ title: String, warning: SpendModelHistoryWarning? = nil) -> some View {
+    private func subsectionLabel(_ title: String, showsPartialWarning: Bool = false) -> some View {
         HStack(spacing: 6) {
             Text(title.uppercased())
                 .font(.caption2.weight(.semibold))
                 .tracking(0.6)
-            if let warning {
-                Label(warning.title, systemImage: warning.symbolName)
+            if showsPartialWarning {
+                Label(L("Partial model breakdown"), systemImage: "exclamationmark.triangle")
                     .font(.caption2)
             }
         }

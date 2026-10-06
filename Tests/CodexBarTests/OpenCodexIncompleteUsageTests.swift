@@ -117,6 +117,36 @@ struct OpenCodexIncompleteUsageTests {
         #expect(group.models.first?.totalCost == nil)
     }
 
+    @Test
+    func `cold import and reopened cache preserve incomplete model rows`() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let log = root.appendingPathComponent("usage.jsonl")
+        try """
+        {"requestId":"known","timestamp":1789560000000,"provider":"openai","model":"fixture-priced",\
+        "usageStatus":"reported","usage":{"inputTokens":100,"outputTokens":20}}
+        {"requestId":"pending","timestamp":1789560000000,"provider":"openai","model":"fixture-pending",\
+        "usageStatus":"unreported"}
+
+        """.write(to: log, atomically: true, encoding: .utf8)
+        let cold = try Self.snapshot(entries: OpenCodexUsageStore(cacheRoot: root).loadEntries(logURL: log))
+        let recorder = OpenCodexUsageParser.LogReadRecorder()
+        let warm = try OpenCodexUsageStore.withLogReadRecorderForTesting(recorder) {
+            try Self.snapshot(entries: OpenCodexUsageStore(cacheRoot: root).loadEntries(logURL: log))
+        }
+        #expect(recorder.snapshot().bytesRead == 0)
+        #expect(warm.daily == cold.daily)
+        #expect(warm.daily.first?.incompleteRequestCount == 1)
+        let group = try #require(SpendDashboardModel.build(
+            inputs: [.init(provider: .codex, displayName: "Fixture source", snapshot: warm, sourceKind: .openCodex)],
+            requestedDays: 7,
+            now: Self.now,
+            calendar: Self.calendar).groups.first)
+        #expect(Set(group.models.map(\.modelName)) == ["fixture-priced", "fixture-pending"])
+        #expect(group.modelHistoryCompleteness == .incomplete)
+    }
+
     static let now = Date(timeIntervalSince1970: 1_789_560_000)
     static var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
