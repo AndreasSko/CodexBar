@@ -657,11 +657,12 @@ extension CostUsageScanner {
             checkCancellation: state.checkCancellation)
         let rows = startOffset > 0 ? Self.mergeClaudeRows(existing: cached?.claudeRows ?? [], delta: parsed.rows)
             : parsed.rows
-        let usage = Self.makeFileUsage(
+        let usage = CostUsageFileUsage(
             mtimeUnixMs: stamp.mtimeUnixMs,
             size: stamp.size,
             days: [:],
             parsedBytes: parsed.parsedBytes,
+            codexCostCacheComplete: true,
             claudeRows: rows)
         state.cache.files[path] = usage
         state.sourceFileIDs[path] = stamp.fileID
