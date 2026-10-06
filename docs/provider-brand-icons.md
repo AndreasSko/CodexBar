@@ -7,9 +7,9 @@ read_when:
 
 # Usage & Spend provider artwork
 
-Provider and subscription rows request `ProviderBrandIcon.Style.brand`. Model rows use a neutral
-SF Symbol with the primary foreground color (black in light appearance, white in dark appearance),
-so the tool recording usage does not imply the model's manufacturer. Menu bar and settings callers
+Provider-level icons request `ProviderBrandIcon.Style.brand`. Account/source and model child rows
+retain CodexBar's existing monochrome provider artwork and 76% opacity, adapting to light and dark
+appearance. The existing provider association is preserved. Menu bar and other settings callers
 retain the default monochrome rendering.
 
 `Brand-ProviderIcon-*` assets are opt-in. They preserve their stored fills, masks and gradients;
@@ -47,10 +47,10 @@ the property of their owners. Colors are not sampled from screenshots or chosen 
 When adding another brand, verify artwork against a primary source and document the transformation
 here before enabling original rendering. Do not infer a brand color from provider progress-bar colors.
 
-Codex brand rows use the app's product-specific terminal artwork rather than the generic OpenAI
-knot in the existing monochrome resource. Provider and native account rows share this brand asset.
-Use the app's transparent in-product artwork. Its desktop launcher icon also contains an opaque
-background and is not suitable for these rows.
+Codex provider-level icons use the app's product-specific terminal artwork. Account/source and
+model child rows retain the generic OpenAI knot in the existing monochrome resource.
+Colored provider icons use the app's transparent in-product artwork. Its desktop launcher icon
+also contains an opaque background and is not suitable for these icons.
 
 ## Checksums
 
@@ -78,5 +78,5 @@ CODEXBAR_BRAND_ICON_PROOF_DIR=docs/screenshots/usage-spend-brand-icons \
 ```
 
 The screenshot fixtures use synthetic usage data and an unrelated purple tint to reveal accidental
-brand tinting. Model aggregation retains the existing provider association; the neutral model symbol
-does not add model-to-vendor identity inference.
+brand tinting. Model aggregation and monochrome child icons retain the existing provider association;
+no model-to-vendor identity inference is added.

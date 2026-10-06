@@ -175,7 +175,12 @@ struct SpendProviderBreakdownRows: View {
                         self.childDivider
                     }
                     HStack(spacing: 8) {
-                        SpendProviderIcon(provider: row.provider, sourceKind: row.sourceKind, size: 16)
+                        SpendProviderIcon(
+                            provider: row.provider,
+                            sourceKind: row.sourceKind,
+                            style: .monochrome,
+                            size: 16)
+                            .opacity(0.76)
                         Text(row.displayName)
                             .lineLimit(1)
                             .help(row.displayName)
@@ -207,12 +212,8 @@ struct SpendProviderBreakdownRows: View {
                     ? breakdown.models : Array(breakdown.models.prefix(spendProviderModelDisplayLimit))
                 ForEach(models) { row in
                     HStack(spacing: 8) {
-                        // This row identifies a model, not the tool that recorded its usage.
-                        Image(systemName: "cpu")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.primary)
-                            .frame(width: 16, height: 16)
-                            .accessibilityHidden(true)
+                        SpendProviderIcon(provider: row.provider, style: .monochrome, size: 16)
+                            .opacity(0.76)
                         Text(row.modelName)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
