@@ -7,9 +7,10 @@ read_when:
 
 # Usage & Spend provider artwork
 
-Provider and subscription rows request `ProviderBrandIcon.Style.brand`. Model rows explicitly request
-`.monochrome`, with the primary foreground color (black in light appearance, white in dark appearance).
-Menu bar and settings callers retain the default monochrome rendering.
+Provider and subscription rows request `ProviderBrandIcon.Style.brand`. Model rows use a neutral
+SF Symbol with the primary foreground color (black in light appearance, white in dark appearance),
+so the tool recording usage does not imply the model's manufacturer. Menu bar and settings callers
+retain the default monochrome rendering.
 
 `Brand-ProviderIcon-*` assets are opt-in. They preserve their stored fills, masks and gradients;
 SwiftUI must render them as original images, without applying the configurable chart accent color.
@@ -19,6 +20,11 @@ If no curated asset exists, or it cannot be decoded, use the existing adaptive t
 provider SVGs often contain white silhouettes and must not simply be switched to original rendering.
 This fallback does not assert that the provider has an officially monochrome-only identity.
 The OpenCodex source retains its existing branch symbol.
+
+The filled Bedrock tile renders at 84% of the icon slot; the open Meta and Vertex AI marks render
+at 108%. This balances their apparent weight without modifying artwork or colors. Single-model
+groups omit the repeated Models heading, while multi-model, multi-source and partial-history groups
+retain it. Long model names truncate in the middle and expose the full name in a tooltip.
 
 ## Sources
 
@@ -54,13 +60,14 @@ SHA-256 pins the reviewed local bytes; a later asset update should update this t
 ## Validation
 
 `ProviderIconResourcesTests` verifies independent caches in both load orders, adaptive fallback and
-actual colored pixels in decoded assets, including warm/green Antigravity pixels. Render synthetic light/dark UI proof with:
+actual colored pixels in decoded assets, including warm/green Antigravity pixels. Render synthetic
+light/dark UI proof, including narrow windows and incomplete model history, with:
 
 ```sh
-source Scripts/test_environment.sh
 CODEXBAR_BRAND_ICON_PROOF_DIR=docs/screenshots/usage-spend-brand-icons \
-  swift test --filter SpendDashboardScreenshotRenderTests.test_renderBrandIconScreenshots
+  make test-fast FILTER='test_renderBrandIconScreenshots|test_renderProviderDetailPolishScreenshots'
 ```
 
-The screenshot fixture uses an unrelated purple tint to reveal accidental brand tinting. Model rows
-retain the existing provider association; this change does not add model-to-vendor identity inference.
+The screenshot fixtures use synthetic usage data and an unrelated purple tint to reveal accidental
+brand tinting. Model aggregation retains the existing provider association; the neutral model symbol
+does not add model-to-vendor identity inference.
