@@ -4,6 +4,8 @@
 
 ### Added
 
+- CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
+- Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
 - Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
 - Codex: list managed accounts and explicitly promote one from the macOS CLI, preserving displaced credentials with shared app/CLI locking, private atomic writes, and rejection of changed auth or managed-home destinations (#3191, #4234). Thanks @Yuxin-Qiao!
 
@@ -18,8 +20,8 @@
 
 ### Fixed
 
-- JetBrains AI: compute Current usage from the monthly tariff quota instead of dividing by the combined monthly + top-up maximum, so accounts with top-up credits no longer show ~99% remaining; show `local` instead of "jetbrains not detected" in the provider detail line and hide the always-undetected Version row.
-- JetBrains AI: prefer the newest quota state from the IDE's `idea.log` when it is newer than `AIAssistantQuotaManager2.xml`, which the IDE can leave weeks out of date; falls back to the XML when the log is missing or its format changes.
+- JetBrains AI: show monthly credit usage accurately when top-up credits exist, keep partial quota data on a consistent balance, and replace misleading version detection with the local source label (#4287). Thanks @taihua!
+- JetBrains AI: refresh stale quota from the selected IDE's bounded `idea.log` tail, preserving XML fallback when log records are incomplete or unsupported (#4288). Thanks @taihua!
 
 ## 0.72.0 — 2026-10-04
 

@@ -1,107 +1,110 @@
 import Foundation
 
-/// Reads the latest quota state the IDE writes to `idea.log`.
-///
-/// The IDE refreshes quota in memory and logs every change, but it only persists
-/// `AIAssistantQuotaManager2.xml` occasionally, so the XML can be weeks out of date
-/// while the log already has the value the IDE shows.
-public enum JetBrainsQuotaLogReader {
-    public struct Entry: Sendable, Equatable {
-        public let timestamp: Date
-        public let quotaInfo: JetBrainsQuotaInfo
-        public let refillInfo: JetBrainsRefillInfo?
-
-        public init(timestamp: Date, quotaInfo: JetBrainsQuotaInfo, refillInfo: JetBrainsRefillInfo?) {
-            self.timestamp = timestamp
-            self.quotaInfo = quotaInfo
-            self.refillInfo = refillInfo
-        }
+/// Reads quota records from a bounded idea.log tail; the IDE can leave its quota XML weeks behind.
+enum JetBrainsQuotaLogReader {
+    struct Entry: Sendable, Equatable {
+        let timestamp: Date
+        let quotaInfo: JetBrainsQuotaInfo
+        let refillInfo: JetBrainsRefillInfo?
     }
 
     private static let quotaMarker = "QuotaManager2Impl - New quota state is: "
     private static let refillMarker = "QuotaManager2Impl - New quota refill state is: "
-    /// idea.log can grow to tens of MB; quota lines are logged on every refresh, so the tail is enough.
-    private static let tailByteCount: UInt64 = 4 * 1024 * 1024
+    static let tailByteCount: UInt64 = 4 * 1024 * 1024
 
-    /// `~/Library/Application Support/JetBrains/DataGrip2026.2` → `~/Library/Logs/JetBrains/DataGrip2026.2/idea.log`
-    public static func logFilePath(forIDEBasePath basePath: String) -> String {
-        let standardized = (basePath as NSString).standardizingPath
-        let dirname = (standardized as NSString).lastPathComponent
-        let vendor = ((standardized as NSString).deletingLastPathComponent as NSString).lastPathComponent
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    static func logFilePath(
+        forIDEBasePath basePath: String,
+        homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path) -> String?
+    {
+        let base = URL(fileURLWithPath: (basePath as NSString).standardizingPath)
+        let vendorPath = base.deletingLastPathComponent()
+        let vendor = vendorPath.lastPathComponent
+        guard ["JetBrains", "Google"].contains(vendor) else { return nil }
         #if os(macOS)
-        return "\(homeDir)/Library/Logs/\(vendor)/\(dirname)/idea.log"
+        let configRoots = ["\(homeDirectory)/Library/Application Support/\(vendor)"]
+        let logRoot = "\(homeDirectory)/Library/Logs/\(vendor)"
         #else
-        return "\(homeDir)/.cache/\(vendor)/\(dirname)/log/idea.log"
+        let configRoots = ["\(homeDirectory)/.config/\(vendor)", "\(homeDirectory)/.local/share/\(vendor)"]
+        let logRoot = "\(homeDirectory)/.cache/\(vendor)"
+        #endif
+        // A copied or custom config directory does not prove it belongs to this installation's log.
+        guard configRoots.contains(vendorPath.path) else { return nil }
+        #if os(macOS)
+        return "\(logRoot)/\(base.lastPathComponent)/idea.log"
+        #else
+        return "\(logRoot)/\(base.lastPathComponent)/log/idea.log"
         #endif
     }
 
-    public static func latestEntry(atPath path: String) -> Entry? {
-        guard let content = self.readTail(atPath: path) else { return nil }
+    static func latestEntry(atPath path: String) -> Entry? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd(), let content = self.readTail(from: handle, endOffset: size) else {
+            return nil
+        }
         return self.latestEntry(inLogContent: content)
     }
 
-    public static func latestEntry(inLogContent content: String) -> Entry? {
-        var latestQuota: (timestamp: Date, info: JetBrainsQuotaInfo)?
-        var latestRefill: JetBrainsRefillInfo?
-
+    static func latestEntry(inLogContent content: String) -> Entry? {
+        var quota: (timestamp: Date, info: JetBrainsQuotaInfo)?
+        var refill: JetBrainsRefillInfo?
+        var foundRefill = false
         for line in content.split(whereSeparator: \.isNewline).reversed() {
-            if latestQuota == nil, let parsed = self.parseQuotaLine(String(line)) {
-                latestQuota = parsed
-            } else if latestRefill == nil, let parsed = self.parseRefillLine(String(line)) {
-                latestRefill = parsed
+            if line.contains(self.quotaMarker) {
+                // Unsupported latest states invalidate the log; never resurrect an older account's quota.
+                guard let parsed = self.parseQuotaLine(String(line)) else {
+                    if quota == nil { return nil }
+                    break
+                }
+                if quota == nil { quota = parsed }
+            } else if !foundRefill, line.contains(self.refillMarker) {
+                foundRefill = true
+                refill = self.parseRefillLine(String(line))
             }
-            if latestQuota != nil, latestRefill != nil { break }
+            if quota != nil, foundRefill { break }
         }
-
-        guard let latestQuota else { return nil }
-        return Entry(timestamp: latestQuota.timestamp, quotaInfo: latestQuota.info, refillInfo: latestRefill)
+        guard let quota else { return nil }
+        return Entry(timestamp: quota.timestamp, quotaInfo: quota.info, refillInfo: refill)
     }
 
-    // MARK: - Line parsing
+    private static let number = #"([0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)"#
+    private static let details = #"QuotaDetails\(current=\#(number), maximum=\#(number), available=\#(number)\)"#
+    private static let quotaRegex = try? NSRegularExpression(pattern:
+        #"^Available\(current=\#(number), maximum=\#(number), until=([^,)\s]+), "#
+            + #"tariffQuota=\#(details)(?:, topUpQuota=\#(details))?\)$"#)
+    private static let refillRegex = try? NSRegularExpression(pattern:
+        #"^Known\(next=([^,)\s]+), tariff=QuotaRefillInfoTariff\(amount=\#(number), duration=([^,)\s]+)\)\)$"#)
 
-    /// `2026-10-05 15:27:49,811 [8326] INFO - #c.i.m.l.c.q.QuotaManager2Impl - New quota state is:
-    /// Available(current=346495.294, maximum=6489986.397, until=2028-09-22T21:00:00Z,
-    /// tariffQuota=QuotaDetails(current=346495.294, maximum=1000000, available=653504.706), topUpQuota=...)`
     static func parseQuotaLine(_ line: String) -> (timestamp: Date, info: JetBrainsQuotaInfo)? {
-        guard let markerRange = line.range(of: self.quotaMarker),
-              let timestamp = self.parseTimestamp(line)
+        guard let record = self.record(in: line, marker: self.quotaMarker),
+              let fields = self.captures(self.quotaRegex, in: record.state),
+              let until = ISO8601DateParser.parse(fields[2])
         else { return nil }
-
-        let state = String(line[markerRange.upperBound...])
-        let type = state.prefix { $0 != "(" }.trimmingCharacters(in: .whitespaces)
-        guard !type.isEmpty else { return nil }
-
-        let tariff = self.captures(
-            #"tariffQuota=QuotaDetails\(current=([0-9.]+), maximum=([0-9.]+), available=([0-9.]+)\)"#,
-            in: state)
-        let overall = self.captures(#"^\w+\(current=([0-9.]+), maximum=([0-9.]+)"#, in: state)
-        // States without numbers (e.g. `Unknown` while the IDE is still loading) must not mask real quota.
-        guard tariff != nil || overall != nil else { return nil }
-        let until = self.captures(#"until=([^,)\s]+)"#, in: state)?.first.flatMap { ISO8601DateParser.parse($0) }
-
-        let used = (tariff?[0] ?? overall?[0]).flatMap { Double($0) } ?? 0
-        let maximum = (tariff?[1] ?? overall?[1]).flatMap { Double($0) } ?? 0
-        let available = tariff.flatMap { Double($0[2]) }
-
-        return (timestamp, JetBrainsQuotaInfo(
-            type: type,
-            used: used,
-            maximum: maximum,
-            available: available,
-            until: until))
+        let numericFields = fields.enumerated().filter { $0.offset != 2 }.map(\.element)
+        let values = numericFields.compactMap(Double.init)
+        guard values.count == numericFields.count, values.allSatisfy({ $0.isFinite && $0 >= 0 }), values[3] > 0 else {
+            return nil
+        }
+        return (record.timestamp, JetBrainsQuotaInfo(
+            type: "Available", used: values[2], maximum: values[3], available: values[4], until: until))
     }
 
-    /// `... New quota refill state is: Known(next=2026-10-11T17:00:30.231Z,
-    /// tariff=QuotaRefillInfoTariff(amount=1000000, duration=30d))`
     static func parseRefillLine(_ line: String) -> JetBrainsRefillInfo? {
-        guard let markerRange = line.range(of: self.refillMarker) else { return nil }
-        let state = String(line[markerRange.upperBound...])
-        let type = state.prefix { $0 != "(" }.trimmingCharacters(in: .whitespaces)
-        let next = self.captures(#"next=([^,)\s]+)"#, in: state)?.first.flatMap { ISO8601DateParser.parse($0) }
-        let amount = self.captures(#"amount=([0-9.]+)"#, in: state)?.first.flatMap { Double($0) }
-        let duration = self.captures(#"duration=([^,)\s]+)"#, in: state)?.first
-        return JetBrainsRefillInfo(type: type.isEmpty ? nil : type, next: next, amount: amount, duration: duration)
+        guard let record = self.record(in: line, marker: self.refillMarker),
+              let fields = self.captures(self.refillRegex, in: record.state),
+              let next = ISO8601DateParser.parse(fields[0]),
+              let amount = Double(fields[1]), amount.isFinite, amount >= 0
+        else { return nil }
+        return JetBrainsRefillInfo(type: "Known", next: next, amount: amount, duration: fields[2])
+    }
+
+    private static func record(in line: String, marker: String) -> (timestamp: Date, state: String)? {
+        let prefix = String(line.prefix(23))
+        guard let range = line.range(of: marker),
+              let timestamp = self.timestampFormatter.date(from: prefix),
+              self.timestampFormatter.string(from: timestamp) == prefix
+        else { return nil }
+        return (timestamp, String(line[range.upperBound...]))
     }
 
     private static let timestampFormatter: DateFormatter = {
@@ -112,29 +115,21 @@ public enum JetBrainsQuotaLogReader {
         return formatter
     }()
 
-    private static func parseTimestamp(_ line: String) -> Date? {
-        let prefix = String(line.prefix(23))
-        return self.timestampFormatter.date(from: prefix)
-    }
-
-    private static func captures(_ pattern: String, in text: String) -> [String]? {
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
-        else { return nil }
+    private static func captures(_ regex: NSRegularExpression?, in text: String) -> [String]? {
+        guard let match = regex?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
         return (1..<match.numberOfRanges).compactMap { index in
             Range(match.range(at: index), in: text).map { String(text[$0]) }
         }
     }
 
-    private static func readTail(atPath path: String) -> String? {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
-        defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return nil }
-        let offset = size > self.tailByteCount ? size - self.tailByteCount : 0
+    static func readTail(from handle: FileHandle, endOffset size: UInt64) -> String? {
+        let count = min(size, self.tailByteCount)
+        let offset = size - count
         guard (try? handle.seek(toOffset: offset)) != nil,
-              let data = try? handle.readToEnd()
+              let data = try? handle.read(upToCount: Int(count)), data.count == count,
+              data.last == UInt8(ascii: "\n")
         else { return nil }
-        // A mid-file offset can split a multi-byte character; start at the first complete line.
+        // The window can start in a UTF-8 sequence. An unfinished final line rejects the entire tail.
         let lines = offset > 0
             ? data.firstIndex(of: UInt8(ascii: "\n")).map { data[data.index(after: $0)...] } ?? Data()
             : data[...]

@@ -3,6 +3,49 @@ import Testing
 @testable import CodexBarCore
 
 struct JetBrainsStatusProbeTests {
+    @Test(arguments: [false, true])
+    func `auto-detect does not combine another IDE log with selected XML`(selectedHasLog: Bool) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let options = root.appendingPathComponent("DataGrip2026.2/options")
+        try FileManager.default.createDirectory(at: options, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let quotaPath = options.appendingPathComponent("AIAssistantQuotaManager2.xml")
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="{&quot;current&quot;:&quot;25&quot;,&quot;maximum&quot;:&quot;100&quot;}" />
+          <option name="nextRefill" value="{&quot;next&quot;:&quot;2026-11-01T00:00:00Z&quot;}" />
+        </component></application>
+        """
+        try Data(xml.utf8).write(to: quotaPath)
+        try FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: quotaPath.path)
+        let selected = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: options.deletingLastPathComponent().path,
+            quotaFilePath: quotaPath.path)
+        let other = JetBrainsIDEInfo(
+            name: "PhpStorm",
+            version: "2026.2",
+            basePath: root.appendingPathComponent("PhpStorm2026.2").path,
+            quotaFilePath: root.appendingPathComponent("PhpStorm2026.2/options/AIAssistantQuotaManager2.xml").path)
+        let entry = JetBrainsQuotaLogReader.Entry(
+            timestamp: Date(timeIntervalSince1970: 100),
+            quotaInfo: .init(type: "Available", used: 50, maximum: 100, available: 50, until: nil),
+            refillInfo: nil)
+        let otherEntry = JetBrainsQuotaLogReader.Entry(
+            timestamp: Date(timeIntervalSince1970: 200),
+            quotaInfo: .init(type: "Available", used: 90, maximum: 100, available: 10, until: nil),
+            refillInfo: .init(type: "Known", next: .distantFuture, amount: 100, duration: "30d"))
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { $0 ? [selected, other] : [selected] },
+            readLogEntry: { $0 == selected.basePath ? (selectedHasLog ? entry : nil) : otherEntry })
+        let snapshot = try await probe.fetch()
+        #expect(snapshot.detectedIDE == selected)
+        #expect(snapshot.quotaInfo.used == (selectedHasLog ? 50 : 25))
+        #expect(snapshot.refillInfo?.next == (selectedHasLog ? nil : ISO8601DateParser.parse("2026-11-01T00:00:00Z")))
+    }
+
     @Test
     func `parses quota XML with tariff quota`() throws {
         // Real-world format with tariffQuota containing available credits
@@ -445,5 +488,53 @@ struct JetBrainsStatusProbeTests {
         await #expect(throws: JetBrainsStatusProbeError.noIDEDetected) {
             _ = try await probe.fetch()
         }
+    }
+
+    @Test(arguments: [
+        ["current": "25000"],
+        ["maximum": "100000"],
+        ["current": "NaN", "maximum": "100000"],
+        ["current": "25000", "maximum": "invalid"],
+    ])
+    func `incomplete monthly quota falls back to one consistent total balance`(monthly: [String: String]) throws {
+        let quota: [String: Any] = [
+            "type": "Available",
+            "current": "50000",
+            "maximum": "200000",
+            "tariffQuota": monthly.merging(["available": "75000"]) { value, _ in value },
+        ]
+        let json = try JSONSerialization.data(withJSONObject: quota)
+        let encoded = try #require(String(bytes: json, encoding: .utf8))
+            .replacingOccurrences(of: "\"", with: "&quot;")
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="\(encoded)" />
+        </component></application>
+        """
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.quotaInfo.used == 50000)
+        #expect(snapshot.quotaInfo.maximum == 200_000)
+        #expect(snapshot.quotaInfo.available == 150_000)
+        #expect(snapshot.quotaInfo.usedPercent == 25)
+        #expect(snapshot.quotaInfo.remainingPercent == 75)
+    }
+
+    @Test
+    func `preserves flat refill fields ahead of nested tariff fields`() throws {
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="{&quot;current&quot;:&quot;0&quot;,&quot;maximum&quot;:&quot;100&quot;}" />
+          <option name="nextRefill"
+            value="{&quot;type&quot;:&quot;Known&quot;,&quot;amount&quot;:&quot;200&quot;,
+            &quot;duration&quot;:&quot;PT720H&quot;,&quot;tariff&quot;:{&quot;amount&quot;:&quot;100&quot;,
+            &quot;duration&quot;:&quot;PT24H&quot;}}" />
+        </component></application>
+        """
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.refillInfo?.type == "Known")
+        #expect(snapshot.refillInfo?.amount == 200)
+        #expect(snapshot.refillInfo?.duration == "PT720H")
     }
 }
