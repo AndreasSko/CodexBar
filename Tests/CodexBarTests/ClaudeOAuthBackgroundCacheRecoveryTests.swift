@@ -240,24 +240,11 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let environment = ["HOME": root.path, "CLAUDE_CONFIG_DIR": root.path]
 
-        ClaudeOAuthRefreshRecoveryStubURLProtocol.reset()
         let registered = URLProtocol.registerClass(ClaudeOAuthRefreshRecoveryStubURLProtocol.self)
         defer {
             URLProtocol.unregisterClass(ClaudeOAuthRefreshRecoveryStubURLProtocol.self)
-            ClaudeOAuthRefreshRecoveryStubURLProtocol.reset()
         }
         try #require(registered)
-        ClaudeOAuthRefreshRecoveryStubURLProtocol.handler = { request in
-            guard let url = request.url,
-                  let response = HTTPURLResponse(
-                      url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
-            else { throw URLError(.badServerResponse) }
-            return (response, Data("""
-            {"access_token":"synthetic-refreshed-token","refresh_token":"synthetic-rotated-refresh",
-            "expires_in":7200,"token_type":"Bearer"}
-            """.utf8))
-        }
-
         try await KeychainCacheStore.withServiceOverrideForTesting(service) {
             KeychainCacheStore.setTestStoreForTesting(true)
             defer { KeychainCacheStore.setTestStoreForTesting(false) }
@@ -514,17 +501,6 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
 }
 
 private final class ClaudeOAuthRefreshRecoveryStubURLProtocol: URLProtocol {
-    private static let state = State()
-
-    static var handler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))? {
-        get { Self.state.handler }
-        set { Self.state.handler = newValue }
-    }
-
-    static func reset() {
-        self.state.reset()
-    }
-
     override static func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "platform.claude.com" && request.url?.path == "/v1/oauth/token"
     }
@@ -534,42 +510,21 @@ private final class ClaudeOAuthRefreshRecoveryStubURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        guard let handler = Self.handler else {
+        guard let url = self.request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        else {
             self.client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
-        do {
-            let (response, data) = try handler(self.request)
-            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            self.client?.urlProtocol(self, didLoad: data)
-            self.client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            self.client?.urlProtocol(self, didFailWithError: error)
-        }
+        let data = Data("""
+        {"access_token":"synthetic-refreshed-token","refresh_token":"synthetic-rotated-refresh",
+        "expires_in":7200,"token_type":"Bearer"}
+        """.utf8)
+        self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        self.client?.urlProtocol(self, didLoad: data)
+        self.client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}
-
-    private final class State: @unchecked Sendable {
-        private let lock = NSLock()
-        private var storedHandler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?
-
-        var handler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))? {
-            get {
-                self.lock.lock()
-                defer { self.lock.unlock() }
-                return self.storedHandler
-            }
-            set {
-                self.lock.lock()
-                self.storedHandler = newValue
-                self.lock.unlock()
-            }
-        }
-
-        func reset() {
-            self.handler = nil
-        }
-    }
 }
 #endif
