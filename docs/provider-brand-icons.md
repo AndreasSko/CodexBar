@@ -81,6 +81,7 @@ The screenshot fixtures use synthetic usage data and an unrelated purple tint to
 brand tinting. Model aggregation and monochrome child icons retain the existing provider association;
 no model-to-vendor identity inference is added.
 
-For packaged application verification, use the [native proof launcher](screenshots/usage-spend-brand-icons/native/README.md).
-It opens the production settings window with isolated synthetic inputs and exercises app-bundle
-resource selection in both appearances. It does not run authenticated provider transports.
+The contributor's [historical packaged application proof](https://github.com/Yuxin-Qiao/CodexBar/blob/404b28c5b1021fccbd868286ec26fc52349c9d16/docs/screenshots/usage-spend-brand-icons/native/README.md)
+records the production settings window with synthetic inputs. The maintained regression path is the
+component rendering suite above; no temporary application-entrypoint overlay is shipped here.
+Menu and widget accent overrides continue to follow the existing palette policy.
