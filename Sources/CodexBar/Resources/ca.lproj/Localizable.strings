@@ -1654,3 +1654,13 @@
 "Browser profile" = "Perfil del navegador";
 "Unavailable profile: %@" = "Perfil no disponible: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Llegeix només el perfil de %@ seleccionat. Els comptes no se seleccionen mai automàticament.";
+
+// Spend chart navigation and inspection
+"Previous day" = "Dia anterior";
+"Next day" = "Dia següent";
+"Click to isolate a source. Click again to show all." = "Fes clic per aïllar una font. Torna a fer clic per mostrar-les totes.";
+"Recorded hourly spend" = "Despesa horària registrada";
+"Highest spend" = "Despesa màxima";
+"Models for this day" = "Models per aquest dia";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Fes clic en una barra per explorar. Consulta els imports exactes al menú inferior.";

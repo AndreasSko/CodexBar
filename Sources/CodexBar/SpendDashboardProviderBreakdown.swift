@@ -145,7 +145,7 @@ struct SpendProviderBreakdownRows: View {
     private func providerGroup(_ breakdown: SpendProviderBreakdown) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                SpendProviderIcon(provider: breakdown.provider, size: 22)
+                SpendProviderIcon(provider: breakdown.provider)
                 Text(breakdown.displayName)
                     .font(.headline)
                 Spacer()
@@ -172,7 +172,7 @@ struct SpendProviderBreakdownRows: View {
                         self.childDivider
                     }
                     HStack(spacing: 9) {
-                        SpendProviderIcon(provider: row.provider, sourceKind: row.sourceKind, size: 16)
+                        SpendProviderIcon(provider: row.provider, sourceKind: row.sourceKind)
                             .opacity(0.76)
                         Text(row.displayName)
                             .lineLimit(1)
@@ -203,7 +203,7 @@ struct SpendProviderBreakdownRows: View {
                         self.childDivider
                     }
                     HStack(spacing: 9) {
-                        SpendProviderIcon(provider: row.provider, size: 16)
+                        SpendProviderIcon(provider: row.provider)
                             .opacity(0.76)
                         Text(row.modelName)
                             .foregroundStyle(.secondary)
@@ -282,20 +282,32 @@ struct SpendProviderBreakdownRows: View {
 struct SpendProviderIcon: View {
     let provider: UsageProvider
     var sourceKind: SpendDashboardModel.SourceKind = .native
-    var size: CGFloat = 20
+    var style: ProviderBrandIcon.Style = .monochrome
+    private static let size: CGFloat = 16
 
     var body: some View {
         Group {
             if self.sourceKind == .openCodex {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.body.weight(.semibold))
-            } else if let icon = ProviderBrandIcon.image(for: self.provider) {
-                Image(nsImage: icon).resizable().scaledToFit()
+            } else if let icon = ProviderBrandIcon.image(for: self.provider, style: self.style) {
+                Image(nsImage: icon)
+                    .renderingMode(icon.isTemplate ? .template : .original)
+                    .resizable().scaledToFit()
+                    .frame(
+                        width: Self.size * self.artworkScale(for: icon),
+                        height: Self.size * self.artworkScale(for: icon))
             } else {
                 Image(systemName: "circle.dotted")
             }
         }
-        .frame(width: self.size, height: self.size)
+        .frame(width: Self.size, height: Self.size)
         .accessibilityHidden(true)
+    }
+
+    private func artworkScale(for icon: NSImage) -> CGFloat {
+        // Provider-specific by design: Antigravity's official PNG needs a 1.1 scale to compensate
+        // for transparent padding and match visible artwork in the shared 16-point slot.
+        self.provider == .antigravity && !icon.isTemplate ? 1.1 : 1
     }
 }

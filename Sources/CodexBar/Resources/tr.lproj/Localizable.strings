@@ -1654,3 +1654,13 @@
 "Browser profile" = "Tarayıcı profili";
 "Unavailable profile: %@" = "Profil kullanılamıyor: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Yalnızca seçilen %@ profilini oku. Hesaplar asla otomatik seçilmez.";
+
+// Spend chart navigation and inspection
+"Previous day" = "Önceki gün";
+"Next day" = "Sonraki gün";
+"Click to isolate a source. Click again to show all." = "Tek kaynağı görmek için tıklayın. Tümünü görmek için tekrar tıklayın.";
+"Recorded hourly spend" = "Kaydedilen saatlik harcama";
+"Highest spend" = "En yüksek harcama";
+"Models for this day" = "Bu günün modelleri";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Ayrıntılar için bir çubuğa tıklayın. Kesin tutarlar için aşağıdaki menüyü kullanın.";

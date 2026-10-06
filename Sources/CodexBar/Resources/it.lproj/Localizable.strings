@@ -1655,3 +1655,13 @@
 "Browser profile" = "Profilo del browser";
 "Unavailable profile: %@" = "Profilo non disponibile: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Leggi solo il profilo %@ selezionato. Gli account non vengono mai selezionati automaticamente.";
+
+// Spend chart navigation and inspection
+"Previous day" = "Giorno precedente";
+"Next day" = "Giorno successivo";
+"Click to isolate a source. Click again to show all." = "Fai clic per isolare una fonte. Fai clic di nuovo per mostrarle tutte.";
+"Recorded hourly spend" = "Spesa oraria registrata";
+"Highest spend" = "Spesa massima";
+"Models for this day" = "Modelli di questo giorno";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Fai clic su una barra per esplorare. Il menu sotto mostra gli importi esatti.";
