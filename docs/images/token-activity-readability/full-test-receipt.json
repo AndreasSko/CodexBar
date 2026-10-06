@@ -1,0 +1,15 @@
+{
+  "testedCommit": "47479f3a0eaf82ffb0081a4fa41dbdc36dc1abe4",
+  "entrypoint": "make test",
+  "exitCode": 0,
+  "selectedGroups": 143,
+  "firstPassSuccessfulGroups": 142,
+  "firstPassFailedGroups": 1,
+  "recoveredGroups": 1,
+  "timedOutGroups": 1,
+  "isolatedSelectionRetries": 12,
+  "performanceBudgetMilliseconds": 50,
+  "performanceBudgetPassed": true,
+  "allActivityAndLocalizationGroupsPassed": true,
+  "fullSourceRunSeconds": 2555.1
+}
