@@ -48,6 +48,9 @@ sessions, Codex projects, and a 365-day token heatmap. A heatmap day with no cov
 and is not clickable. Custom list-price overlays are documented in `docs/model-pricing.md`.
 Cached and combined reports retain token-class details and known request counts. Coverage is combined from each
 source's existing classification, so a priced source cannot hide another source's unpriced or unmetered rows.
+The daily ledger retains known request counts when another source cannot count requests and marks that subtotal
+with `≥`. If every source omits its request count, the ledger shows a dash. Request-count gaps do not make known
+token or cost totals partial, and partial cost estimates do not erase known request counts.
 If coverage totals cannot fit, aggregation falls back to existing request or daily-row inference without changing costs or stored data.
 Token sums that exceed the supported integer range remain unavailable for that aggregation pass; later rows do not
 restore a partial count. Other token classes, pricing, and explicit totals retain their existing meaning. Materialized
