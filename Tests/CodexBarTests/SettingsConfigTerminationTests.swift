@@ -111,6 +111,8 @@ struct SettingsConfigTerminationTests {
                 .applicationShouldTerminate?(NSApplication.shared) ?? .terminateNow
             let second = (delegate as NSApplicationDelegate)
                 .applicationShouldTerminate?(NSApplication.shared) ?? .terminateNow
+            #expect(!fileManager.writerFinishedWaiting)
+            #expect(replies == 0)
             fileManager.releaseWriter()
             try #require(first == .terminateLater)
             #expect(second == .terminateLater)
@@ -220,12 +222,10 @@ struct SettingsConfigTerminationTests {
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(3)
-        while !condition(), ContinuousClock.now < deadline {
+        while !condition() {
             self.deliverTerminationReplies()
             try await Task.sleep(for: .milliseconds(10))
         }
-        try #require(condition())
     }
 }
 
@@ -234,13 +234,21 @@ private final class PausingConfigFileManager: FileManager {
     private let resumeWriter = DispatchSemaphore(value: 0)
     private var pauseRequested = false
     private var paused = false
+    private var finishedWaiting = false
 
     var writerIsPaused: Bool {
         self.lock.withLock { self.paused }
     }
 
+    var writerFinishedWaiting: Bool {
+        self.lock.withLock { self.finishedWaiting }
+    }
+
     func pauseNextWrite() {
-        self.lock.withLock { self.pauseRequested = true }
+        self.lock.withLock {
+            self.pauseRequested = true
+            self.finishedWaiting = false
+        }
     }
 
     func releaseWriter() {
@@ -266,9 +274,8 @@ private final class PausingConfigFileManager: FileManager {
             return true
         }
         if shouldPause {
-            guard self.resumeWriter.wait(timeout: .now() + 5) == .success else {
-                throw CocoaError(.fileWriteUnknown)
-            }
+            self.resumeWriter.wait()
+            self.lock.withLock { self.finishedWaiting = true }
         }
         try super.createDirectory(at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
     }

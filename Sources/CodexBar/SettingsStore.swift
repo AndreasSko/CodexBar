@@ -253,7 +253,7 @@ final class SettingsStore {
     @ObservationIgnored let keychainAccessPolicy: SettingsStoreKeychainAccessPolicy
     @ObservationIgnored var config: CodexBarConfig
     @ObservationIgnored var configPersistTask: Task<Void, Never>?
-    @ObservationIgnored var configPersistWriteTask: Task<(any Error)?, Never>?
+    @ObservationIgnored var configPersistWriteTask: Task<Void, Never>?
     @ObservationIgnored var configFileWatcher: ConfigFileWatcher?
     @ObservationIgnored var configLoading = false
     @ObservationIgnored var cachedCodexAccountReconciliationSnapshot:

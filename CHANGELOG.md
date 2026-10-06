@@ -1,19 +1,87 @@
 # Changelog
 
-## 0.71.1 — Unreleased
+## 0.72.1 — Unreleased
+
+### Added
+
+- CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
+- Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
+- Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
+- Codex: list managed accounts and explicitly promote one from the macOS CLI, preserving displaced credentials with shared app/CLI locking, private atomic writes, and rejection of changed auth or managed-home destinations (#3191, #4234). Thanks @Yuxin-Qiao!
+
+- Dashboard: expose managed Codex accounts with saved usage, stable IDs, independent errors, and shared identity redaction in one-shot JSON and HTTP schema-v1 snapshots (#4184). Thanks @niteshmanav!
+
+### Changed
+
+- Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
+- Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
+- Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
+- Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
 ### Fixed
 
-- Grok: skip session artifact trees during local usage scans and exclude nested signal files from token totals (#4209, #4208). Thanks @alexander-schneider!
+- Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
+
+## 0.72.0 — 2026-10-04
+
+### Highlights
+
+- New providers and balances: WorkBuddy (Tencent) joins as provider #90 with its monthly credits allowance; Claude shows promotional cloud-session credits separately from prepaid credits; LithosAI puts its prepaid balance in the menu bar; Grok exports purchased credits in `usage --json`.
+- Antigravity works again on 2.19.1: Login with Google no longer fails with `invalid_client` (discovery now pairs each OAuth client id with its own secret), and additional Gemini profile homes can be combined into one local token/cost history.
+- Sign-in and cookies: explicit refreshes can prompt for Keychain access again for every plugin cookie provider, the CLI explains rejected sessions instead of "missing cookie", SweetCookieKit 0.5.5 adds Aside, Opera and Opera Neon, and Muse imports from every supported browser.
+- Lighter on CPU: the hidden "Surprise me" blink timer no longer burns 6–10% of a core in brand-icon mode.
+- Codex accounting: resumed sessions no longer zero out today's usage after a counter reset, local-history catch-up publishes today's tokens before sleeping, saved limit-reset credits appear in Claude OAuth usage, and Usage & Spend separates independent Codex chats from projects.
+- Linux: Claude web usage works with a manual session cookie.
+
+### Added
+
+- Claude: allow the claude.ai web source on Linux when a manual `sessionKey` cookie is configured; browser cookie import remains macOS-only (#4241). Thanks @5p00kyy!
+- Grok: export purchased Extra Usage Credits as a separate USD balance in usage JSON, preserving zero balances and included quotas (#4239, #4243). Thanks @Yuxin-Qiao and @djbclark!
+- LithosAI: show the prepaid balance beside the menu bar icon and in Balance layouts, including merged mode and zero, negative, and sub-cent amounts (#4230). Thanks @apoorvdarshan!
+- Claude: show promotional cloud-session credits separately from prepaid credits in menus, settings, and CLI output, including exhausted, expired, and unavailable states (#4194, #4214). Thanks @dstier-git!
+- Antigravity: opt in to additional Gemini profile homes in provider settings or config.json to combine local token/cost history without double-counting copied conversations (#4177). Thanks @keeuu!
+- WorkBuddy: show the monthly credits allowance, plan name, and cycle reset from the www.workbuddy.cn billing API using Chrome or manual session cookies (#4226, #4227). Thanks @sudoHG!
+
+### Fixed
+
+- Browser cookies: distinguish rejected sessions, permission failures, and provider outages in CLI refresh guidance without exposing cookie values (#4245). Thanks @sudoHG!
+- Claude: include saved limit-reset credits in OAuth usage while preserving quota and spending when the optional inventory query is rejected (#3895, #4232). Thanks @Yuxin-Qiao!
+- Antigravity: discover matching Google OAuth client credentials from Antigravity 2.19.1 and explain how to recover when Google rejects the client (#4229). Thanks @mvicari!
+- Usage & Spend: hide empty Antigravity unknown-model rows while preserving request counts, token totals, and complete coverage (#4246). Thanks @urda!
+- Codex: recover resumed-session usage after counter resets using owned request records, without double-counting legacy mirrors or copied child history; preserve saved prices through bounded cache upgrades (#3303, #4195). Thanks @Yuxin-Qiao!
+- Browser cookies: let explicit refreshes retry Keychain permission across plugin providers, explain suppressed imports, and recognize successful nonpersistent sessions (#4231). Thanks @apoorvdarshan!
+- Codex: continue bounded local-history discovery before sleeping so validated current-day tokens can publish promptly during catch-up, while preserving power limits and complete-window checks (#3508). Thanks @kernnel!
+- Browser cookies: adopt SweetCookieKit 0.5.5 for Aside, Opera, and Opera Neon support, including Cursor account switching, and let Muse (muse.ai) automatically import from the full supported browser catalog (#4215, #2429). Thanks @mvicari!
+- Muse Code: keep the selected dev.meta.ai browser team quota working when the session's `/api/auth/me` email is blank, by matching the session user to the login email in the team member list (#4228). Thanks @enieuwy!
+- Menu bar: fix recurring high CPU usage in brand icon mode by stopping hidden Surprise me animations while preserving critter fallback blinking and the saved preference (#4244). Thanks @lg!
+- Claude: restore the credential cache after a rejected write using an unexpired, consented in-memory credential even after 30 minutes, while preserving profile, invalidation, and prompt-policy checks (#3395, #4242). Thanks @Yuxin-Qiao!
+- Usage & Spend: separate explicitly marked independent Codex chats from projects, use saved chat titles, and hide titles and paths in privacy mode; retain project grouping when ownership is uncertain (#4247). Thanks @Yuxin-Qiao!
+
+## 0.71.1 — 2026-10-03
+
+### Highlights
+
+- Lighter cost tracking: unchanged Codex refreshes reuse the decoded local history instead of decoding the whole cache, empty session histories stop being rewritten on every pass, Claude keeps parsed transcript windows across pricing changes, and Grok scans no longer walk session artifact trees.
+- Codex weekly quota recovers after a reset: when the previous snapshot had no credit inventory, the fresh quota, reset credits, and update time are published instead of "1% left" lingering for hours.
+- Clearer cookie sign-in: every browser-cookie provider now names the browsers automatic import supports and offers Manual for the rest, instead of saying "Chrome" regardless.
+- Steadier cards: the Cursor card shows Grok Bot's weekly pace again, provider status can no longer be overwritten by a late response from an older refresh, long statistics headings wrap instead of truncating, and widgets follow the menu accent for the providers whose widget color was pinned by accident.
+- Spend dashboard keeps projects with the same folder name apart and shows saved Codex project names, so renaming a project no longer splits its totals.
+
+### Fixed
+
 - Codex: refresh weekly quota, reset credits, and update time after a confirmed reset when the previous snapshot lacks credit inventory (#4210).
-- Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
-- Widgets: use current menu accents for Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, Cursor, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice while preserving intentionally distinct widget colors (#4199). Thanks @raulgg!
-- Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!
-- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
-- Codex: avoid repeatedly rewriting empty session histories during local cost refreshes (#4201, #4203). Thanks @Yuxin-Qiao!
 - Codex: reuse decoded local cost history across unchanged refreshes, including priority-cursor updates (#4200, #4205). Thanks @Yuxin-Qiao!
+- Codex: avoid repeatedly rewriting empty session histories during local cost refreshes (#4201, #4203). Thanks @Yuxin-Qiao!
 - Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!
 - Pi: recognize OMP one-hour cache-write counters and reprice older cached estimates without double-counting tokens (#4121, #4176). Thanks @vincent-peng!
+- Grok: skip session artifact trees during local usage scans and exclude nested signal files from token totals (#4209, #4208). Thanks @alexander-schneider!
+- Usage & Spend: keep same-named project directories separate and show saved Codex project names on fresh and cached loads, preserving totals across renames and hiding paths with personal information (#4172). Thanks @Yuxin-Qiao!
+- Cursor: restore Grok Bot weekly pace and reserve when the reported period starts mid-week (#4221, #4222). Thanks @dimpurr!
+- Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
+- Widgets: use current menu accents for Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, Cursor, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice while preserving intentionally distinct widget colors (#4199). Thanks @raulgg!
+- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
+- Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!
+- Browser cookies: name each plugin provider's supported automatic browsers in settings and cookie sign-in guidance, with Manual as the alternative for other browsers (#4215).
 
 ## 0.71.0 — 2026-10-02
 

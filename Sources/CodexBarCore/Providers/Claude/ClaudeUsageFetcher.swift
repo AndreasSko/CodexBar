@@ -19,6 +19,7 @@ public struct ClaudeUsageSnapshot: Sendable {
     public let extraRateWindows: [NamedRateWindow]
     public let providerCost: ProviderCostSnapshot?
     public let resetCredits: ClaudeRateLimitResetCreditsSnapshot?
+    public let cloudCredits: ClaudeCloudCreditsSnapshot?
     public let updatedAt: Date
     public let accountEmail: String?
     public let accountOrganization: String?
@@ -47,6 +48,7 @@ public struct ClaudeUsageSnapshot: Sendable {
         extraRateWindows: [NamedRateWindow] = [],
         providerCost: ProviderCostSnapshot? = nil,
         resetCredits: ClaudeRateLimitResetCreditsSnapshot? = nil,
+        cloudCredits: ClaudeCloudCreditsSnapshot? = nil,
         updatedAt: Date,
         accountEmail: String?,
         accountOrganization: String?,
@@ -67,6 +69,7 @@ public struct ClaudeUsageSnapshot: Sendable {
         self.extraRateWindows = extraRateWindows
         self.providerCost = providerCost
         self.resetCredits = resetCredits
+        self.cloudCredits = cloudCredits
         self.updatedAt = updatedAt
         self.accountEmail = accountEmail
         self.accountOrganization = accountOrganization
@@ -1047,27 +1050,8 @@ extension ClaudeUsageFetcher {
             loginMethod: loginMethod,
             treatAsSpendLimit: treatAsSpendLimit)
 
-        guard let primary else {
-            if let spendLimit = Self.oauthSpendLimitWindow(from: providerCost, extraUsage: usage.extraUsage) {
-                return ClaudeUsageSnapshot(
-                    primary: spendLimit,
-                    primaryWindowKind: .spendLimit,
-                    secondary: nil,
-                    opus: nil,
-                    extraRateWindows: Self.oauthExtraRateWindows(from: usage),
-                    providerCost: providerCost,
-                    updatedAt: Date(),
-                    accountEmail: nil,
-                    accountOrganization: nil,
-                    loginMethod: loginMethod,
-                    rawText: nil,
-                    oauthKeychainPersistentRefHash: oauthKeychainPersistentRefHash,
-                    oauthHistoryOwnerIdentifier: oauthHistoryOwnerIdentifier,
-                    oauthCredentialOwner: oauthCredentialOwner,
-                    oauthKeychainCredentialMismatch: oauthKeychainCredentialMismatch,
-                    oauthKeychainCredentialAbsent: oauthKeychainCredentialAbsent,
-                    oauthKeychainCredentialUnavailable: oauthKeychainCredentialUnavailable)
-            }
+        guard let primary = primary ?? Self.oauthSpendLimitWindow(from: providerCost, extraUsage: usage.extraUsage)
+        else {
             throw ClaudeUsageError.parseFailed("missing session data")
         }
 
@@ -1077,13 +1061,17 @@ extension ClaudeUsageFetcher {
             windowMinutes: 7 * 24 * 60)
         let extraRateWindows = Self.oauthExtraRateWindows(from: usage)
 
+        let updatedAt = Date()
         return ClaudeUsageSnapshot(
             primary: primary,
+            primaryWindowKind: treatAsSpendLimit ? .spendLimit : .usage,
             secondary: weekly,
             opus: modelSpecific,
             extraRateWindows: extraRateWindows,
             providerCost: providerCost,
-            updatedAt: Date(),
+            resetCredits: usage.resetStatus?.snapshot(updatedAt: updatedAt),
+            cloudCredits: usage.cloudCredits,
+            updatedAt: updatedAt,
             accountEmail: nil,
             accountOrganization: nil,
             loginMethod: loginMethod,
@@ -1108,13 +1096,10 @@ extension ClaudeUsageFetcher {
         let currency = extra.currency?.trimmingCharacters(in: .whitespacesAndNewlines)
         let code = (currency?.isEmpty ?? true) ? "USD" : currency!
         let isSpendLimit = treatAsSpendLimit || ClaudePlan.fromCompatibilityLoginMethod(loginMethod) == .enterprise
-        let normalized = Self.normalizeClaudeExtraUsageAmounts(
-            used: used,
-            limit: limit,
-            treatAsMajorUnits: false)
+        // OAuth extra usage is always in cents, including Enterprise spend-only responses.
         return ProviderCostSnapshot(
-            used: normalized.used,
-            limit: normalized.limit,
+            used: used / 100,
+            limit: limit / 100,
             currencyCode: code,
             period: isSpendLimit ? "Spend limit" : "Monthly cap",
             resetsAt: nil,
@@ -1136,21 +1121,6 @@ extension ClaudeUsageFetcher {
             windowMinutes: nil,
             resetsAt: providerCost.resetsAt,
             resetDescription: "\(providerCost.period ?? "Spend limit"): \(used) / \(limit)")
-    }
-
-    private static func normalizeClaudeExtraUsageAmounts(
-        used: Double,
-        limit: Double,
-        treatAsMajorUnits: Bool) -> (used: Double, limit: Double)
-    {
-        if treatAsMajorUnits {
-            return (used: used, limit: limit)
-        }
-
-        // Claude's OAuth API returns values in cents (minor units), same as the Web API.
-        // Always convert to dollars (major units) for display consistency.
-        // See: ClaudeWebAPIFetcher.swift which always divides by 100.
-        return (used: used / 100.0, limit: limit / 100.0)
     }
 
     private static func oauthExtraRateWindows(from usage: OAuthUsageResponse) -> [NamedRateWindow] {
@@ -1257,6 +1227,7 @@ extension ClaudeUsageFetcher {
             extraRateWindows: webData.extraRateWindows,
             providerCost: webData.extraUsageCost,
             resetCredits: webData.resetCredits,
+            cloudCredits: webData.cloudCredits,
             updatedAt: Date(),
             accountEmail: webData.accountEmail,
             accountOrganization: webData.accountOrganization,

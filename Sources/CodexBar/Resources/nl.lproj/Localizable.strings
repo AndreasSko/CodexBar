@@ -100,6 +100,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Gemiddeld (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Vermijd sleutelhangerprompts";
 "Balance" = "Saldo";
+"Cloud credits" = "Cloudtegoed";
+"Expired" = "Verlopen";
 "Battery Saver" = "Batterijbesparing";
 "Bordered" = "Omzoomd";
 "Build" = "Bouwen";
@@ -850,7 +852,6 @@
 "No local data found" = "Geen lokale gegevens gevonden";
 "Credits unavailable; keep Codex running to refresh." = "Tegoeden niet beschikbaar; laat Codex draaien om te vernieuwen.";
 "No available fetch strategy for minimax." = "Geen beschikbare ophaalstrategie voor minimax.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "Geen Cursorsessie gevonden. Meld u aan bij cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX of Edge Canary. Als u Safari gebruikt, verleen CodexBar volledige schijftoegang in Systeeminstellingen ▸ Privacy en beveiliging. U kunt zich ook aanmelden bij Cursor via het CodexBar-menu (Account toevoegen/wisselen).";
 "No OpenCode session cookies found in browsers." = "Er zijn geen OpenCode-sessiecookies gevonden in browsers.";
 "No available fetch strategy for %@." = "Geen beschikbare ophaalstrategie voor %@.";
 "Today" = "Vandaag";
@@ -1552,6 +1553,10 @@
 "Cache write" = "Cache write";
 "Reasoning" = "Reasoning";
 "Sessions" = "Sessions";
+
+"Independent chat" = "Onafhankelijke chat";
+"Independent chats" = "Onafhankelijke chats";
+"Chat %d" = "Chat %d";
 "Projects" = "Projects";
 "Plan metered" = "Plan metered";
 "List-price equivalent" = "List-price equivalent";
@@ -1629,7 +1634,20 @@
 "account_widgets_title" = "Accounts voor widgets actueel houden";
 "account_widgets_description" = "Kies een account in elke Account Usage-widget. Werkt maximaal zes accounts per aanbieder bij.";
 
+/* Spend time zone */
+"Statistics time zone" = "Tijdzone voor statistieken";
+"Use Mac's current time zone" = "Huidige tijdzone van de Mac gebruiken";
+"Daily usage uses a fixed time zone. Changing it may move usage to a different day." = "Dagelijks gebruik wordt ingedeeld volgens een vaste tijdzone. Een wijziging kan gebruik naar een andere dag verschuiven.";
+
 /* Antigravity local cost estimates */
 "antigravity_cost_estimate_hint" = "Lokaal gebruik × publieke API-prijzen · geen Antigravity-kosten of -tegoeden";
 "antigravity_quota_window_note" = "Vensterkosten omvatten alle modellen · getoond venster is de meest beperkte familie";
 "antigravity_no_priced_token_history" = "Geen geprijsde Antigravity-tokengeschiedenis beschikbaar.";
+"Supported browsers: %@. Use Manual for other browsers." = "Ondersteunde browsers: %@. Gebruik Handmatig voor andere browsers.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Plak de Cookie-header van een Chrome-verzoek aan www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Gereserveerd";
+
+/* Selected browser profile */
+"Browser profile" = "Browserprofiel";
+"Unavailable profile: %@" = "Profiel niet beschikbaar: %@";
+"Read only the selected %@ profile. Accounts are never selected automatically." = "Lees alleen het geselecteerde %@-profiel. Accounts worden nooit automatisch geselecteerd.";

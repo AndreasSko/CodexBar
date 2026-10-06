@@ -12,6 +12,7 @@ The app's **Help → CodexBar Help** command opens the [README](https://github.c
 
 The app and CLI share one JSON file for API keys, manual cookie headers, source selection, provider ordering, and token accounts. The running app detects external edits, atomic replacements, and restored older contents, including during watcher startup and change callbacks. App writes update the baseline without being treated as external edits.
 Keychain holds runtime cookie caches, browser Safe Storage access, and provider OAuth/device-flow credentials where required.
+App settings writes are coalesced. Normal quit finishes any pending configuration write in the background before exiting, including an edit made just before quitting. A failed final write is logged and does not prevent quitting.
 
 ## Location
 - `CODEXBAR_CONFIG=/path/to/config.json` when set.
@@ -319,6 +320,10 @@ iCloud projection syncs onward; reset notifications, the additional menu setting
 unless explicitly exported and imported. Import does not modify `config.json` or iCloud's remote-update suppression.
 
 ### Menu bar controls
+
+**Surprise me** is disabled while brand icons are selected, and static brand layouts do not run the blink timer.
+Your animation preference is kept for switching back to critters. If a brand image is unavailable and the legacy
+layout falls back to a critter, that visible critter can still animate; stored layouts remain static.
 
 In **Settings → Menu Bar**, inactive combined-icon controls use dimmed labels. Their titles and explanations remain readable and available to VoiceOver; label styling follows each control's enabled state, including stacked-icon restrictions. The layout size and gap controls remain independent of Merge Icons.
 

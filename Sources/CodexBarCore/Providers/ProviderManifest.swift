@@ -34,6 +34,7 @@ public enum ProviderManifest {
         MoonshotProviderDescriptor.descriptor,
         AmpProviderDescriptor.descriptor,
         T3ChatProviderDescriptor.descriptor,
+        LangdockProviderDescriptor.descriptor,
         OllamaProviderDescriptor.descriptor,
         SyntheticProviderDescriptor.descriptor,
         OpenRouterProviderDescriptor.descriptor,
@@ -94,5 +95,6 @@ public enum ProviderManifest {
         XKiroProviderDescriptor.descriptor,
         MuseAIProviderDescriptor.descriptor,
         LithosAIProviderDescriptor.descriptor,
+        WorkBuddyProviderDescriptor.descriptor,
     ]
 }
