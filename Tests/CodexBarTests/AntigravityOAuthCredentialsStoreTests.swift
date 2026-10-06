@@ -33,17 +33,32 @@ struct AntigravityOAuthCredentialsStoreTests {
         #expect(AntigravityOAuthConfig.discoverClientFromInstalledApp(applicationRoots: [root]) == client)
     }
 
-    @Test(arguments: [false, true])
-    func `oauth discovery prefers the consumer client that agy signs in with`(intel: Bool) {
+    @Test(arguments: [false, true], [false, true])
+    func `oauth discovery prefers the consumer client that agy signs in with`(intel: Bool, consumerFirst: Bool) {
         let other = AntigravityOAuthClient(
             clientID: self.googleClientID("hub"),
             clientSecret: self.googleClientSecret(repeating: "a"))
         let consumer = AntigravityOAuthClient(
             clientID: AntigravityOAuthConfig.consumerClientID,
             clientSecret: self.googleClientSecret(repeating: "b"))
-        let data = self.binaryFixture(clients: [other, consumer], intel: intel)
+        let data = self.binaryFixture(
+            clients: consumerFirst ? [consumer, other] : [other, consumer], intel: intel, reverseSecrets: true)
 
         #expect(AntigravityOAuthConfig.parseClient(fromInstalledArtifactData: data) == consumer)
+    }
+
+    @Test(arguments: ["expiry_date", "expiresAt"], ["1700000000000", "1700000000000.5", "null"])
+    func `credential expiry accepts integer fractional and absent JSON numbers`(key: String, value: String) throws {
+        let data = Data("{\"\(key)\":\(value)}".utf8)
+        let credentials = try JSONDecoder().decode(AntigravityOAuthCredentials.self, from: data)
+        #expect(credentials.expiryDateMilliseconds == Double(value))
+    }
+
+    @Test(arguments: [nil, "invalid", "header.e30.signature", "header.%%%!.signature"])
+    func `missing or malformed id token claims retain the stored email`(token: String?) {
+        let credentials = AntigravityOAuthCredentials(
+            accessToken: nil, refreshToken: nil, expiryDate: nil, idToken: token, email: " User@example.com \n")
+        #expect(credentials.resolvedAccountEmail == "User@example.com")
     }
 
     @Test
