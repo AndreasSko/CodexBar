@@ -10,10 +10,12 @@ Chart legends and amount inspectors request `ProviderBrandIcon.Style.brand`. Bra
 their original colors; a separate account color swatch matches the chart. Existing callers retain
 the default adaptive monochrome style. OpenCodex sources retain their branch symbol.
 
-All Usage & Spend provider icons share a fixed 16-point square slot, including chart legends,
+All Usage & Spend provider icons share a fixed 20-point square slot, including chart legends,
 amount inspectors, provider headings, account/source rows and subscription summaries. Callers cannot
-override the size. Antigravity's original artwork uses a 1.1 display scale to compensate for its
-additional transparent padding; source image bytes and aspect ratios remain unchanged. Both chart
+override the size. Codex, Antigravity and Cursor's artwork use display scales of 1.22, 1.38 and 1.25 to
+compensate for their transparent padding, giving each approximately 20-point visible artwork;
+the monochrome Codex and Antigravity SVGs use scales of 1.24 and 1.14 for the same reason.
+Source image bytes and aspect ratios remain unchanged. Both chart
 locations use the same 8-point account swatch.
 
 Brand and monochrome images have independent cache entries. Curated assets are keyed by product

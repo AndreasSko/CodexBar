@@ -235,7 +235,7 @@ struct SpendProviderBreakdownRows: View {
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .padding(.leading, 59)
+                    .padding(.leading, 63)
                     .padding(.top, 5)
                 }
             } else if breakdown.hasPartialModelHistory {
@@ -252,7 +252,7 @@ struct SpendProviderBreakdownRows: View {
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 59)
+                .padding(.leading, 63)
                 .padding(.vertical, 6)
         }
     }
@@ -275,7 +275,7 @@ struct SpendProviderBreakdownRows: View {
 
     private var childDivider: some View {
         Divider()
-            .padding(.leading, 59)
+            .padding(.leading, 63)
     }
 }
 
@@ -283,13 +283,13 @@ struct SpendProviderIcon: View {
     let provider: UsageProvider
     var sourceKind: SpendDashboardModel.SourceKind = .native
     var style: ProviderBrandIcon.Style = .monochrome
-    private static let size: CGFloat = 16
+    private static let size: CGFloat = 20
 
     var body: some View {
         Group {
             if self.sourceKind == .openCodex {
                 Image(systemName: "arrow.triangle.branch")
-                    .font(.body.weight(.semibold))
+                    .resizable().scaledToFit()
             } else if let icon = ProviderBrandIcon.image(for: self.provider, style: self.style) {
                 Image(nsImage: icon)
                     .renderingMode(icon.isTemplate ? .template : .original)
@@ -299,6 +299,7 @@ struct SpendProviderIcon: View {
                         height: Self.size * self.artworkScale(for: icon))
             } else {
                 Image(systemName: "circle.dotted")
+                    .resizable().scaledToFit()
             }
         }
         .frame(width: Self.size, height: Self.size)
@@ -306,8 +307,13 @@ struct SpendProviderIcon: View {
     }
 
     private func artworkScale(for icon: NSImage) -> CGFloat {
-        // Provider-specific by design: Antigravity's official PNG needs a 1.1 scale to compensate
-        // for transparent padding and match visible artwork in the shared 16-point slot.
-        self.provider == .antigravity && !icon.isTemplate ? 1.1 : 1
+        // Provider-specific by design: bundled artwork includes different transparent padding.
+        // Normalize their visible artwork to the shared 20-point slot without changing source assets.
+        switch self.provider {
+        case .cursor: 1.25
+        case .codex: icon.isTemplate ? 1.24 : 1.22
+        case .antigravity: icon.isTemplate ? 1.14 : 1.38
+        default: 1
+        }
     }
 }

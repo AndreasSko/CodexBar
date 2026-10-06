@@ -66,6 +66,8 @@ try:
         "production_source_sha256": {
             path: hashlib.sha256((root / path).read_bytes()).hexdigest()
             for path in ["Sources/CodexBar/SpendDashboardTrendPanel.swift",
+                         "Sources/CodexBar/SpendDashboardProviderBreakdown.swift",
+                         "Sources/CodexBar/ProviderBrandIcon.swift",
                          "Sources/CodexBar/SpendTrendChartModel.swift",
                          "Tests/CodexBarTests/SpendTrendChartTests.swift"]
         },

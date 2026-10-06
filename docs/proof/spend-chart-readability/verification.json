@@ -6,7 +6,7 @@
   "image_metadata_is_dimensions_and_color_space_only": true,
   "screenshots": {
     "01-settings-entry.jpg": {
-      "sha256": "d5efdaa597ca66b4b84244f9f04dfa76fd9ecb4043f939b1f895d9b7f48adba4",
+      "sha256": "408a0fa5ca2430a9f8fcf3bc291f7f7355721c0cbf709d6d033e4abc19aef4e0",
       "dimensions": [
         2120,
         1608
@@ -17,7 +17,7 @@
       }
     },
     "02-usage-spend-entry.jpg": {
-      "sha256": "8ca7091df724a0e5f3ee9ab84e81f7b8e6cd49ec32d4d5b2f28e6ed04a82aa87",
+      "sha256": "49ca0e9bf9fe4e75284e679adea1eb24352439eedd76e840aa15f54c1f148dcf",
       "dimensions": [
         2120,
         1608
@@ -28,7 +28,7 @@
       }
     },
     "03-weekly-overview.jpg": {
-      "sha256": "33c7a4ee32f0b824acecbb57ba5e4beaff62162048674064571d2ddbe075a4e6",
+      "sha256": "48e2135dfd915f327477aad735022c3d5b649c041e6e94f38cb8ed21e4d1d6fb",
       "dimensions": [
         2120,
         1608
@@ -39,7 +39,7 @@
       }
     },
     "04-account-isolated.jpg": {
-      "sha256": "b0574185231329559ede0d3a3739ce36409778e77ff79979ff2a6eb0d7bb9690",
+      "sha256": "c1814ea2f8d72ed9bae40a042a55ee2403649446ccee7affcaeb6a1f7daf15d2",
       "dimensions": [
         2120,
         1608
@@ -50,7 +50,7 @@
       }
     },
     "05-filter-reset.jpg": {
-      "sha256": "032b36f04af91c2418148515d6ba87503f9ce42e5995ab08e04635a3b7e542b3",
+      "sha256": "75844f79848c67b5322afefc297e0dae5a1e1cbf42282b4e1cced72535592f16",
       "dimensions": [
         2120,
         1608
@@ -61,7 +61,7 @@
       }
     },
     "06-week-to-days.jpg": {
-      "sha256": "d00d56d2c49956955e8c3c83e297c82d5aaba43225dcec4713bd91e36f7f0aff",
+      "sha256": "5cb5362eafe68d6af45c3ce1dee0523ca4f08770bc3c0a4a43cf257d838b1ed9",
       "dimensions": [
         2120,
         1608
@@ -72,7 +72,7 @@
       }
     },
     "07-day-to-hours.jpg": {
-      "sha256": "29cbc4a06a50f61ae75ac9889dcdfca38f5b4b4843293f26a671f9135c174097",
+      "sha256": "a3fb9c6560021044f243605c3d7065b14595bd7e96c7ee0f6e79206916475756",
       "dimensions": [
         2120,
         1608
@@ -83,7 +83,7 @@
       }
     },
     "08-previous-day.jpg": {
-      "sha256": "a73cac500e00981ddb457710eb98beaed90540d7940a86e5d18b191264d94c5f",
+      "sha256": "a34a1a8140158c467dec5611a3f88e329356677ce7a99893278169afc36f9521",
       "dimensions": [
         2120,
         1608
@@ -94,7 +94,7 @@
       }
     },
     "09-next-day.jpg": {
-      "sha256": "bc7ee8acc1b4ee3aee236f78ffc9c0a0949c4721b5ccfb80a06f52c59e2ed12b",
+      "sha256": "de319ecb05e5979c481f26d08201566f0a5e047b4d5337577117e775b8df178e",
       "dimensions": [
         2120,
         1608
@@ -105,7 +105,7 @@
       }
     },
     "10-date-menu-selected.jpg": {
-      "sha256": "f05152158c794146a792f103f64b95387ade73bf9426b9977ab802e71114c819",
+      "sha256": "ad8ff1e12dfac1474942a2d86a613e0165531c090683aa4da0b49b4e688fc503",
       "dimensions": [
         2120,
         1608
