@@ -524,6 +524,24 @@ struct ProviderDiagnosticExportTests {
 
         #expect(category == "configuration")
         #expect(diagnostic.category == "configuration")
+        #expect(diagnostic.safeDescription == "Configuration issue - check provider source and settings")
+        #expect(ProviderDiagnosticFetchAttempt.errorCategoryLabel(
+            error.localizedDescription.uppercased()) == "configuration")
+    }
+
+    @Test
+    func `fetch attempt coding preserves diagnostic fields`() throws {
+        let attempt = ProviderDiagnosticFetchAttempt(
+            strategyID: "claude.cli", kind: "cli", wasAvailable: true, errorCategory: "configuration")
+        let data = try JSONEncoder().encode(attempt)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(Set(object.keys) == ["strategyID", "kind", "outcome", "wasAvailable", "errorCategory"])
+        let decoded = try JSONDecoder().decode(ProviderDiagnosticFetchAttempt.self, from: data)
+        #expect(decoded.strategyID == "claude.cli")
+        #expect(decoded.kind == "cli")
+        #expect(decoded.outcome == "failed")
+        #expect(decoded.wasAvailable)
+        #expect(decoded.errorCategory == "configuration")
     }
 
     @Test

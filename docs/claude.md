@@ -447,7 +447,8 @@ Model-scoped weekly-window proof (synthetic data, no real accounts or credential
   - Surfaces CLI errors (e.g. token expired) directly.
   - Some Education and organization-managed subscriptions return only a subscription notice, with no numeric
     session or weekly quota fields. CodexBar reports those limits as unavailable, keeps local cost/token history
-    visible, and never derives quota percentages from spend or token totals.
+    visible, and never derives quota percentages from spend or token totals. Logs and diagnostics classify this as
+    a configuration issue and recommend checking the provider source/settings, rather than re-authenticating.
 
 ## Cost usage (local log scan)
 - Source roots:
