@@ -1001,6 +1001,8 @@ extension CostUsageStoreTests {
         let fixture = try StoreFixture()
         defer { fixture.remove() }
         #expect(CostUsageStore.compatiblePredecessorParserHashes == [
+            "99d920977063318a",
+            "3f8aded5c0ff0486",
             "ed735dc27ffa70d9",
             "029fe80aa98f27e8",
             "c61aebb9cf043a72",
@@ -1134,7 +1136,9 @@ extension CostUsageStoreTests {
         #expect(resumed.resumeState == nil)
     }
 
-    @Test(arguments: ["8050a4faf4fddb96", "dd19ffa2dcfa8d47", "ed735dc27ffa70d9"])
+    @Test(arguments: [
+        "8050a4faf4fddb96", "dd19ffa2dcfa8d47", "ed735dc27ffa70d9", "99d920977063318a", "3f8aded5c0ff0486",
+    ])
     func `retained report migration preserves compatible rows and clears stale payload`(
         predecessorHash: String) async throws
     {

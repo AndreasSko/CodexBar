@@ -122,7 +122,9 @@ actor CostUsageStore {
         parserHash: CodexParserHash.value)
     static let cacheGeneration = "sqlite:\(CostUsageStore.schemaVersion)"
     static let compatiblePredecessorParserHashes: Set<String> = [
-        "ed735dc27ffa70d9", // 0.72.0 rows and checkpoints are kept; partial Codex days are recomputed from rows.
+        "99d920977063318a", // Main's ledger migration keeps rows; partial costs require rebuilt reports.
+        "3f8aded5c0ff0486", // Prior partial-pricing builds keep rows during ownership-preserving migration.
+        "ed735dc27ffa70d9", // 0.72.0 rows, markers, and checkpoints survive; reports are recomputed.
         "029fe80aa98f27e8", // Revision 7 caches retain history during bounded JSON-fallback reparsing.
         "c61aebb9cf043a72", // Revision 6 ledger caches reparse through the shared ownership router.
         "4a4c4ef34ce6f037", // Request-ledger accounting uses bounded native parser-revision migration.
@@ -174,6 +176,8 @@ actor CostUsageStore {
         "5f8507161b23757c", // 0.54.2 tokscale parity + priority evidence; persisted row shape unchanged.
     ]
     static let incompatibleRetainedReportPredecessorParserHashes: Set<String> = [
+        "99d920977063318a",
+        "3f8aded5c0ff0486",
         "dd19ffa2dcfa8d47",
         "2d17f4981b78d07f",
         "8050a4faf4fddb96",

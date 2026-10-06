@@ -22,6 +22,8 @@
 
 - Usage & Spend: retain known daily request counts when another source cannot count requests, showing the subtotal with ≥ while wholly unavailable counts remain a dash; partial costs do not erase request totals (#4295). Thanks @Yuxin-Qiao!
 - Codex costs: a request with unknown historical pricing no longer hides the estimate for the other requests of its model and day. The day shows the priced subtotal as a partial estimate with its unpriced request count, and a day with an unpriced model is no longer reported as fully priced (#4273, #4278, #4279). Thanks @gabrielrojasc and @luochen211!
+- Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
+- Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
 
 ## 0.72.0 — 2026-10-04
 
