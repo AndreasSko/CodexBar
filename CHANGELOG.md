@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Codex: preserve sibling account readings and credits across selected-account refreshes and restarts when account widgets are disabled (#4307). Thanks @Yuxin-Qiao!
 - Codex: reject account promotion when legacy saved credentials conflict or a preservation destination changes before the live swap (#4301). Thanks @vincent-peng!
 - Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
 
