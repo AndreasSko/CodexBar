@@ -909,10 +909,11 @@ public struct CostUsageFetcher: Sendable {
                 {
                     staleSnapshotUpdatedAt = previous.updatedAt
                 } else {
-                    daily = view.dailyReport(range: range, cacheRoot: options.scanOptions.cacheRoot)
+                    let reports = view.reports(range: range, cacheRoot: options.scanOptions.cacheRoot, roots: roots)
+                    daily = reports.daily
                     (projects, sessions) = Self.codexBreakdownsWithMetadata(
-                        view.sessions(range: range, cacheRoot: options.scanOptions.cacheRoot, roots: roots),
-                        projects: view.projects(range: range, cacheRoot: options.scanOptions.cacheRoot),
+                        reports.sessions,
+                        projects: reports.projects,
                         projectSessionIDs: view.projectSessionIDs(range: range),
                         sessionsRoot: roots.first,
                         environment: options.environment)
@@ -1405,9 +1406,13 @@ public struct CostUsageFetcher: Sendable {
                       cache.roots == rootsFingerprint,
                       !cache.windowExpandsCache(range)
             {
-                let daily = cache.dailyReport(
+                let projections = cache.reports(
                     range: range,
-                    cacheRoot: options.cacheRoot)
+                    cacheRoot: options.cacheRoot,
+                    roots: roots,
+                    includeBreakdowns: includeProjectAndSessionBreakdowns,
+                    includeProjects: cache.projectMetadataVersion == CostUsageScanner.codexProjectMetadataVersion)
+                let daily = projections.daily
                 if !daily.data.isEmpty {
                     reports.append(daily)
                     if cache.lastScanUnixMs > 0 {
@@ -1416,15 +1421,8 @@ public struct CostUsageFetcher: Sendable {
                         scanTimes.append(scanAt)
                     }
                     if includeProjectAndSessionBreakdowns {
-                        sessions = cache.sessions(
-                            range: range,
-                            cacheRoot: options.cacheRoot,
-                            roots: roots)
-                        if cache.projectMetadataVersion == CostUsageScanner.codexProjectMetadataVersion {
-                            projects.append(contentsOf: cache.projects(
-                                range: range,
-                                cacheRoot: options.cacheRoot))
-                        }
+                        sessions = projections.sessions
+                        projects = projections.projects
                         (projects, sessions) = Self.codexBreakdownsWithMetadata(
                             sessions,
                             projects: projects,
