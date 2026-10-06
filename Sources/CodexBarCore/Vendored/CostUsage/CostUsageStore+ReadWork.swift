@@ -12,6 +12,7 @@ struct CostUsageStoreReadWorkMetrics: Codable, Equatable, Sendable {
     var fileRows = 0
     var tokenSnapshotRows = 0
     var usageRows = 0
+    var materializedUsageRows = 0
     var reportBuilds = 0
     var bufferedLines = 0
     var usagePayloadBytes = 0
@@ -69,6 +70,10 @@ final class CostUsageStoreReadWorkRecorder: @unchecked Sendable {
 
     func recordReportBuild() {
         self.lock.withLock { self.metrics.reportBuilds += 1 }
+    }
+
+    func recordMaterializedUsageRows(count: Int) {
+        self.lock.withLock { self.metrics.materializedUsageRows += count }
     }
 
     func recordBufferedLine(payloadBytes: Int) {

@@ -334,6 +334,7 @@ extension CostUsageStore {
     {
         var values: [CostUsageStoreUsageRow] = []
         try self.forEachUsageRow(database, path: path, recorder: recorder) { values.append($0) }
+        recorder?.recordMaterializedUsageRows(count: values.count)
         return values
     }
 
