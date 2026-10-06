@@ -2412,6 +2412,13 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This exact shared construct dispatches a provider-owned capability at the generic integration boundary."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/SpendDashboardModel+ModelBreakdown.swift",
+            anchor: "if !Self.hasCompleteModelCostCoverage(entry)",
+            expectedProviderIDs: ["codex"],
+            expectedReferenceCount: 1,
+            expectedReferenceFingerprint: ["codex@0"],
+            reason: "Codex request-priced model subtotals retain unknown historical prices even when amounts reconcile."),
+        AllowedProviderConstruct(
+            path: "Sources/CodexBar/SpendDashboardModel+ModelBreakdown.swift",
             anchor: "guard summary.input.provider == .codex else { return false }",
             expectedProviderIDs: ["codex"],
             expectedReferenceCount: 1,

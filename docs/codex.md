@@ -376,6 +376,11 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     grows or a recovery scan is interrupted. Appended requests cannot borrow prices from the historical prefix,
     and an invalidated pricing map remains invalid through subsequent upgrades. Native stores from 0.62.0's
     `865a444e01b818f1` fingerprint retain their history while individual files are reparsed with corrected accounting.
+  - When a model/day's request rows account for its billed tokens, daily reports price the requests with known
+    pricing and count the unpriced ones in `unpricedRequestCount` and the priced ones in `pricedRequestCount`. Unpriced
+    requests are never estimated from current list prices or folded into an aggregate estimate, and the partial group
+    has no Standard/Priority split. A day with any unpriced model or request reports `unpricedRequestCount`, so Usage &
+    Spend and the CLI show its cost as a partial estimate. Fully priced days keep the day-level coverage count.
   - Fully read empty session fragments retain completion records even when another file contributes the same session.
     They contribute no usage and reparse from the start if they grow. Usage-bearing duplicates and incomplete fragments
     keep their existing accounting and retry rules. Existing 0.56.4 cost caches are adopted without rebuilding
@@ -465,7 +470,8 @@ directory, even when its project is grouped under a different canonical reposito
 Rows rank by cost descending, with unpriced sessions last. Ties use tokens descending, activity time descending,
 and source-qualified session ID ascending. The panel initially shows eight rows and can expand to the top 50.
 Dates use the dashboard's cost-bucketing time zone. Naming and ranking leave daily totals, the ledger, and existing
-per-session costs unchanged; an unpriced session remains unpriced.
+per-session costs unchanged; an unpriced session remains unpriced, and a partially priced session shows the subtotal
+of its priced requests.
 
 **Hide personal information** replaces titles with shortened session IDs and removes project names and paths,
 including from tooltips. Models, dates, tokens, costs, and ranks remain visible. Turning it off restores the names;
