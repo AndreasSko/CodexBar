@@ -147,6 +147,12 @@ public enum AntigravityOAuthConfig {
         ProcessInfo.processInfo.environment["ANTIGRAVITY_OAUTH_CLIENT_SECRET"]?.trimmedNonEmpty
     }
 
+    /// Public OAuth client id that `agy` and the Antigravity language server use for consumer
+    /// (personal Google account) sign-in. Bundles also ship a second client; Cloud Code treats its
+    /// tokens as unonboarded and returns a placeholder quota summary with every bucket at 100%.
+    /// Discovery still reads the matching secret from the installed artifact.
+    public static let consumerClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+
     public static let authURL = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
     public static let tokenURL = URL(string: "https://oauth2.googleapis.com/token")!
     public static let userInfoURL = URL(string: "https://www.googleapis.com/oauth2/v2/userinfo")!
@@ -317,7 +323,9 @@ public enum AntigravityOAuthConfig {
     }
 
     /// Reads adjacent ClientID/ClientSecret Go string fields, never string-pool ordering.
+    /// Prefers the consumer sign-in client when a bundle pairs several; otherwise the first record wins.
     private static func binaryClient(in data: Data) -> AntigravityOAuthClient? {
+        var clients: [AntigravityOAuthClient] = []
         func word(_ offset: Int) -> UInt32 {
             data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self).littleEndian }
         }
@@ -398,11 +406,13 @@ public enum AntigravityOAuthConfig {
                           clientSecret.range(
                               of: #"^GOCSPX-[A-Za-z0-9_-]{28}$"#,
                               options: .regularExpression) != nil else { continue }
-                    return AntigravityOAuthClient(clientID: clientID, clientSecret: clientSecret)
+                    let client = AntigravityOAuthClient(clientID: clientID, clientSecret: clientSecret)
+                    if clientID == Self.consumerClientID { return client }
+                    clients.append(client)
                 }
             }
         }
-        return nil
+        return clients.first
     }
 }
 

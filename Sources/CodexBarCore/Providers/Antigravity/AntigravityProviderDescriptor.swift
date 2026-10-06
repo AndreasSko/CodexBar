@@ -1062,8 +1062,11 @@ struct AntigravityOfflineFetchStrategy: ProviderFetchStrategy {
                 return "check Diagnostics for per-source details"
             }
         case let remoteError as AntigravityRemoteFetchError:
-            if case .notLoggedIn = remoteError {
+            switch remoteError {
+            case .notLoggedIn, .reauthenticationRequired:
                 return remoteError.localizedDescription
+            case .permissionDenied, .apiError, .parseFailed:
+                break
             }
             return "the Antigravity API request failed"
         case let urlError as URLError:

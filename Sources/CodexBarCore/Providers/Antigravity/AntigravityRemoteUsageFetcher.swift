@@ -5,6 +5,7 @@ import FoundationNetworking
 
 public enum AntigravityRemoteFetchError: LocalizedError, Sendable, Equatable {
     case notLoggedIn
+    case reauthenticationRequired
     case permissionDenied(String)
     case apiError(String)
     case parseFailed(String)
@@ -13,6 +14,9 @@ public enum AntigravityRemoteFetchError: LocalizedError, Sendable, Equatable {
         switch self {
         case .notLoggedIn:
             "Antigravity Google auth not found. Use Antigravity login to authenticate."
+        case .reauthenticationRequired:
+            "This Antigravity account was signed in with an OAuth client that cannot read its quota. "
+                + "Sign in to it again."
         case let .permissionDenied(message):
             "Antigravity remote API permission denied: \(message)"
         case let .apiError(message):
@@ -141,6 +145,10 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
             accessToken: accessToken,
             timeout: self.timeout,
             dataLoader: self.dataLoader)
+        if credentials.projectID?.trimmedNonEmpty == nil, codeAssist.rejectsClientForConsumerTier {
+            // Quota endpoints would answer with a placeholder summary that reports every bucket at 100%.
+            throw AntigravityRemoteFetchError.reauthenticationRequired
+        }
         let projectId = try await Self.resolveProjectID(
             accessToken: accessToken,
             storedProjectID: credentials.projectID?.trimmedNonEmpty,
@@ -686,10 +694,18 @@ private struct CodeAssistResponse: Decodable {
     let currentTier: TierInfo?
     let paidTier: TierInfo?
     let allowedTiers: [AllowedTier]?
+    let ineligibleTiers: [IneligibleTier]?
     let cloudaicompanionProject: ProjectReference?
 
     var projectID: String? {
         self.cloudaicompanionProject?.value?.trimmedNonEmpty
+    }
+
+    /// Consumer accounts are unonboarded when the token's OAuth client is not the consumer sign-in client.
+    var rejectsClientForConsumerTier: Bool {
+        self.currentTier == nil && self.projectID == nil && self.ineligibleTiers?.contains {
+            $0.reasonCode == "GOOGLE_TOS_NOT_SUPPORTED_BY_CLIENT"
+        } == true
     }
 }
 
@@ -705,6 +721,10 @@ private struct TierInfo: Decodable {
 private struct AllowedTier: Decodable {
     let id: String?
     let isDefault: Bool?
+}
+
+private struct IneligibleTier: Decodable {
+    let reasonCode: String?
 }
 
 private struct OnboardResponse: Decodable {

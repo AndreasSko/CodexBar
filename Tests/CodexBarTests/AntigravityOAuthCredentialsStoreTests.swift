@@ -33,6 +33,19 @@ struct AntigravityOAuthCredentialsStoreTests {
         #expect(AntigravityOAuthConfig.discoverClientFromInstalledApp(applicationRoots: [root]) == client)
     }
 
+    @Test(arguments: [false, true])
+    func `oauth discovery prefers the consumer client that agy signs in with`(intel: Bool) {
+        let other = AntigravityOAuthClient(
+            clientID: self.googleClientID("hub"),
+            clientSecret: self.googleClientSecret(repeating: "a"))
+        let consumer = AntigravityOAuthClient(
+            clientID: AntigravityOAuthConfig.consumerClientID,
+            clientSecret: self.googleClientSecret(repeating: "b"))
+        let data = self.binaryFixture(clients: [other, consumer], intel: intel)
+
+        #expect(AntigravityOAuthConfig.parseClient(fromInstalledArtifactData: data) == consumer)
+    }
+
     @Test
     func `oauth discovery keeps a lone UTF8 pair beyond the text window`() {
         let id = self.googleClientID("legacy")
