@@ -106,6 +106,9 @@ the cookie import.
   - `Never prompt`: never attempts interactive Claude OAuth Keychain prompts.
   - `Only on user action` (default): interactive prompts are reserved for user-initiated repair flows.
   - `Always allow prompts`: allows interactive prompts in both user and background flows.
+- Explicit Refresh can repair Claude OAuth Keychain access when direct-read consent is enabled and the policy
+  allows user prompts. Ordinary OAuth fetches remain noninteractive, including with `Always allow prompts`;
+  that policy still governs the existing delegated refresh and experimental reader paths.
 - This setting only affects Claude OAuth Keychain prompting behavior; it does not switch your Claude usage source.
 - The policy also applies to the experimental `/usr/bin/security` reader and delegated OAuth refresh through
   `claude`: background operations that can prompt require `Always allow prompts`.
