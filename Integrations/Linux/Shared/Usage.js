@@ -77,8 +77,8 @@ function rows(text, showIdentity) {
             failed: !!entry.error,
             accountLabel: showIdentity ? String(identity.accountEmail || usage.accountEmail || "") : "",
             accountNumber: entryIndex + 1,
-            plan: String(identity.loginMethod || usage.loginMethod || ""),
-            status: entry.status ? String(entry.status.description || entry.status.indicator || "Unknown") : "",
+            plan: displayText(identity.loginMethod || usage.loginMethod, false),
+            status: entry.status ? displayText(entry.status.description || entry.status.indicator || "Unknown", false) : "",
             statusLevel: entry.status ? String(entry.status.indicator || "unknown") : "unknown",
             details: Array.isArray(usage.details) ? usage.details.slice(0, 8).map(function(section) {
                 return {title: String(section.title || ""), rows: (section.rows || []).slice(0, 24).map(function(row) {
@@ -91,7 +91,7 @@ function rows(text, showIdentity) {
             updatedAt: usage.updatedAt || "",
             credits: entry.credits && typeof entry.credits.remaining === "number" ? entry.credits.remaining : null,
             extraUsage: providerCost(usage.providerCost),
-            resetCredits: resetCredits(usage.codexResetCredits),
+            resetCredits: resetCredits(entry.resetCredits),
             error: entry.error ? "Usage unavailable. Check this provider’s CodexBar login/configuration." :
                 windows.length ? "" : "No quota windows reported."
         };
@@ -128,20 +128,10 @@ function chart(value) {
         kind: value.kind === "line" ? "line" : "bars", points: points};
 }
 
-// Codex grants one-time rate-limit resets. Match the shared core inventory: count available,
-// unexpired credits (no expiry counts as unexpired) and export only the soonest expiry.
-function resetCredits(value, now) {
-    if (!value || typeof value !== "object" || !Array.isArray(value.credits)) return null;
-    now = typeof now === "number" ? now : Date.now();
-    var usable = value.credits.filter(function(credit) {
-        if (!credit || credit.status !== "available") return false;
-        if (credit.expires_at === undefined || credit.expires_at === null || credit.expires_at === "") return true;
-        var expiry = Date.parse(credit.expires_at);
-        return isFinite(expiry) && expiry > now;
-    });
-    var expiries = usable.map(function(credit) { return Date.parse(credit.expires_at); })
-        .filter(function(expiry) { return isFinite(expiry); }).sort(function(a, b) { return a - b; });
-    return {available: usable.length, nextExpiresAt: expiries.length ? new Date(expiries[0]).toISOString() : ""};
+// Project the shared CLI inventory summary without copying credit identifiers or expiry policy.
+function resetCredits(value) {
+    if (!value || number(value.available) === null) return null;
+    return {available: value.available, nextExpiresAt: value.nextExpiresAt || ""};
 }
 
 // Extra usage or prepaid balance reported beside quota windows; amounts only, no identity.

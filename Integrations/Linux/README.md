@@ -244,10 +244,12 @@ replace the tag with a local logo and count additional `entries` as `+N`; older
 backends omit this field, so adapters should fall back to `summary`.
 Each entry also carries `plan`, `status`, `statusLevel`, `updatedAt`, `credits`,
 `extraUsage` (period, currency and used/limit/balance amounts), and `resetCredits`
-(available count and soonest expiry); windows carry `paceExpected`, the expected used
+(available count and soonest expiry, projected by the shared CLI inventory); windows carry `paceExpected`, the expected used
 percentage for an even pace. `spending` lists today and 30-day local cost per provider
 once a scan has run. Spending is never scanned by a plain snapshot; `--with-spending`
 asks for a scan when the five-minute cache is stale, for panels that show it.
+Older CLIs without the compact reset-credit summary leave that field unavailable. Plan and status
+labels redact email addresses even when account identity is enabled in the desktop window.
 The snapshot excludes account identity, CLI paths, and credential configuration.
 It includes display values and reset text for adapters. Adapters should check `schemaVersion`, tolerate
 unknown fields, and treat a missing backend as unavailable.

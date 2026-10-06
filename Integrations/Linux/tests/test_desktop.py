@@ -38,7 +38,7 @@ if args[0]=='cost':
 else:
  usage=state.get('usage',{'identity':{'accountEmail':'private@example.com'},
  'primary':{'usedPercent':40,'windowMinutes':300,'resetsAt':'2030-01-01T00:00:00Z'}})
- print(json.dumps([{'provider':provider,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels'),'pace':state.get('pace')}]))
+ print(json.dumps([{'provider':provider,'usage':usage,'rateWindowLabels':state.get('rateWindowLabels'),'pace':state.get('pace'),'resetCredits':state.get('resetCredits'),'status':state.get('status')}]))
 ''')
         self.fake.chmod(0o755)
         self.log = (self.root / 'desktop.log').open('w+')
@@ -176,14 +176,14 @@ else:
             'usage': {'identity': {'accountEmail': 'private@example.com', 'loginMethod': 'Max'},
                       'primary': {'usedPercent': 25, 'windowMinutes': 300},
                       'providerCost': {'period': 'Extra usage', 'currencyCode': 'Credits', 'balance': 500, 'used': 0},
-                      # availableCount is not authoritative: expired and redeemed credits are excluded,
-                      # credits without expiry count, and expiry is compared as time rather than text.
+                      # The CLI owns expiry/status filtering. Raw credit IDs must never reach IPC.
                       'codexResetCredits': {'availableCount': 99, 'credits': [
                           {'id': 'private-credit-id', 'status': 'available', 'expires_at': '2030-01-01T05:00:00Z'},
                           {'id': 'private-credit-id', 'status': 'available', 'expires_at': '2030-01-01T09:00:00+09:00'},
                           {'id': 'private-credit-id', 'status': 'available', 'expires_at': '2020-01-01T00:00:00Z'},
                           {'id': 'private-credit-id', 'status': 'redeemed', 'expires_at': '2030-01-01T00:00:00Z'},
                           {'id': 'private-credit-id', 'status': 'available'}]}},
+            'resetCredits': {'available': 3, 'nextExpiresAt': '2030-01-01T00:00:00Z'},
             'pace': {'primary': {'summary': 'On pace', 'expectedUsedPercent': 30}}
         }))
         self.client('--configure', '{"provider":"claude"}')
@@ -192,13 +192,26 @@ else:
         entry = value['entries'][0]
         self.assertEqual(entry['windows'][0]['paceExpected'], 30)
         self.assertEqual(entry['extraUsage']['balance'], 500)
-        self.assertEqual(entry['resetCredits'], {'available': 3, 'nextExpiresAt': '2030-01-01T00:00:00.000Z'})
+        self.assertEqual(entry['resetCredits'], {'available': 3, 'nextExpiresAt': '2030-01-01T00:00:00Z'})
         self.assertNotIn('private-credit-id', json.dumps(value))
         self.assertEqual(value['spending'], [])
         self.assertNotIn('private@example.com', json.dumps(value))
         self.client('--snapshot', '--with-spending')
         value = self.wait_for(lambda value: bool(value.get('spending')))
         self.assertEqual(value['spending'][0]['month'], 12)
+
+    def test_snapshot_redacts_provider_labels_even_when_identity_is_visible(self):
+        (self.root / 'state.json').write_text(json.dumps({
+            'usage': {'identity': {'loginMethod': 'Max private@example.com'},
+                      'primary': {'usedPercent': 25, 'windowMinutes': 300}},
+            'status': {'description': 'Incident for private@example.com', 'indicator': 'minor'}
+        }))
+        self.client('--configure', '{"provider":"claude","showIdentity":true}')
+        value = self.wait_for(lambda value: value.get('entries') and not value['busy']
+                              and value['entries'][0].get('statusLevel') == 'minor')
+        self.assertEqual(value['entries'][0]['plan'], 'Max [hidden email]')
+        self.assertEqual(value['entries'][0]['status'], 'Incident for [hidden email]')
+        self.assertNotIn('private@example.com', json.dumps(value))
 
     def test_spending_snapshot_recovers_after_failed_scan(self):
         state = self.root / 'state.json'
