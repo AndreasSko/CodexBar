@@ -26,6 +26,7 @@
 - Codex: preserve terminal local-cost catch-up pauses across scheduled refreshes while allowing explicit retries (#4251). Thanks @vincent-peng!
 - Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
 - Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+- Codex: price Priority turns from durable session-log tier evidence across resumed scans, preserving saved trace pricing and existing cost history (#4274, #4276). Thanks @luochen211!
 
 ## 0.72.0 — 2026-10-04
 

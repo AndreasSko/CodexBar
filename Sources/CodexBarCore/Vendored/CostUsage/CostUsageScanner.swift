@@ -361,6 +361,8 @@ enum CostUsageScanner {
         var legacyRowIndices: [String: Int] = [:]
         var turnModels: [String: String] = [:]
         var activeTurnID: String?
+        var pendingPriority: Bool?
+        var priorityTurnIDs: Set<String>?
         var sessionID: String?
         var pendingLedgerMirrors: Set<String>?
         var pendingLedgerResponseID: String?
@@ -3452,6 +3454,7 @@ enum CostUsageScanner {
         case sessionMeta(CodexSessionMetadata)
         case turnContext(CodexTurnContextMetadata)
         case interAgentCommunication(triggerTurn: Bool)
+        case threadSettingsApplied(priority: Bool)
         case taskStarted(turnID: String?)
         case tokenCount(CodexTokenCountRecord)
         case tokenUsageRecord(CodexRequestUsageRecord)
@@ -3474,7 +3477,8 @@ enum CostUsageScanner {
             switch self {
             case .sessionMeta:
                 false
-            case .turnContext, .interAgentCommunication, .taskStarted, .tokenCount, .tokenUsageRecord:
+            case .turnContext, .interAgentCommunication, .threadSettingsApplied, .taskStarted, .tokenCount,
+                 .tokenUsageRecord:
                 true
             }
         }
@@ -3652,6 +3656,11 @@ enum CostUsageScanner {
                 guard let payload, let payloadType = string(Self.codexJSONFieldType, in: payload)
                 else { return nil }
                 let turnID = Self.codexTurnID(from: buffer, in: payload)
+                if payloadType == "thread_settings_applied" {
+                    guard let decoded = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any]
+                    else { return nil }
+                    return Self.codexLine(from: decoded)
+                }
                 if payloadType == "task_started" { return .taskStarted(turnID: turnID) }
                 guard payloadType == "token_count", let timestamp, let info else { return nil }
                 return .tokenCount(CodexTokenCountRecord(
@@ -3695,6 +3704,11 @@ enum CostUsageScanner {
                 title: payload["title"] as? String ?? payload["name"] as? String,
                 turnID: Self.codexTurnID(from: payload)))
         case "event_msg":
+            if payload["type"] as? String == "thread_settings_applied" {
+                let settings = payload["thread_settings"] as? [String: Any]
+                return .threadSettingsApplied(
+                    priority: Self.codexModelEvidence(settings?["service_tier"] as? String) == "priority")
+            }
             if payload["type"] as? String == "task_started" {
                 return .taskStarted(turnID: Self.codexTurnID(from: payload))
             }
@@ -4306,7 +4320,8 @@ enum CostUsageScanner {
                 knownCostNanos: pricing?.knownCostNanos,
                 unpricedTokens: pricing?.unpricedTokens,
                 pricingModel: pricing?.pricingModel,
-                pricingMode: pricing?.pricingMode,
+                pricingMode: pricing?.pricingMode
+                    ?? (requestLedger.priorityTurnIDs?.contains(turnID ?? "") == true ? "priority" : nil),
                 responseID: responseID,
                 requestMirrorKeys: mirrorKeys))
             rowSourceEndOffsets[index] = endOffset
@@ -4737,9 +4752,18 @@ enum CostUsageScanner {
                 }
             case .interAgentCommunication:
                 break
+            case let .threadSettingsApplied(priority):
+                requestLedger.pendingPriority = priority
             case let .taskStarted(turnID):
                 requestLedger.clearPendingMirrors()
                 currentTurnID = turnID
+                if requestLedger.pendingPriority == true {
+                    if requestLedger.priorityTurnIDs == nil { requestLedger.priorityTurnIDs = [] }
+                    requestLedger.priorityTurnIDs?.insert(turnID ?? "")
+                } else {
+                    requestLedger.priorityTurnIDs?.remove(turnID ?? "")
+                }
+                requestLedger.pendingPriority = nil
             case let .tokenCount(record):
                 try handleTokenCount(record, sourceEndOffset: sourceEndOffset)
             case let .tokenUsageRecord(record):
@@ -4911,7 +4935,8 @@ enum CostUsageScanner {
 
                     if line.bytes.containsAscii(#""type":"event_msg""#),
                        !line.bytes.containsAscii(#""token_count""#),
-                       !line.bytes.containsAscii(#""task_started""#)
+                       !line.bytes.containsAscii(#""task_started""#),
+                       !line.bytes.containsAscii(#""thread_settings_applied""#)
                     {
                         return
                     }
@@ -5013,7 +5038,7 @@ enum CostUsageScanner {
                     case .tokenCount, .tokenUsageRecord:
                         guard let record = buffered.line.boundaryTokenCount else { return nil }
                         kind = .tokenCount(total: record.total, last: record.last)
-                    case .taskStarted:
+                    case .taskStarted, .threadSettingsApplied:
                         return nil
                     }
                     return Self.CodexSubagentRolloutShape.Observation(
@@ -5215,7 +5240,8 @@ enum CostUsageScanner {
             forkAccountingState: forkAccountingState,
             requestLedgerState: requestLedger.responseIDs.isEmpty && requestLedger.legacyRowIndices.isEmpty
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
-                && requestLedger.sessionID == sessionId
+                && requestLedger.sessionID == sessionId && requestLedger.pendingPriority == nil
+                && requestLedger.priorityTurnIDs?.isEmpty != false
                 ? nil : requestLedger,
             replacedLegacyRowIndices: replacedLegacyRowIndices,
             ledgerLegacyPricingKeys: ledgerLegacyPricingKeys)
