@@ -1,0 +1,33 @@
+Codex cost catch-up production-path proof
+Captured: 2026-10-06, Apple Silicon macOS
+Production revision: e3c5efb99e7b31755d26fc84ee1a71a55f0f5c1b
+Parser fingerprint: 081483783d17aab6
+Released predecessor: ed735dc27ffa70d9 (v0.72.0)
+
+Synthetic inputs only. The published transcript selects assertion-backed output;
+private paths and unrelated test logs are omitted. The complete original is retained locally.
+The temporary test source was byte-identical to Scripts/fixtures/codex_cost_catch_up_proof.swift.
+
+The recovery forwarding wrapper invokes the real fetcher/scanner/executor/SQLite path
+and passes its measured duration and status back to the real menu worker. A controlled
+clock forces the empty pass; recovery uses normal wall-clock scan budgets. Resource
+state is pinned to AC/nominal, and scheduled cooldown is recorded without waiting.
+The dashboard worker uses its real status/advance calls and an unreadable fixture file.
+After permission restoration, another real scan completes the cache. Synchronization
+performs the real read-only coverage check; no additional dashboard worker pass runs.
+The fixture allocates a unique account cache and removes only that cache afterward.
+
+Command (with Scripts/test_environment.sh sourced):
+swift test --filter 'CodexCostCatchUpProductionProofTests|CostUsageStoreTests'
+
+Selected terminal output:
+◇ Test case passing 1 argument predecessorHash → "ed735dc27ffa70d9" to "compatible predecessor parser hash adopts without rebuilding" started.
+PROOF recovery emptyPass=true sameKey=true fileAttempts=0 bytesRead=0 timeDeferred=true
+PROOF recovery cooldownScheduled=true fullBudgetRequested=2
+✔ Test "compatible predecessor parser hash adopts without rebuilding" with 41 test cases passed after 1.023 seconds.
+PROOF recovery realWorkerPhase=complete pending=false coverageConfirmed=true scannerAttempted=true
+✔ Suite CostUsageStoreTests passed after 1.050 seconds.
+PROOF completion realWorkerPhase=paused reason=noProgress workerRunning=false
+PROOF completion otherScannerPending=false coverageConfirmed=true scanNewerThanPause=true
+PROOF completion realWorkerPhase=complete extraWorkerPasses=0 readOnlyClear=true
+✔ Test run with 77 tests in 2 suites passed after 1.126 seconds.
