@@ -170,6 +170,39 @@ final class CodexAccountPromotionTestContainer {
             lastAuthenticatedAt: createdAt)
     }
 
+    /// Writes a managed home with auth material but returns a legacy record that predates
+    /// provider/workspace tracking, so `effectiveWorkspaceAccountID` stays nil.
+    @discardableResult
+    func legacyManagedAccount(
+        id: UUID = UUID(),
+        persistedEmail: String,
+        authEmail: String? = nil,
+        authAccountID: String? = nil,
+        plan: String = "Pro",
+        writeAuthFile: Bool = true) throws -> ManagedCodexAccount
+    {
+        let homeURL = self.managedHomesURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        if writeAuthFile {
+            _ = try self.writeOAuthAuthFile(
+                homeURL: homeURL,
+                email: authEmail ?? persistedEmail,
+                plan: plan,
+                accountID: authAccountID)
+        } else {
+            try FileManager.default.createDirectory(at: homeURL, withIntermediateDirectories: true)
+        }
+        return ManagedCodexAccount(
+            id: id,
+            email: persistedEmail,
+            providerAccountID: nil,
+            workspaceLabel: nil,
+            workspaceAccountID: nil,
+            managedHomePath: homeURL.path,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: nil)
+    }
+
     func persistAccounts(_ accounts: [ManagedCodexAccount]) throws {
         try self.fileStore.storeAccounts(ManagedCodexAccountSet(
             version: FileManagedCodexAccountStore.currentVersion,

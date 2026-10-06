@@ -190,7 +190,11 @@ package struct CodexDisplacedLivePreservationExecutor {
         _ existingManagedAccount: ManagedCodexAccount,
         for importedAccount: ManagedCodexAccount) throws
     {
-        guard let providerAccountID = importedAccount.providerAccountID else { return }
+        let importedIdentity: CodexIdentity = if let providerAccountID = importedAccount.providerAccountID {
+            .providerAccount(id: providerAccountID)
+        } else {
+            .emailOnly(normalizedEmail: importedAccount.email)
+        }
         let homeURL = URL(fileURLWithPath: existingManagedAccount.managedHomePath, isDirectory: true)
         guard let authData = try? self.authMaterialReader.readAuthData(homeURL: homeURL),
               (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
@@ -200,7 +204,6 @@ package struct CodexDisplacedLivePreservationExecutor {
             return
         }
 
-        let importedIdentity = CodexIdentity.providerAccount(id: providerAccountID)
         guard CodexIdentityMatcher.matches(
             authIdentity.identity,
             lhsEmail: authIdentity.email,
@@ -281,6 +284,7 @@ package struct CodexDisplacedLivePreservationExecutor {
                 throw CodexAccountPromotionError.displacedLiveImportFailed
             }
 
+            try self.validateRefreshDestinationAuth(refreshedHomeURL, liveAuthIdentity: liveAuthIdentity)
             try self.fileManager.createDirectory(at: refreshedHomeURL, withIntermediateDirectories: true)
             try self.writeManagedAuthData(liveAuthMaterial.rawData, to: refreshedHomeURL)
             try self.store.storeAccounts(ManagedCodexAccountSet(
@@ -294,6 +298,32 @@ package struct CodexDisplacedLivePreservationExecutor {
             throw error
         } catch {
             throw CodexAccountPromotionError.managedStoreCommitFailed
+        }
+    }
+
+    /// Re-reads the repair/refresh destination just before it is overwritten. The planner snapshot is
+    /// built seconds earlier (workspace resolution performs network calls) and external `codex` writers
+    /// do not share the managed-account lock, so the destination may have gained credentials for a
+    /// different account in the meantime. Mirrors `validateRepairDestination`.
+    private func validateRefreshDestinationAuth(
+        _ homeURL: URL,
+        liveAuthIdentity: PreparedIdentity) throws
+    {
+        guard let authData = try? self.authMaterialReader.readAuthData(homeURL: homeURL),
+              (try? CodexOAuthCredentialsStore.parse(data: authData)) != nil,
+              let authIdentity = try? PreparedPromotionContextBuilder.runtimeAccount(from: authData)
+        else {
+            // Missing or unreadable auth is the repair case already accepted by the planner.
+            return
+        }
+
+        guard CodexIdentityMatcher.matches(
+            authIdentity.identity,
+            lhsEmail: authIdentity.email,
+            liveAuthIdentity.identity,
+            rhsEmail: liveAuthIdentity.email)
+        else {
+            throw CodexAccountPromotionError.displacedLiveManagedAccountConflict
         }
     }
 

@@ -159,23 +159,28 @@ package struct CodexDisplacedLivePreservationPlanner {
         liveAuthIdentity: PreparedIdentity)
         -> Bool
     {
-        guard case let .providerAccount(id) = liveAuthIdentity.identity else {
-            return false
+        let providerAccountID: String? = switch liveAuthIdentity.identity {
+        case let .providerAccount(id):
+            ManagedCodexAccount.normalizeWorkspaceAccountID(id)
+        case .emailOnly, .unresolved:
+            nil
         }
-
-        let providerAccountID = ManagedCodexAccount.normalizeWorkspaceAccountID(id)
+        let liveEmail = liveAuthIdentity.email
         return candidates.contains { candidate in
-            guard candidate.persisted.effectiveWorkspaceAccountID == providerAccountID else { return false }
-            if let liveEmail = liveAuthIdentity.email, candidate.persisted.email != liveEmail {
-                return false
-            }
+            let matchesProviderKey = providerAccountID != nil
+                && candidate.persisted.effectiveWorkspaceAccountID == providerAccountID
+                && (liveEmail == nil || candidate.persisted.email == liveEmail)
+            let matchesLegacyEmailKey = liveEmail != nil
+                && candidate.persisted.effectiveWorkspaceAccountID == nil
+                && candidate.persisted.email == liveEmail
+            guard matchesProviderKey || matchesLegacyEmailKey else { return false }
             guard case .readable = candidate.homeState else { return false }
             guard let candidateIdentity = candidate.authIdentity else { return false }
             return !CodexIdentityMatcher.matches(
                 candidateIdentity.identity,
                 lhsEmail: candidateIdentity.email,
                 liveAuthIdentity.identity,
-                rhsEmail: liveAuthIdentity.email)
+                rhsEmail: liveEmail)
         }
     }
 

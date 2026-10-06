@@ -159,6 +159,58 @@ struct CodexAccountPromotionPlanningTests {
     }
 
     @Test
+    func `planner rejects legacy email repair when the readable home holds a different account`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionPlanningTests-legacy-readable-conflict")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let divergentManaged = try container.legacyManagedAccount(
+            persistedEmail: "alpha@example.com",
+            authAccountID: "acct-gamma")
+        try container.persistAccounts([target, divergentManaged])
+        _ = try container.writeLiveOAuthAuthFile(email: "alpha@example.com", accountID: "acct-alpha")
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+
+        switch plan {
+        case let .reject(reason):
+            #expect(reason == .conflictingReadableManagedHome)
+        case .none, .importNew, .refreshExisting, .repairExisting:
+            Issue.record("Expected reject plan")
+        }
+    }
+
+    @Test
+    func `planner rejects email only live auth against a divergent readable legacy home`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionPlanningTests-email-only-readable-conflict")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let divergentManaged = try container.legacyManagedAccount(
+            persistedEmail: "alpha@example.com",
+            authAccountID: "acct-gamma")
+        try container.persistAccounts([target, divergentManaged])
+        _ = try container.writeLiveOAuthAuthFile(email: "alpha@example.com")
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+
+        switch plan {
+        case let .reject(reason):
+            #expect(reason == .conflictingReadableManagedHome)
+        case .none, .importNew, .refreshExisting, .repairExisting:
+            Issue.record("Expected reject plan")
+        }
+    }
+
+    @Test
     func `planner imports when same email belongs to a different provider account workspace`() async throws {
         let container = try CodexAccountPromotionTestContainer(
             suiteName: "CodexAccountPromotionPlanningTests-import",

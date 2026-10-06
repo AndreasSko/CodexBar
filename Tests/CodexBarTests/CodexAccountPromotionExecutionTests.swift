@@ -233,6 +233,170 @@ struct CodexAccountPromotionExecutionTests {
     }
 
     @Test
+    func `executor refresh rejects a destination whose auth changed to a different account`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionExecutionTests-refresh-destination-mutated")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let existingManagedLive = try container.createManagedAccount(
+            persistedEmail: "alpha@example.com",
+            authAccountID: "acct-alpha")
+        try container.persistAccounts([target, existingManagedLive])
+        let liveAuthData = try container.writeLiveOAuthAuthFile(
+            email: "alpha@example.com",
+            accountID: "acct-alpha")
+        let foreignAuthData = try container.managedAuthData(for: target)
+        let destinationAuthURL = CodexAuthFingerprint.authFileURL(
+            homePath: existingManagedLive.managedHomePath)
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+        let executor = CodexDisplacedLivePreservationExecutor(
+            store: MutatingManagedHomeAuthStore(base: container.fileStore) {
+                try foreignAuthData.write(to: destinationAuthURL, options: .atomic)
+            },
+            homeFactory: container.homeFactory,
+            fileManager: .default)
+
+        #expect(throws: CodexAccountPromotionError.displacedLiveManagedAccountConflict) {
+            try executor.execute(plan: plan, context: context)
+        }
+
+        #expect(try Data(contentsOf: destinationAuthURL) == foreignAuthData)
+        #expect(try container.liveAuthData() == liveAuthData)
+        let accounts = try container.loadAccounts().accounts
+        let persistedDestination = try #require(accounts.first(where: { $0.id == existingManagedLive.id }))
+        #expect(persistedDestination.authFingerprint == existingManagedLive.authFingerprint)
+    }
+
+    @Test
+    func `executor refresh tolerates a same account auth rewrite during promotion`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionExecutionTests-refresh-same-account-rewrite")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let existingManagedLive = try container.createManagedAccount(
+            persistedEmail: "alpha@example.com",
+            authAccountID: "acct-alpha")
+        try container.persistAccounts([target, existingManagedLive])
+        let liveAuthData = try container.writeLiveOAuthAuthFile(
+            email: "alpha@example.com",
+            accountID: "acct-alpha")
+        let destinationAuthURL = CodexAuthFingerprint.authFileURL(
+            homePath: existingManagedLive.managedHomePath)
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+        let executor = CodexDisplacedLivePreservationExecutor(
+            store: MutatingManagedHomeAuthStore(base: container.fileStore) {
+                var json = try #require(JSONSerialization.jsonObject(
+                    with: Data(contentsOf: destinationAuthURL)) as? [String: Any])
+                var tokens = try #require(json["tokens"] as? [String: Any])
+                tokens["accessToken"] = "rotated-access-alpha"
+                json["tokens"] = tokens
+                try JSONSerialization.data(withJSONObject: json).write(
+                    to: destinationAuthURL,
+                    options: .atomic)
+            },
+            homeFactory: container.homeFactory,
+            fileManager: .default)
+
+        let result = try executor.execute(plan: plan, context: context)
+
+        #expect(result == .alreadyManaged(managedAccountID: existingManagedLive.id))
+        #expect(try Data(contentsOf: destinationAuthURL) == liveAuthData)
+    }
+
+    @Test
+    func `executor repair rejects a destination that gained foreign auth after planning`() async throws {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionExecutionTests-repair-gained-foreign-auth")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let staleManaged = try container.legacyManagedAccount(
+            persistedEmail: "alpha@example.com",
+            writeAuthFile: false)
+        try container.persistAccounts([target, staleManaged])
+        let liveAuthData = try container.writeLiveOAuthAuthFile(
+            email: "alpha@example.com",
+            accountID: "acct-alpha")
+        let foreignAuthData = try container.managedAuthData(for: target)
+        let destinationAuthURL = CodexAuthFingerprint.authFileURL(homePath: staleManaged.managedHomePath)
+
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let plan = CodexDisplacedLivePreservationPlanner().makePlan(context: context)
+        guard case .repairExisting = plan else {
+            Issue.record("Expected repair plan, got \(plan)")
+            return
+        }
+        let executor = CodexDisplacedLivePreservationExecutor(
+            store: MutatingManagedHomeAuthStore(base: container.fileStore) {
+                try foreignAuthData.write(to: destinationAuthURL, options: .atomic)
+            },
+            homeFactory: container.homeFactory,
+            fileManager: .default)
+
+        #expect(throws: CodexAccountPromotionError.displacedLiveManagedAccountConflict) {
+            try executor.execute(plan: plan, context: context)
+        }
+
+        #expect(try Data(contentsOf: destinationAuthURL) == foreignAuthData)
+        #expect(try container.liveAuthData() == liveAuthData)
+        let accounts = try container.loadAccounts().accounts
+        let persistedStale = try #require(accounts.first(where: { $0.id == staleManaged.id }))
+        #expect(persistedStale.providerAccountID == nil)
+    }
+
+    @Test
+    func `executor import rejects a raced legacy collision whose readable home holds a different account`()
+        async throws
+    {
+        let container = try CodexAccountPromotionTestContainer(
+            suiteName: "CodexAccountPromotionExecutionTests-import-legacy-conflicting-collision")
+        defer { container.tearDown() }
+
+        let target = try container.createManagedAccount(
+            persistedEmail: "beta@example.com",
+            authAccountID: "acct-beta")
+        let concurrentManaged = try container.legacyManagedAccount(
+            persistedEmail: "alpha@example.com",
+            authAccountID: "acct-gamma")
+        let concurrentAuthData = try container.managedAuthData(for: concurrentManaged)
+        try container.persistAccounts([target])
+        let liveAuthData = try container.writeLiveOAuthAuthFile(email: "alpha@example.com")
+        let context = try await self.makeContext(container: container, targetID: target.id)
+        let executor = CodexDisplacedLivePreservationExecutor(
+            store: ConcurrentDuplicateManagedCodexAccountStore(
+                base: container.fileStore,
+                concurrentAccount: concurrentManaged),
+            homeFactory: container.homeFactory,
+            authMaterialReader: DefaultCodexAuthMaterialReader(),
+            fileManager: .default)
+
+        #expect(throws: CodexAccountPromotionError.displacedLiveManagedAccountConflict) {
+            try executor.execute(plan: .importNew(reason: .noExistingManagedDestination), context: context)
+        }
+
+        let accounts = try container.loadAccounts().accounts
+        let persistedConcurrent = try #require(accounts.first(where: { $0.id == concurrentManaged.id }))
+        #expect(accounts.count == 2)
+        #expect(persistedConcurrent.managedHomePath == concurrentManaged.managedHomePath)
+        #expect(persistedConcurrent.providerAccountID == nil)
+        #expect(try container.managedAuthData(for: persistedConcurrent) == concurrentAuthData)
+        #expect(try container.liveAuthData() == liveAuthData)
+        #expect(try container.managedHomeURLs().count == 2)
+    }
+
+    @Test
     func `executor refresh filesystem failure maps to managed store error`() async throws {
         let container = try CodexAccountPromotionTestContainer(
             suiteName: "CodexAccountPromotionExecutionTests-refresh-filesystem-failure")
@@ -382,6 +546,39 @@ private final class ConcurrentDuplicateManagedCodexAccountStore: ManagedCodexAcc
             try self.base.storeAccounts(ManagedCodexAccountSet(
                 version: current.version,
                 accounts: current.accounts + [self.concurrentAccount]))
+        }
+        return try self.base.loadAccounts()
+    }
+
+    func storeAccounts(_ accounts: ManagedCodexAccountSet) throws {
+        try self.base.storeAccounts(accounts)
+    }
+
+    func ensureFileExists() throws -> URL {
+        try self.base.ensureFileExists()
+    }
+}
+
+/// Rewrites a managed home's auth.json on the first store access inside the executor,
+/// modeling an external writer racing the promotion between context build and the auth write.
+private final class MutatingManagedHomeAuthStore: ManagedCodexAccountStoring, @unchecked Sendable {
+    let base: any ManagedCodexAccountStoring
+    private let mutation: @Sendable () throws -> Void
+    private var didMutate = false
+
+    init(base: any ManagedCodexAccountStoring, mutation: @Sendable @escaping () throws -> Void) {
+        self.base = base
+        self.mutation = mutation
+    }
+
+    var lockURL: URL? {
+        self.base.lockURL
+    }
+
+    func loadAccounts() throws -> ManagedCodexAccountSet {
+        if self.didMutate == false {
+            self.didMutate = true
+            try self.mutation()
         }
         return try self.base.loadAccounts()
     }
