@@ -90,7 +90,21 @@ models.dev publishes costs as USD per 1M tokens. CodexBar converts those to USD 
 perToken = modelsDevCost / 1_000_000
 ```
 
-When models.dev includes `cost.context_over_200k`, CodexBar parses those values as the above-200k-token pricing lane and converts them with the same per-1M-token rule.
+When models.dev includes `cost.context_over_200k`, CodexBar converts those rates with the same per-1M-token rule.
+The legacy field name does not establish the threshold: a matching `cost.tiers` entry with `tier.type = "context"`
+supplies its explicit `tier.size`. Only the tier matching the legacy lane's rates is used; this does not add
+arbitrary multi-tier pricing. Older catalogs without that metadata use the bundled OpenAI model threshold,
+or 200,000 tokens when no provider-specific contract is known. Other providers never inherit OpenAI thresholds.
+
+OpenAI's [pricing table](https://developers.openai.com/api/docs/pricing) defines short context as **at most 272,000
+input tokens**, and long context as **more than 272,000**, including cached input. This applies to GPT-6 Astra,
+GPT-6.1 Sol, GPT-6 Sol, GPT-6 Luna, GPT-5.6 Sol/Terra/Luna, GPT-5.4/5.5, and their Pro variants where listed.
+The bundled table preserves that boundary for old catalogs, including the GPT-5.6 and Daybreak Blue aliases.
+For example, GPT-6.1 Sol with 210,000 input tokens (200,000 cached) and 1,000 output tokens costs **$0.050** at
+Standard rates. At 272,001 input tokens the full request uses long-context rates, not just the excess tokens.
+Catalog thresholds and bundled rates participate in the native Codex pricing fingerprint, so affected cached
+estimates are repriced. Existing native rows and scan checkpoints remain compatible; recorded authoritative costs
+and explicit custom-pricing overrides retain their existing precedence.
 
 ## Custom pricing overlay
 
