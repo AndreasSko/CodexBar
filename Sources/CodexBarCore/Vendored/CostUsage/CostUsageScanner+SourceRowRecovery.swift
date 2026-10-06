@@ -309,23 +309,9 @@ extension CostUsageScanner {
             guard !isAppended(row), retainedPricing(row) == nil else { return row }
             let (tokens, overflow) = row.input.addingReportingOverflow(row.output)
             // Source proves the request, but absent historical pricing must not silently become standard.
-            return CodexUsageRow(
-                day: row.day,
-                model: row.model,
-                rawModel: row.rawModel,
-                turnID: row.turnID,
-                eventIndex: row.eventIndex,
-                timestampUnixMs: row.timestampUnixMs,
-                input: row.input,
-                cached: row.cached,
-                output: row.output,
-                reasoning: row.reasoning,
-                knownCostNanos: row.knownCostNanos,
-                unpricedTokens: overflow ? Int.max : max(1, tokens),
-                pricingModel: row.pricingModel,
-                pricingMode: row.pricingMode,
-                responseID: row.responseID,
-                requestMirrorKeys: row.requestMirrorKeys)
+            var row = row
+            row.unpricedTokens = overflow ? Int.max : max(1, tokens)
+            return row
         }
         return Self.codexRowsWithPricingMetadata(
             classified,

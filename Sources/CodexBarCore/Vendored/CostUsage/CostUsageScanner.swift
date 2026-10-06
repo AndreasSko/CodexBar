@@ -364,6 +364,7 @@ enum CostUsageScanner {
         var sessionID: String?
         var pendingLedgerMirrors: Set<String>?
         var pendingLedgerResponseID: String?
+        var pendingLedgerPricingResponseID: String?
         var pendingLegacyMirrors: Set<String>?
         var pendingLegacyRowIndex: Int?
         var countedUsage: CostUsageCodexTotals?
@@ -372,15 +373,17 @@ enum CostUsageScanner {
             guard shouldClear else { return }
             self.pendingLedgerMirrors = nil
             self.pendingLedgerResponseID = nil
+            self.pendingLedgerPricingResponseID = nil
             self.pendingLegacyMirrors = nil
             self.pendingLegacyRowIndex = nil
         }
 
-        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?) {
+        mutating func beginLegacyObservation(keys: Set<String>?, snapshot: String?) -> String? {
             defer { self.clearPendingMirrors() }
             guard let keys, let pending = self.pendingLedgerMirrors, !keys.isDisjoint(with: pending),
-                  let snapshot, let responseID = self.pendingLedgerResponseID else { return }
+                  let snapshot, let responseID = self.pendingLedgerResponseID else { return nil }
             self.rememberMirrors([snapshot], responseID: responseID)
+            return self.pendingLedgerPricingResponseID
         }
 
         mutating func rememberMirrors(_ keys: [String], responseID: String) {
@@ -4136,13 +4139,13 @@ enum CostUsageScanner {
             usage: CostUsageCodexTotals?,
             turnID: String?,
             total: CostUsageCodexTotals?,
-            timestamp: String) -> (snapshot: String, adjacent: Set<String>)?
+            timestamp: String) -> (snapshot: String, adjacent: Set<String>, owningResponseID: String?)?
         {
             guard let usage else { return nil }
             let snapshot = mirrorKey(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
             let adjacent = adjacentMirrorKeys(turnID: turnID, usage: usage, total: total, timestamp: timestamp)
-            requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot)
-            return (snapshot, adjacent)
+            let owningResponseID = requestLedger.beginLegacyObservation(keys: adjacent, snapshot: snapshot)
+            return (snapshot, adjacent, owningResponseID)
         }
 
         func handleRequestLedger(_ record: CodexRequestUsageRecord, endOffset: Int64?) {
@@ -4175,6 +4178,10 @@ enum CostUsageScanner {
             requestLedger.pendingLegacyRowIndex = nil
             requestLedger.pendingLedgerMirrors = mirrorIndex == nil ? adjacentKeys : nil
             requestLedger.pendingLedgerResponseID = mirrorIndex == nil ? responseID : nil
+            // Only the original observation (including a verbatim duplicate) can donate saved legacy pricing.
+            let ownsPricing = !isReplay || (rows.last { $0.responseID == responseID }
+                ?? retainedRows.values.first { $0.responseID == responseID })?.requestMirrorKeys?.first == keys.first
+            requestLedger.pendingLedgerPricingResponseID = mirrorIndex == nil && ownsPricing ? responseID : nil
             let legacyRow = mirrorIndex.flatMap { index in
                 rows.first(where: { $0.eventIndex == index }) ?? retainedRows[index]
             }
@@ -4238,7 +4245,7 @@ enum CostUsageScanner {
         func rememberMirroredLegacyPricingKey(
             responseID: String,
             legacyRow: CodexUsageRow,
-            mirror: (snapshot: String, counterAlias: String?, exact: String))
+            mirror: (snapshot: String, owningResponseID: String?))
         {
             // A bounded slice can end between the ledger row and this mirror; the ledger row is then retained.
             guard let ledger = rows.last(where: { $0.responseID == responseID })
@@ -4246,14 +4253,8 @@ enum CostUsageScanner {
                 let ledgerIndex = ledger.eventIndex, ledger.model == legacyRow.model,
                 let legacyKey = CodexSourcePricingKey(legacyRow)
             else { return }
-            // A replay also links its mirror to this row for deduplication; only the original record's own
-            // mirror (same turn, usage, and cumulative total) describes the request this row owns.
-            let ownKeys = ledger.requestMirrorKeys ?? []
-            // A mirror stamped with another ledger record for this response belongs to that replay.
-            if !ownKeys.contains(mirror.exact), requestLedger.mirroredResponses?[mirror.exact] == responseID { return }
-            guard ownKeys.contains(mirror.snapshot)
-                || mirror.counterAlias.map({ alias in ownKeys.contains { $0.hasPrefix(alias) } }) == true
-            else { return }
+            guard mirror.owningResponseID == responseID
+                || ledger.requestMirrorKeys?.contains(mirror.snapshot) == true else { return }
             ledgerLegacyPricingKeys[ledgerIndex] = legacyKey
         }
 
@@ -4696,16 +4697,7 @@ enum CostUsageScanner {
                         input: deltaUsage.input,
                         cached: deltaUsage.cached,
                         output: deltaUsage.output),
-                    mirror: (
-                        key,
-                        total.map {
-                            mirrorKey(turnID: mirrorTurnID, usage: last ?? deltaUsage, total: $0, timestamp: nil)
-                        },
-                        mirrorKey(
-                            turnID: mirrorTurnID,
-                            usage: last ?? deltaUsage,
-                            total: nil,
-                            timestamp: record.timestamp)))
+                    mirror: (key, mirror?.owningResponseID))
                 return
             }
             if deltaInput == 0, deltaCached == 0, deltaOutput == 0 {

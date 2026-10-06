@@ -331,17 +331,27 @@ struct CostUsageRequestLedgerMigrationTests {
 
     /// A replayed response links its later token_count to the original ledger row for deduplication. Only the
     /// original's own mirror may supply that row's saved pricing; the replay's legacy row is a different request.
+    struct ReplayScenario: Sendable {
+        var bounded = false
+        var verbatimDuplicate = false
+        var originalUnpriced = false
+        var turnTracking = false
+        var sameCounterReplay = false
+    }
+
     @Test(arguments: [
-        (bounded: false, verbatimDuplicate: false, originalUnpriced: false, turnTracking: false),
-        (bounded: true, verbatimDuplicate: false, originalUnpriced: false, turnTracking: false),
-        (bounded: false, verbatimDuplicate: true, originalUnpriced: false, turnTracking: false),
-        (bounded: false, verbatimDuplicate: false, originalUnpriced: true, turnTracking: false),
-        (bounded: true, verbatimDuplicate: false, originalUnpriced: true, turnTracking: false),
-        (bounded: false, verbatimDuplicate: false, originalUnpriced: true, turnTracking: true),
-        (bounded: true, verbatimDuplicate: false, originalUnpriced: true, turnTracking: true),
+        ReplayScenario(),
+        .init(bounded: true),
+        .init(verbatimDuplicate: true),
+        .init(originalUnpriced: true),
+        .init(bounded: true, originalUnpriced: true),
+        .init(originalUnpriced: true, turnTracking: true),
+        .init(bounded: true, originalUnpriced: true, turnTracking: true),
+        .init(originalUnpriced: true, sameCounterReplay: true),
+        .init(bounded: true, originalUnpriced: true, sameCounterReplay: true),
     ])
     func `legacy upgrade takes saved pricing only from the original request mirror`(
-        _ scenario: (bounded: Bool, verbatimDuplicate: Bool, originalUnpriced: Bool, turnTracking: Bool)) throws
+        _ scenario: ReplayScenario) throws
     {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
@@ -390,7 +400,10 @@ struct CostUsageRequestLedgerMigrationTests {
             ],
             ledger(at: original, total: 100_000),
         ]
-        if scenario.verbatimDuplicate {
+        if scenario.sameCounterReplay {
+            // The original had no legacy mirror. Only the later replay was saved by the old parser.
+            lines += [ledger(at: replay, total: 100_000), count(at: replay, total: 100_000)]
+        } else if scenario.verbatimDuplicate {
             lines += [ledger(at: original, total: 100_000), count(at: original, total: 100_000)]
         } else {
             lines += [
@@ -413,8 +426,8 @@ struct CostUsageRequestLedgerMigrationTests {
         usage.codexParserRevision = 5
         usage.codexRequestLedgerState = nil
         let dayKey = CostUsageScanner.CostUsageDayRange.dayKey(from: day)
-        let observations = scenario.verbatimDuplicate ? [(original, "priority")]
-            : [(original, "priority"), (replay, "standard")]
+        let observations = scenario.sameCounterReplay ? [(replay, "standard")]
+            : scenario.verbatimDuplicate ? [(original, "priority")] : [(original, "priority"), (replay, "standard")]
         usage.codexRows = observations.enumerated().map { index, observation in
             CostUsageScanner.CodexUsageRow(
                 day: dayKey,
@@ -426,7 +439,7 @@ struct CostUsageRequestLedgerMigrationTests {
                 input: 100_000,
                 cached: 0,
                 output: 1000,
-                unpricedTokens: index == 0 && scenario.originalUnpriced ? 101_000 : nil,
+                unpricedTokens: index == 0 && scenario.originalUnpriced && !scenario.sameCounterReplay ? 101_000 : nil,
                 pricingModel: "gpt-5.4",
                 pricingMode: observation.1)
         }
