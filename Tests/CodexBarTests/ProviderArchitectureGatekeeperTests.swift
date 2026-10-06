@@ -3435,7 +3435,7 @@ struct ProviderArchitectureGatekeeperTests {
             anchor: "guard provider == .codex || provider == .claude || provider == .antigravity else { return nil }",
             expectedProviderIDs: ["antigravity", "claude", "codex"],
             expectedReferenceCount: 5,
-            expectedReferenceFingerprint: ["antigravity@0", "claude@0", "codex@0", "antigravity@5", "codex@17"],
+            expectedReferenceFingerprint: ["antigravity@0", "claude@0", "codex@0", "antigravity@6", "codex@8"],
             reason: "This exact cost scanner dispatch selects a provider-owned transcript, cache, or pricing format."),
         AllowedProviderConstruct(
             path: "Sources/CodexBarCore/CostUsageFetcher.swift",

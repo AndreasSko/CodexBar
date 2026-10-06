@@ -925,6 +925,7 @@ extension CostUsagePricing {
 
         func costUSD(
             model: String,
+            providerID: String? = nil,
             inputTokens: Int,
             cacheReadInputTokens: Int,
             cacheCreationInputTokens: Int,
@@ -938,6 +939,12 @@ extension CostUsagePricing {
                 cacheCreation: cacheCreationInputTokens,
                 cacheCreation1h: cacheCreationInputTokens1h,
                 output: outputTokens)
+            // Explicit provider routes stay in this catalog snapshot and never borrow another vendor's price.
+            if let providerID {
+                guard let lookup = self.prepareCatalog().pricing(providerID: providerID, modelID: model)
+                else { return nil }
+                return CostUsagePricing.claudeCostUSD(pricing: lookup.pricing, tokens: tokens)
+            }
             let key = self.normalize(model)
             return CostUsagePricing.claudeCostUSD(normalizedModel: key, tokens: tokens, pricingDate: pricingDate) {
                 self.lookup(model)

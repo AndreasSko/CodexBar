@@ -1183,31 +1183,19 @@ public struct CostUsageFetcher: Sendable {
         for entry in daily.data {
             for breakdown in entry.modelBreakdowns ?? [] {
                 guard breakdown.costUSD == nil else { continue }
+                let pricingTargets: [(providerID: String, modelID: String)]
                 if provider == .antigravity {
-                    // Antigravity prices through the Claude resolver, and its routing variants
-                    // resolve against the base vendor model, so both IDs are worth fetching.
-                    let names = [breakdown.modelName]
-                        + [AntigravityLocalReader.pricingBaseModelID(for: breakdown.modelName)].compactMap(\.self)
-                    for name in names {
-                        for target in CostUsagePricing.claudeModelsDevPricingTargets(for: name) {
-                            targets.insert(ModelsDevPricingTarget(
-                                providerID: target.providerID,
-                                modelID: target.modelID))
-                        }
-                    }
+                    pricingTargets = AntigravityLocalReader.pricingRefreshTargets(for: breakdown.modelName)
                 } else if provider == .codex {
                     guard OpenCodexRouteDispatcher.countsTowardCodexSubscription(modelName: breakdown.modelName)
                     else { continue }
                     guard !CostUsagePricing.isCodexUnattributedModel(breakdown.modelName) else { continue }
-                    for target in CostUsagePricing.codexModelsDevPricingTargets(for: breakdown.modelName) {
-                        targets.insert(ModelsDevPricingTarget(providerID: target.providerID, modelID: target.modelID))
-                    }
+                    pricingTargets = CostUsagePricing.codexModelsDevPricingTargets(for: breakdown.modelName)
                 } else {
-                    for target in CostUsagePricing.claudeModelsDevPricingTargets(for: breakdown.modelName) {
-                        targets.insert(ModelsDevPricingTarget(
-                            providerID: target.providerID,
-                            modelID: target.modelID))
-                    }
+                    pricingTargets = CostUsagePricing.claudeModelsDevPricingTargets(for: breakdown.modelName)
+                }
+                for target in pricingTargets {
+                    targets.insert(ModelsDevPricingTarget(providerID: target.providerID, modelID: target.modelID))
                 }
             }
         }
