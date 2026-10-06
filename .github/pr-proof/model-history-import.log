@@ -1,0 +1,39 @@
+Anonymized derivative of real production import runs.
+Private model names, paths, sessions/accounts, timestamps, request/token quantities and monetary values are withheld.
+Original input, raw logs, SQLite caches and JSON receipts are preserved locally; this is not an untouched raw transcript.
+
+Base production revision: 6a26b2e9b1b60471970deb6fe663f9e5f284e2ce
+After production revision: a0a56f5c6ee981e255ca3c6c74e6e71c81c88aab
+Observer: Tests/CodexBarTests/SpendDashboardRealImportProofTests.swift (identical in both checkouts)
+Path: SpendDashboardSource.mergingOpenCodexInputsWithObservation -> default store.loadEntries -> fan-out/aggregator -> SpendDashboardModel.build
+Input-byte equality between variants: PASS
+Frozen pricing-catalog byte equality between variants: PASS
+Known non-null token subtotal equality between variants: PASS
+Known non-null finite cost subtotal equality between variants: PASS
+Daily known accounting equality with exclusion markers removed: PASS
+Named models hidden on base and retained after fix: PASS
+Incomplete-request markers absent on base and propagated after fix: PASS
+Fresh-process cold/warm daily and dashboard accounting equality: PASS
+
+[base / cold / separate process / XCTest PASS]
+IMPORT_PROOF phase=cold productionSource=available sourceKind=openCodex
+IMPORT_PROOF storeCachePresent=true reader=full-log
+IMPORT_PROOF namedModels=hidden exclusions=absent
+IMPORT_PROOF knownSubtotals=preserved-on-dashboard
+[base / warm / separate process / XCTest PASS]
+IMPORT_PROOF phase=warm productionSource=available sourceKind=openCodex
+IMPORT_PROOF storeCachePresent=true reader=cached-zero-log-bytes
+IMPORT_PROOF namedModels=hidden exclusions=absent
+IMPORT_PROOF knownSubtotals=preserved-on-dashboard
+IMPORT_PROOF freshProcessReload=identical-daily-and-dashboard-accounting
+[after / cold / separate process / XCTest PASS]
+IMPORT_PROOF phase=cold productionSource=available sourceKind=openCodex
+IMPORT_PROOF storeCachePresent=true reader=full-log
+IMPORT_PROOF namedModels=retained exclusions=propagated
+IMPORT_PROOF knownSubtotals=preserved-on-dashboard
+[after / warm / separate process / XCTest PASS]
+IMPORT_PROOF phase=warm productionSource=available sourceKind=openCodex
+IMPORT_PROOF storeCachePresent=true reader=cached-zero-log-bytes
+IMPORT_PROOF namedModels=retained exclusions=propagated
+IMPORT_PROOF knownSubtotals=preserved-on-dashboard
+IMPORT_PROOF freshProcessReload=identical-daily-and-dashboard-accounting

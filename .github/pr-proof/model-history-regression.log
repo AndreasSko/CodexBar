@@ -1,0 +1,46 @@
+Anonymized regression-run summary; private paths, identities and wall-clock timestamps are withheld.
+Technical test counts, deadlines and elapsed durations are retained.
+Original full test logs and run receipts are preserved locally.
+
+Suite: UsageStoreCodexCostCatchUpPublicationTests
+Entrypoint: ./Scripts/test_fast.sh --skip-build --filter UsageStoreCodexCostCatchUpPublicationTests
+Deadline for each native invocation: 180 seconds
+
+[Unchanged base: 6a26b2e9b1b60471970deb6fe663f9e5f284e2ce]
+Independent build with no copied products: PASS
+Clean tree before and after suite invocation: PASS
+Native process exit code: 0
+Swift Testing: 10 tests in 1 suite PASS
+Entire native invocation: approximately 139 seconds
+
+[Repaired production: a0a56f5c6ee981e255ca3c6c74e6e71c81c88aab]
+Production code and suite unchanged during the comparison: PASS
+Native process exit code: 0
+Swift Testing: 10 tests in 1 suite PASS
+Entire native invocation: approximately 23 seconds
+
+The earlier isolated 180-second timeout did not reproduce on either revision in this comparison.
+The cause of that historical timeout remains undetermined. This is not evidence that the base reproduces it.
+
+[Fresh complete regression on repaired production plus the opt-in observer]
+Entrypoint: ./Scripts/test.sh --direct-workers 1
+Isolated homes, fresh group processes, contained descendants and Keychain suppression: enabled
+Complete runner process exit code: 0
+All selected groups ultimately passed.
+A Linux compatibility group exceeded its deadline; its twelve selections passed in isolated fresh-process retries.
+The real-input observer is opt-in and skips in this fixture regression; its four real-input executions passed separately.
+Swift test timing summary:
+- Shard: none
+- Group size: 12
+- Discovered selections: 1568
+- Selected selections: 1568
+- Selected groups: 143
+- First-pass successful groups: 142
+- First-pass failed groups: 1
+- Full-group retries: 0
+- Recovered groups: 1
+- Timed out groups: 1
+- Isolated selection retries: 12
+- Discovery seconds: 15.1
+- Execution seconds: 1830.7
+- Total seconds: 1861.7
