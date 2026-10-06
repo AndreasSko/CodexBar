@@ -34,6 +34,10 @@ login still needs the app's OAuth client or the explicit client environment over
 expose the generated token (1.1.28, 1.2.0, and 1.2.1 answer the same request with `200`). When the selected
 executable reports 1.2.2 or later, CodexBar still spends its bounded warm-reuse check but does not spawn a
 managed session or wait for its readiness deadline. Unknown versions keep the managed spawn.
+The legacy gate and ambient or account-scoped print fallback share one `agy --version` result per refresh,
+including unknown versions and probe failures. Each later refresh probes again; successful warm reuse needs
+no version subprocess. On the CSRF-gated fallback, CLI launches drop from three to two: one version check
+and one usage report, without caching across accounts or refreshes.
 
 For `agy` 1.2.2 and later, a failed legacy HTTPS fetch can fall back to
 `agy -p /usage --output-format json`. CodexBar checks that the same executable reports version 1.1.11
@@ -416,7 +420,10 @@ affected models unpriced rather than failing the scan.
 
 Use `codexbar cost --provider antigravity --format json` to read this same local history from the CLI.
 The cost endpoint and dashboard also include it when Antigravity is selected. Known models receive local token ×
-public API-price estimates from the pricing catalog. Unknown models stay unpriced. These figures are not Antigravity
+public API-price estimates from the pricing catalog. Unknown models with tokens stay unpriced.
+Requests with no model and zero tokens still count for the day but add no model row. With pricing enabled,
+they count as estimated at $0; without pricing, their cost remains absent. Named zero-token rows are unchanged. A model-less zero-token day does not hide
+named unpriced model rows from other days. These figures are not Antigravity
 charges or credit deductions, and these entry points do not expand the supported timestamp layouts described below.
 Local reads use cached or built-in prices first. Routine catalog updates run in the background; `codexbar cost --provider antigravity --refresh` may wait for a bounded pricing refresh when a recorded model has no known rate. Empty or absent history never starts a pricing download. Historical requests use prices applicable to their event timestamps.
 

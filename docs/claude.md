@@ -140,7 +140,9 @@ the cookie import.
   memory beyond the normal 30-minute cache window, ahead of a stale credentials file. Each refresh retries the
   persistent cache. Token expiry, profile changes, cache invalidation, and Never prompt still prevent reuse;
   after a rejected cache write, the next refresh first clears the stale persistent entry, then reuses and persists
-  a still-fresh in-memory credential once that cleanup succeeds.
+  an unexpired in-memory credential even after 30 minutes once that cleanup succeeds. Extended reuse requires
+  evidence of that exact failed write and its original consent; an unrelated invalidation cannot authorize it.
+  This does not discover an external login or enable additional background reads of Claude Code's Keychain item.
 - For the default CLI profile, expired cached or file credentials can adopt a fresh CLI Keychain token after file fallback, even when its fingerprint was already observed during an earlier repair. Existing direct-read consent, prompt policy, cooldown, one-minute freshness-check throttle, and noninteractive-read checks still apply. Custom profiles are not recovered from the unscoped global item, and CLI credentials are never rewritten by this synchronization. Background recovery still requires the Always allow prompts policy; the default Only on user action policy requires an explicit Refresh.
 - Credential selection does not rank unrelated sources by the largest `expiresAt`: expiry establishes validity,
   not account identity or issuance order. A valid profile file remains ahead of Keychain bootstrap. Keychain candidates
@@ -219,6 +221,14 @@ the cookie import.
   2) Chrome/Chromium forks: `~/Library/Application Support/Google/Chrome/*/Cookies`
   3) Firefox: `~/Library/Application Support/Firefox/Profiles/*/cookies.sqlite`
 - Domain: `claude.ai`.
+- Linux: the web source supports an explicitly configured manual `sessionKey` cookie. Automatic browser import,
+  including Firefox import, remains unavailable. This enables the same API request path as macOS; it does not
+  bypass Cloudflare challenges, refresh Claude Code OAuth credentials, or guarantee that a browser session will
+  work outside the browser. Use the OAuth source when the web request is challenged.
+- Linux CLI Auto mode: an existing valid manual cookie makes Web eligible ahead of CLI after upgrading.
+  Web success returns without launching Claude Code; authentication rejection or a Cloudflare challenge falls
+  back to an available CLI using the existing Auto policy. Cancellation stops without launching the CLI.
+  Explicit Web mode does not fall back. Use explicit OAuth mode for passive polling that must not launch the CLI.
 - Cookie name required:
   - `sessionKey` (value prefix `sk-ant-...`).
 - Cached cookies: Keychain cache `com.steipete.codexbar.cache` (account `cookie.claude`, source + timestamp).

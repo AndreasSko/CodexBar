@@ -1,9 +1,39 @@
 # Changelog
 
-## 0.71.2 — Unreleased
+## 0.72.1 — Unreleased
 
 ### Added
 
+- CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
+- Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
+- Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
+- Codex: list managed accounts and explicitly promote one from the macOS CLI, preserving displaced credentials with shared app/CLI locking, private atomic writes, and rejection of changed auth or managed-home destinations (#3191, #4234). Thanks @Yuxin-Qiao!
+
+- Dashboard: expose managed Codex accounts with saved usage, stable IDs, independent errors, and shared identity redaction in one-shot JSON and HTTP schema-v1 snapshots (#4184). Thanks @niteshmanav!
+
+### Changed
+
+- Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
+- Antigravity: avoid a duplicate `agy --version` process during each CLI usage refresh, including account-scoped fallbacks (#4254). Thanks @djbclark!
+- Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
+- Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
+- Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
+
+## 0.72.0 — 2026-10-04
+
+### Highlights
+
+- New providers and balances: WorkBuddy (Tencent) joins as provider #90 with its monthly credits allowance; Claude shows promotional cloud-session credits separately from prepaid credits; LithosAI puts its prepaid balance in the menu bar; Grok exports purchased credits in `usage --json`.
+- Antigravity works again on 2.19.1: Login with Google no longer fails with `invalid_client` (discovery now pairs each OAuth client id with its own secret), and additional Gemini profile homes can be combined into one local token/cost history.
+- Sign-in and cookies: explicit refreshes can prompt for Keychain access again for every plugin cookie provider, the CLI explains rejected sessions instead of "missing cookie", SweetCookieKit 0.5.5 adds Aside, Opera and Opera Neon, and Muse imports from every supported browser.
+- Lighter on CPU: the hidden "Surprise me" blink timer no longer burns 6–10% of a core in brand-icon mode.
+- Codex accounting: resumed sessions no longer zero out today's usage after a counter reset, local-history catch-up publishes today's tokens before sleeping, saved limit-reset credits appear in Claude OAuth usage, and Usage & Spend separates independent Codex chats from projects.
+- Linux: Claude web usage works with a manual session cookie.
+
+### Added
+
+- Claude: allow the claude.ai web source on Linux when a manual `sessionKey` cookie is configured; browser cookie import remains macOS-only (#4241). Thanks @5p00kyy!
+- Grok: export purchased Extra Usage Credits as a separate USD balance in usage JSON, preserving zero balances and included quotas (#4239, #4243). Thanks @Yuxin-Qiao and @djbclark!
 - LithosAI: show the prepaid balance beside the menu bar icon and in Balance layouts, including merged mode and zero, negative, and sub-cent amounts (#4230). Thanks @apoorvdarshan!
 - Claude: show promotional cloud-session credits separately from prepaid credits in menus, settings, and CLI output, including exhausted, expired, and unavailable states (#4194, #4214). Thanks @dstier-git!
 - Antigravity: opt in to additional Gemini profile homes in provider settings or config.json to combine local token/cost history without double-counting copied conversations (#4177). Thanks @keeuu!
@@ -11,13 +41,18 @@
 
 ### Fixed
 
+- Browser cookies: distinguish rejected sessions, permission failures, and provider outages in CLI refresh guidance without exposing cookie values (#4245). Thanks @sudoHG!
 - Claude: include saved limit-reset credits in OAuth usage while preserving quota and spending when the optional inventory query is rejected (#3895, #4232). Thanks @Yuxin-Qiao!
 - Antigravity: discover matching Google OAuth client credentials from Antigravity 2.19.1 and explain how to recover when Google rejects the client (#4229). Thanks @mvicari!
+- Usage & Spend: hide empty Antigravity unknown-model rows while preserving request counts, token totals, and complete coverage (#4246). Thanks @urda!
 - Codex: recover resumed-session usage after counter resets using owned request records, without double-counting legacy mirrors or copied child history; preserve saved prices through bounded cache upgrades (#3303, #4195). Thanks @Yuxin-Qiao!
 - Browser cookies: let explicit refreshes retry Keychain permission across plugin providers, explain suppressed imports, and recognize successful nonpersistent sessions (#4231). Thanks @apoorvdarshan!
 - Codex: continue bounded local-history discovery before sleeping so validated current-day tokens can publish promptly during catch-up, while preserving power limits and complete-window checks (#3508). Thanks @kernnel!
 - Browser cookies: adopt SweetCookieKit 0.5.5 for Aside, Opera, and Opera Neon support, including Cursor account switching, and let Muse (muse.ai) automatically import from the full supported browser catalog (#4215, #2429). Thanks @mvicari!
 - Muse Code: keep the selected dev.meta.ai browser team quota working when the session's `/api/auth/me` email is blank, by matching the session user to the login email in the team member list (#4228). Thanks @enieuwy!
+- Menu bar: fix recurring high CPU usage in brand icon mode by stopping hidden Surprise me animations while preserving critter fallback blinking and the saved preference (#4244). Thanks @lg!
+- Claude: restore the credential cache after a rejected write using an unexpired, consented in-memory credential even after 30 minutes, while preserving profile, invalidation, and prompt-policy checks (#3395, #4242). Thanks @Yuxin-Qiao!
+- Usage & Spend: separate explicitly marked independent Codex chats from projects, use saved chat titles, and hide titles and paths in privacy mode; retain project grouping when ownership is uncertain (#4247). Thanks @Yuxin-Qiao!
 
 ## 0.71.1 — 2026-10-03
 

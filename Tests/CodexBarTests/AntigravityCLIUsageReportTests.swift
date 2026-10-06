@@ -364,9 +364,14 @@ extension AntigravityCLIHTTPSFetchStrategyTests {
         ("1.2.2-preview", true),
         ("", true),
     ])
-    func `only CSRF gated agy versions skip the managed spawn`(version: String, spawns: Bool) {
+    func `only CSRF gated agy versions skip the managed spawn`(version: String, spawns: Bool) async {
         let parsed = AntigravityCLIHTTPSFetchStrategy.parseVersion(version)
-        #expect(AntigravityCLIHTTPSFetchStrategy.spawnCanReachLocalServer(version: parsed) == spawns)
+        let counter = SpawnCounter()
+        _ = try? await AntigravityCLIHTTPSFetchStrategy.fetchBySpawningIfReachable(version: parsed) {
+            await counter.record()
+            throw AntigravityStatusProbeError.notRunning
+        }
+        #expect(await counter.count == (spawns ? 1 : 0))
     }
 
     @Test
@@ -506,7 +511,7 @@ extension AntigravityCLIHTTPSFetchStrategyTests {
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let resolver = AntigravityCLIHTTPSFetchStrategy.AgyVersionResolver()
         let missing = fixture.directory.appendingPathComponent("missing-agy").path
-        let gate = try await AntigravityCLIHTTPSFetchStrategy.agyVersion(
+        let gate = try? await AntigravityCLIHTTPSFetchStrategy.agyVersion(
             binary: missing, environment: fixture.environment, resolver: resolver)
         #expect(gate == nil)
         await #expect(throws: AntigravityStatusProbeError.cliReportFailed(.executableNotFound)) {
@@ -518,6 +523,16 @@ extension AntigravityCLIHTTPSFetchStrategyTests {
                 versionResolver: resolver)
         }
         #expect(Self.versionCallCount(in: fixture.directory) == 0)
+    }
+
+    @Test
+    func `version resolver does not cache cancellation`() async throws {
+        let resolver = AntigravityCLIHTTPSFetchStrategy.AgyVersionResolver()
+        await #expect(throws: CancellationError.self) {
+            try await resolver.resolve { throw CancellationError() }
+        }
+        let version = try await resolver.resolve { (1, 2, 2) }
+        #expect(version?.0 == 1 && version?.1 == 2 && version?.2 == 2)
     }
 
     @Test(arguments: [false, true])
