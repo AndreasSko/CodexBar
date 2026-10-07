@@ -1455,6 +1455,18 @@ public enum ClaudeOAuthCredentialsStore {
         }
     }
 
+    /// Optional enrichment may reuse only the already accepted in-memory credential.
+    /// Never imports credentials, prompts, repairs, or changes persistent state.
+    public static func cachedCredentialsForSubscription(
+        historyOwner: String, environment: [String: String]) -> ClaudeOAuthCredentials?
+    {
+        let memory = self.readMemoryCache()
+        guard memory.profileIdentifier == self.credentialsProfileIdentifier(environment: environment),
+              let record = memory.record, record.historyOwnerIdentifier == historyOwner,
+              !record.credentials.isExpired else { return nil }
+        return record.credentials
+    }
+
     public static func load(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         allowKeychainPrompt: Bool = true,

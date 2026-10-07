@@ -684,7 +684,10 @@ extension UsageStore {
             let prepared = self.preparePublishedSnapshot(
                 allowanceCurrent, provider: provider, resetBackfillSource: resetBackfillSource, context: context)
             let backfilled = self.carryingClaudeSubscriptionMetadata(
-                prepared, provider: provider, strategy: result.strategyKind)
+                prepared,
+                provider: provider,
+                strategy: result.strategyKind,
+                oauthHistoryOwner: result.claudeOAuthHistoryOwnerIdentifier)
             let notifications = self.handleProviderRefreshNotifications(
                 provider: provider, result: result, snapshot: backfilled, context: context)
             self.lastKnownResetSnapshots[provider.instanceID] = backfilled
@@ -768,7 +771,11 @@ extension UsageStore {
             runtime.providerDidRefresh(context: runtimeContext, provider: provider)
         }
         self.scheduleClaudeSubscriptionMetadataIfSupported(
-            snapshot: backfilled, provider: provider, strategy: result.strategyKind, generation: context.generation)
+            snapshot: backfilled,
+            provider: provider,
+            strategy: result.strategyKind,
+            generation: context.generation,
+            oauthHistoryOwner: result.claudeOAuthHistoryOwnerIdentifier)
         if provider == .codex {
             self.recordCodexHistoricalSampleIfNeeded(snapshot: backfilled)
         }
@@ -1296,6 +1303,7 @@ extension UsageStore {
         // unresolved accounts.
         self.claudeSubscriptionMetadataTask?.cancel()
         self.claudeSubscriptionMetadataToken = nil
+        self.claudeSubscriptionHistoryBinding = nil
         self.widgetUsagePreservationBlockedProviders.insert(.claude)
         self.snapshots.removeValue(forKey: .claude)
         self.lastKnownResetSnapshots.removeValue(forKey: .claude)

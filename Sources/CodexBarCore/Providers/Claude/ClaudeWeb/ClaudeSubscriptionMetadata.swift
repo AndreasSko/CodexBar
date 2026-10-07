@@ -60,6 +60,18 @@ public enum ClaudeSubscriptionFetchResult: Equatable, Sendable {
 }
 
 public enum ClaudeSubscriptionMetadataFetcher {
+    /// Resolves ownership from the OAuth token used for the accepted usage capture.
+    public static func oauthOwner(
+        accessToken: String, transport: any ProviderHTTPTransport = ProviderHTTPClient.shared) async -> String?
+    {
+        guard let profile = try? await ClaudeOAuthUsageFetcher.fetchProfile(
+            accessToken: accessToken, transport: transport) else { return nil }
+        return ClaudeVerifiedAccountOwner.ownerID(
+            accountUUID: profile.accountUuid,
+            email: profile.emailAddress,
+            organizationUUID: profile.organizationUuid)
+    }
+
     /// Uses ONLY an existing, verified web-owner binding. No cookie discovery or credential mutation.
     public static func fetch(cookieHeader: String, expectedOwnerID: String) async -> ClaudeSubscriptionFetchResult {
         do {

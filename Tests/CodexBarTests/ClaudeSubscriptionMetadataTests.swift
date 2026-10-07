@@ -13,6 +13,99 @@ struct ClaudeSubscriptionMetadataTests {
         return try JSONSerialization.data(withJSONObject: fields)
     }
 
+    @Test func `optional OAuth identity reuses only the accepted cached owner and profile`() throws {
+        try ClaudeOAuthCredentialsStore.withEnvironmentCredentialsURLForTesting {
+            let credentials = ClaudeOAuthCredentials(
+                accessToken: "accepted-oauth",
+                refreshToken: "fixture-refresh",
+                expiresAt: Date().addingTimeInterval(3600),
+                scopes: ["user:profile"],
+                rateLimitTier: nil)
+            let record = ClaudeOAuthCredentialRecord(credentials: credentials, owner: .claudeCLI, source: .memoryCache)
+            let history = try #require(record.historyOwnerIdentifier)
+            let environment = ["CLAUDE_CONFIG_DIR": "/tmp/claude-subscription-fixture"]
+            let memory = ClaudeOAuthCredentialsStore.MemoryCacheStore()
+            memory.record = record
+            memory.profileIdentifier = ClaudeOAuthCredentialsStore
+                .credentialsProfileIdentifier(environment: environment)
+            ClaudeOAuthCredentialsStore.$taskMemoryCacheStoreOverride.withValue(memory) {
+                #expect(ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
+                    historyOwner: history, environment: environment)?.accessToken == "accepted-oauth")
+                #expect(ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
+                    historyOwner: "different-owner", environment: environment) == nil)
+                #expect(ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
+                    historyOwner: history, environment: ["CLAUDE_CONFIG_DIR": "/tmp/another-profile"]) == nil)
+                memory.record = nil
+                #expect(ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
+                    historyOwner: history, environment: environment) == nil)
+            }
+        }
+    }
+
+    @Test func `ordinary OAuth resolves billing owner without widget identity`() async throws {
+        let transport = ProviderHTTPTransportHandler { request in
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer accepted-oauth")
+            let url = try #require(request.url)
+            let profile = Data("""
+            {"account":{"uuid":"account-one","email_address":"one@example.com"},
+             "organization":{"uuid":"22222222-2222-4222-8222-222222222222"}}
+            """.utf8)
+            return try (
+                profile,
+                #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)))
+        }
+        let original = UsageSnapshot(primary: nil, secondary: nil, updatedAt: Date())
+        #expect(original.identity?.widgetAccountOwnerID == nil)
+        let owner = try #require(await ClaudeSubscriptionMetadataFetcher.oauthOwner(
+            accessToken: "accepted-oauth", transport: transport))
+        let bound = UsageStore.subscriptionSnapshot(original, owner: owner)
+        #expect(UsageStore.matchesClaudeSubscriptionOwner(bound, expected: bound))
+        #expect(UsageStore.subscriptionCaptureMatches(original, original))
+        #expect(!UsageStore.subscriptionCaptureMatches(
+            original.withIdentity(ProviderIdentitySnapshot(
+                providerID: .claude, accountEmail: "other@example.com", accountOrganization: nil, loginMethod: nil)),
+            original))
+    }
+
+    @Test func `manual billing cookie selects configured or saved credential without browser cache`() {
+        let configured = "sessionKey=sk-ant-sid01-configured"
+        let saved = "sessionKey=sk-ant-sid01-saved"
+        #expect(UsageStore.subscriptionManualCookie(
+            source: .manual, accountToken: nil, configuredHeader: configured) == configured)
+        #expect(UsageStore.subscriptionManualCookie(
+            source: .off, accountToken: saved, configuredHeader: configured) == saved)
+        #expect(UsageStore.subscriptionManualCookie(
+            source: .auto, accountToken: nil, configuredHeader: configured) == nil)
+        #expect(UsageStore.subscriptionManualCookie(
+            source: .manual, accountToken: nil, configuredHeader: "") == nil)
+        #expect(UsageStore.subscriptionManualCookie(
+            source: .manual, accountToken: nil, configuredHeader: saved) != configured)
+    }
+
+    @Test func `manual billing sends only the selected cookie and verifies its owner`() async throws {
+        let header = try #require(UsageStore.subscriptionManualCookie(
+            source: .manual, accountToken: nil, configuredHeader: "sessionKey=sk-ant-sid01-manual"))
+        let owner = try #require(ClaudeVerifiedAccountOwner.ownerID(
+            accountUUID: nil,
+            email: "one@example.com",
+            organizationUUID: "11111111-1111-4111-8111-111111111111"))
+        let billing = try self.response()
+        let transport = ProviderHTTPTransportHandler { request in
+            #expect(request.value(forHTTPHeaderField: "Cookie") == header)
+            let url = try #require(request.url)
+            let body = url.path == "/api/account" ? Data("""
+            {"email_address":"one@example.com",
+             "memberships":[{"organization":{"uuid":"11111111-1111-4111-8111-111111111111"}}]}
+            """.utf8) : billing
+            return try (body, #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)))
+        }
+        let result = await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+            await ClaudeSubscriptionMetadataFetcher.fetch(cookieHeader: header, expectedOwnerID: owner)
+        }
+        guard case let .available(metadata) = result else { Issue.record("Manual billing failed"); return }
+        #expect(metadata.renews != nil)
+    }
+
     @Test func `authenticated renewal retains exact timestamp`() throws {
         let value = try ClaudeSubscriptionMetadata.parse(self.response())
         #expect(value.renews?.date == ISO8601DateFormatter().date(from: "2026-11-05T14:15:04Z"))
