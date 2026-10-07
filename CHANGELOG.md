@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Codex: reject account promotion when legacy saved credentials conflict or a preservation destination changes before the live swap (#4301). Thanks @vincent-peng!
 - Vertex AI: stop Cloud Monitoring pagination when a page token repeats, preserve the collected quota samples, and cap unbounded pagination (#4318). Thanks @cheek-walnut!
 - Claude: disable user hooks in usage probes so background polling cannot run SessionStart commands (#4292). Thanks @IvanWest33!
 - Claude: let explicit Refresh request Keychain access with direct-read consent and an allowing prompt policy, while ordinary OAuth polling stays noninteractive (#4257). Thanks @stromseng!
