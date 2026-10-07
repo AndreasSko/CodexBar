@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Storage: reduce repeated path processing while scanning provider directories, preserving component totals and symbolic-link exclusions (#4286). Thanks @Yuxin-Qiao!
 - Usage & Spend: preserve provider brand artwork, keep source and model icons monochrome, and clarify compact breakdown rows without changing totals or menu/widget accents (#4294). Thanks @Yuxin-Qiao!
 
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
