@@ -93,6 +93,10 @@ Usage source picker:
 - In the segmented layout, selecting an account refreshes its card while the menu stays open. Delayed results stay
   scoped to that selection. An open chart submenu or highlighted menu command can defer the update until the submenu
   closes or the highlight clears.
+- Saved account readings are independent of account-widget visibility. Refreshing a selected account preserves
+  valid sibling readings, their original ages, errors, and credits in memory and across restart. Removed accounts
+  and rows whose ownership no longer matches the current account list are pruned; refresh failures only invalidate
+  the affected account's reading.
 - Reusing OpenCode OAuth enables remote account quota, not OpenCode session token/cost ingestion. See
   [OpenCode with Codex or OpenAI](opencode.md#using-opencode-with-codex-or-openai) for the current history boundary.
 

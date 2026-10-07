@@ -1252,17 +1252,6 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This provider-specific app branch passes its already-selected identity to a shared helper."),
         SuppressedProviderReference(
             path: "Sources/CodexBar/UsageStore+Refresh.swift",
-            anchor: "let identity = snapshot.identity(for: .codex)",
-            expectedProviderIDs: ["codex"],
-            reason: "This provider-specific app branch passes its already-selected identity to a shared helper."),
-        SuppressedProviderReference(
-            path: "Sources/CodexBar/UsageStore+Refresh.swift",
-            occurrence: 2,
-            anchor: "providerID: .codex,",
-            expectedProviderIDs: ["codex"],
-            reason: "This provider-specific app branch passes its already-selected identity to a shared helper."),
-        SuppressedProviderReference(
-            path: "Sources/CodexBar/UsageStore+Refresh.swift",
             anchor: "let currentAccount = self.uniqueTokenAccount(provider: .claude, accountID: fetchedAccount.id),",
             expectedProviderIDs: ["claude"],
             reason: "This provider-specific app branch passes its already-selected identity to a shared helper."),
