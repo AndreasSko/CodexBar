@@ -415,7 +415,7 @@ Model-scoped weekly-window proof (synthetic data, no real accounts or credential
 - Runs `claude` in a PTY session (`ClaudeCLISession`).
 - The bundled watchdog is discovered only in the running executable's resolved app bundle; launching through a CLI symlink preserves that association.
 - Default behavior: exit after each probe; Debug → "Keep CLI sessions alive" keeps it running between probes.
-- Both PTY probes and the non-PTY `/usage` fallback pass `--settings '{"remoteControlAtStartup":false}'` to disable Remote Control startup for the probe process. This process-local override leaves the user's saved settings unchanged; Claude's managed-settings policy still applies.
+- Both PTY probes and the non-PTY `/usage` fallback pass `--settings '{"remoteControlAtStartup":false,"disableAllHooks":true}'` to disable Remote Control startup and user hooks for the probe process. This process-local override leaves the user's saved settings unchanged; Claude's managed-settings policy still applies.
 - Both launches use `--strict-mcp-config` to skip the user's configured MCP servers. Saved nonessential-traffic restrictions remain in force.
 - A PTY timeout or usage-loading failure can trigger the non-PTY `/usage` fallback. Cancellation and rate limits stop the probe; a subscription-only notice from the fallback takes precedence over the original PTY failure.
 - Transient CLI timeouts and loading stalls preserve availability already established for that account, so a later
