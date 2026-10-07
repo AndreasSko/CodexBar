@@ -139,7 +139,7 @@ struct ProviderIconResourcesTests {
         }
     }
 
-    @Test(arguments: [UsageProvider.codex, .antigravity])
+    @Test(arguments: [UsageProvider.claude, .codex, .antigravity, .mistral, .muse, .bedrock, .vertexai])
     func `brand and monochrome images have independent caches`(provider: UsageProvider) throws {
         for brandFirst in [false, true] {
             ProviderBrandIcon.resetCacheForTesting()
@@ -164,7 +164,7 @@ struct ProviderIconResourcesTests {
         #expect(image.size == NSSize(width: 18, height: 18))
     }
 
-    @Test(arguments: [UsageProvider.codex, .antigravity])
+    @Test(arguments: [UsageProvider.claude, .codex, .antigravity, .mistral, .muse, .bedrock, .vertexai])
     func `curated brand resources render color and transparent padding`(provider: UsageProvider) throws {
         let image = try #require(ProviderBrandIcon.image(for: provider, style: .brand))
         let bitmap = try #require(NSBitmapImageRep(

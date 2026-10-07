@@ -8,16 +8,11 @@ enum ProviderBrandIcon {
         case brand
     }
 
-    private struct CacheKey: Hashable {
-        let provider: UsageProvider
-        let style: Style
-    }
-
     private static let size = NSSize(width: 18, height: 18)
-    private static var cache: [CacheKey: NSImage] = [:]
+    private static var cache: [Style: [UsageProvider: NSImage]] = [:]
 
     /// Lazy-loaded resource bundle for provider icons.
-    private static let resourceBundle: Bundle? = {
+    private static let resourceBundle: Bundle = {
         guard Bundle.main.bundleURL.pathExtension == "app" else {
             return Bundle.module
         }
@@ -32,18 +27,15 @@ enum ProviderBrandIcon {
     }()
 
     static func image(for provider: UsageProvider, style: Style = .monochrome) -> NSImage? {
-        let key = CacheKey(provider: provider, style: style)
-        if let cached = self.cache[key] {
+        if let cached = self.cache[style]?[provider] {
             return cached
         }
 
         let baseName = ProviderDescriptorRegistry.descriptor(for: provider).branding.iconResourceName
-        guard let bundle = self.resourceBundle else {
-            return nil
-        }
+        let bundle = self.resourceBundle
         // Only explicitly curated brand assets have reliable original colors. Existing provider
         // SVGs are often white silhouettes, so they must remain templates in both appearances.
-        // Different products can share a legacy monochrome resource, but not product artwork.
+        // Providers can share a monochrome resource while representing different products.
         let brandResourceName = "Brand-ProviderIcon-" + provider.rawValue
         let brandImage: NSImage? = style == .brand ? ["svg", "png"].lazy.compactMap { fileExtension in
             bundle.url(forResource: brandResourceName, withExtension: fileExtension)
@@ -54,7 +46,7 @@ enum ProviderBrandIcon {
 
         image.size = self.size
         image.isTemplate = brandImage == nil
-        self.cache[key] = image
+        self.cache[style, default: [:]][provider] = image
         return image
     }
 

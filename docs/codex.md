@@ -487,6 +487,11 @@ These account rows intentionally exclude pi and OMP sessions because their histo
 by one Codex account. The normal Codex cost menu and CLI scan continue to include supported pi-compatible history. The
 dashboard labels its values as local estimates and keeps currencies separate.
 
+## Local storage footprint
+
+Storage scans reuse top-level component paths within each scan. Symbolic links stay excluded, and path aliases
+and unnormalized roots retain their normalization fallback; directory totals and component names are unchanged.
+
 ## Key files
 - Web: `Sources/CodexBarCore/OpenAIWeb/*`
 - CLI RPC + diagnostic PTY parser: `Sources/CodexBarCore/UsageFetcher.swift`,

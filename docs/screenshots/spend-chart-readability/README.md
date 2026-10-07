@@ -19,7 +19,8 @@ are included.
 - `hourly-english.png`: the same clock notation with English dates and UI.
 - `hourly-german-narrow.png`: German dates and UI in a narrow dark layout, including both day-boundary ticks.
 
-Images are unmodified output from the offline render test. The test requires credential/session
+Images were regenerated against the merged upstream artwork on 2026-10-07 and are unmodified output
+from the offline render test. The test requires credential/session
 isolation and only writes screenshots when `CODEXBAR_SPEND_TREND_PROOF_DIR` is explicitly set.
 Provider icon slots are 20 points throughout Usage & Spend, with brand artwork padding compensated;
 account swatches are 8 points.
