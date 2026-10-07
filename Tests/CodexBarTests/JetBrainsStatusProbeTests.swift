@@ -1,8 +1,51 @@
-import CodexBarCore
 import Foundation
 import Testing
+@testable import CodexBarCore
 
 struct JetBrainsStatusProbeTests {
+    @Test(arguments: [false, true])
+    func `auto-detect does not combine another IDE log with selected XML`(selectedHasLog: Bool) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let options = root.appendingPathComponent("DataGrip2026.2/options")
+        try FileManager.default.createDirectory(at: options, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let quotaPath = options.appendingPathComponent("AIAssistantQuotaManager2.xml")
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="{&quot;current&quot;:&quot;25&quot;,&quot;maximum&quot;:&quot;100&quot;}" />
+          <option name="nextRefill" value="{&quot;next&quot;:&quot;2026-11-01T00:00:00Z&quot;}" />
+        </component></application>
+        """
+        try Data(xml.utf8).write(to: quotaPath)
+        try FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: quotaPath.path)
+        let selected = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: options.deletingLastPathComponent().path,
+            quotaFilePath: quotaPath.path)
+        let other = JetBrainsIDEInfo(
+            name: "PhpStorm",
+            version: "2026.2",
+            basePath: root.appendingPathComponent("PhpStorm2026.2").path,
+            quotaFilePath: root.appendingPathComponent("PhpStorm2026.2/options/AIAssistantQuotaManager2.xml").path)
+        let entry = JetBrainsQuotaLogReader.Entry(
+            timestamp: Date(timeIntervalSince1970: 100),
+            quotaInfo: .init(type: "Available", used: 50, maximum: 100, available: 50, until: nil),
+            refillInfo: nil)
+        let otherEntry = JetBrainsQuotaLogReader.Entry(
+            timestamp: Date(timeIntervalSince1970: 200),
+            quotaInfo: .init(type: "Available", used: 90, maximum: 100, available: 10, until: nil),
+            refillInfo: .init(type: "Known", next: .distantFuture, amount: 100, duration: "30d"))
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { $0 ? [selected, other] : [selected] },
+            readLogEntry: { $0 == selected.basePath ? (selectedHasLog ? entry : nil) : otherEntry })
+        let snapshot = try await probe.fetch()
+        #expect(snapshot.detectedIDE == selected)
+        #expect(snapshot.quotaInfo.used == (selectedHasLog ? 50 : 25))
+        #expect(snapshot.refillInfo?.next == (selectedHasLog ? nil : ISO8601DateParser.parse("2026-11-01T00:00:00Z")))
+    }
+
     @Test
     func `parses quota XML with tariff quota`() throws {
         // Real-world format with tariffQuota containing available credits
@@ -390,6 +433,61 @@ struct JetBrainsStatusProbeTests {
         #expect(snapshot.quotaInfo.available == 654_000)
         #expect(abs(snapshot.quotaInfo.usedPercent - 34.6) < 0.001)
         #expect(abs(snapshot.quotaInfo.remainingPercent - 65.4) < 0.001)
+    }
+
+    @Test
+    func `auto-detect falls back to idea log when no IDE has a quota XML`() async throws {
+        let log = [
+            "2026-10-05 15:21:27,386 [1]   INFO - #c.i.m.l.c.q.QuotaManager2Impl - New quota refill state is: "
+                + "Known(next=2026-10-11T17:00:30.231Z, tariff=QuotaRefillInfoTariff(amount=1000000, duration=30d))",
+            "2026-10-05 15:27:49,811 [2]   INFO - #c.i.m.l.c.q.QuotaManager2Impl - New quota state is: "
+                + "Available(current=346495.294, maximum=6489986.397, until=2028-09-22T21:00:00Z, "
+                + "tariffQuota=QuotaDetails(current=346495.294, maximum=1000000, available=653504.706), "
+                + "topUpQuota=QuotaDetails(current=0, maximum=5489986.397, available=5489986.397))",
+        ].joined(separator: "\n")
+        let logEntry = try #require(JetBrainsQuotaLogReader.latestEntry(inLogContent: log))
+        let staleEntry = JetBrainsQuotaLogReader.Entry(
+            timestamp: logEntry.timestamp.addingTimeInterval(-3600),
+            quotaInfo: JetBrainsQuotaInfo(type: "Available", used: 0, maximum: 1_000_000, available: nil, until: nil),
+            refillInfo: nil)
+        let dataGrip = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: "/missing/DataGrip2026.2",
+            quotaFilePath: "/missing/DataGrip2026.2/options/AIAssistantQuotaManager2.xml")
+        let phpStorm = JetBrainsIDEInfo(
+            name: "PhpStorm",
+            version: "2026.2",
+            basePath: "/missing/PhpStorm2026.2",
+            quotaFilePath: "/missing/PhpStorm2026.2/options/AIAssistantQuotaManager2.xml")
+
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { includeMissingQuota in includeMissingQuota ? [dataGrip, phpStorm] : [] },
+            readLogEntry: { basePath in basePath == dataGrip.basePath ? logEntry : staleEntry })
+        let snapshot = try await probe.fetch()
+
+        #expect(snapshot.detectedIDE == dataGrip)
+        #expect(snapshot.quotaInfo.used == 346_495.294)
+        #expect(snapshot.quotaInfo.maximum == 1_000_000)
+        #expect(snapshot.refillInfo?.next == ISO8601DateParser.parse("2026-10-11T17:00:30.231Z"))
+    }
+
+    @Test
+    func `auto-detect without quota XML or log still reports no IDE`() async {
+        let ide = JetBrainsIDEInfo(
+            name: "DataGrip",
+            version: "2026.2",
+            basePath: "/missing/DataGrip2026.2",
+            quotaFilePath: "/missing/DataGrip2026.2/options/AIAssistantQuotaManager2.xml")
+        let probe = JetBrainsStatusProbe(
+            settings: nil,
+            detectIDEs: { includeMissingQuota in includeMissingQuota ? [ide] : [] },
+            readLogEntry: { _ in nil })
+
+        await #expect(throws: JetBrainsStatusProbeError.noIDEDetected) {
+            _ = try await probe.fetch()
+        }
     }
 
     @Test(arguments: [
