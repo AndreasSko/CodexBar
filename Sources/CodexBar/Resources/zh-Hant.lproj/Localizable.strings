@@ -1525,6 +1525,8 @@
 
 "Cumulative" = "累計";
 "Token activity" = "Token 活動";
+"Earlier activity" = "較早紀錄";
+"More recent activity" = "最近紀錄";
 "View" = "檢視";
 "in the last year" = "近一年";
 "No activity in the last 12 months" = "近 12 個月暫無活動";
@@ -1683,3 +1685,15 @@
 "Browser profile" = "瀏覽器設定檔";
 "Unavailable profile: %@" = "無法使用的設定檔：%@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "僅讀取所選的 %@ 設定檔。絕不會自動選擇帳號。";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "已記錄支出";
+"Highest recorded spend" = "最高已記錄支出";
+"Previous day" = "前一天";
+"Next day" = "後一天";
+"Click to isolate a source. Click again to show all." = "點擊單獨查看此來源，再次點擊顯示全部。";
+"Recorded hourly spend" = "已記錄的每小時支出";
+"Highest spend" = "最高支出";
+"Models for this day" = "查看當天模型";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "點擊長條逐層查看，下方選單可查詢詳細金額。";

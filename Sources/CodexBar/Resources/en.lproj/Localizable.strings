@@ -1529,6 +1529,8 @@
 
 "Cumulative" = "Cumulative";
 "Token activity" = "Token activity";
+"Earlier activity" = "Earlier activity";
+"More recent activity" = "More recent activity";
 "View" = "View";
 "in the last year" = "in the last year";
 "No activity in the last 12 months" = "No activity in the last 12 months";
@@ -1655,3 +1657,15 @@
 "Browser profile" = "Browser profile";
 "Unavailable profile: %@" = "Unavailable profile: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Read only the selected %@ profile. Accounts are never selected automatically.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Recorded spend";
+"Highest recorded spend" = "Highest recorded spend";
+"Previous day" = "Previous day";
+"Next day" = "Next day";
+"Click to isolate a source. Click again to show all." = "Click to isolate a source. Click again to show all.";
+"Recorded hourly spend" = "Recorded hourly spend";
+"Highest spend" = "Highest spend";
+"Models for this day" = "Models for this day";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Click a bar to explore. Use the menu below for exact amounts.";

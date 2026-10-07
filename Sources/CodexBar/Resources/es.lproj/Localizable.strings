@@ -1493,6 +1493,8 @@
 
 "Cumulative" = "Acumulado";
 "Token activity" = "Actividad de tokens";
+"Earlier activity" = "Actividad anterior";
+"More recent activity" = "Actividad más reciente";
 "View" = "Vista";
 "in the last year" = "en el último año";
 "No activity in the last 12 months" = "Sin actividad en los últimos 12 meses";
@@ -1650,3 +1652,15 @@
 "Browser profile" = "Perfil del navegador";
 "Unavailable profile: %@" = "Perfil no disponible: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Leer solo el perfil de %@ seleccionado. Las cuentas nunca se seleccionan automáticamente.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Gasto registrado";
+"Highest recorded spend" = "Mayor gasto registrado";
+"Previous day" = "Día anterior";
+"Next day" = "Día siguiente";
+"Click to isolate a source. Click again to show all." = "Haz clic para aislar una fuente. Haz clic de nuevo para mostrar todas.";
+"Recorded hourly spend" = "Gasto por hora registrado";
+"Highest spend" = "Gasto máximo";
+"Models for this day" = "Modelos de este día";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Haz clic en una barra para explorar. Consulta los importes exactos en el menú inferior.";

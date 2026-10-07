@@ -1498,6 +1498,8 @@
 
 "Cumulative" = "تراكمي";
 "Token activity" = "نشاط الرموز";
+"Earlier activity" = "نشاط أقدم";
+"More recent activity" = "نشاط أحدث";
 "View" = "عرض";
 "in the last year" = "في العام الماضي";
 "No activity in the last 12 months" = "لا يوجد نشاط في آخر 12 شهرًا";
@@ -1656,3 +1658,15 @@
 "Browser profile" = "ملف تعريف المتصفح";
 "Unavailable profile: %@" = "ملف التعريف غير متاح: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "قراءة ملف تعريف %@ المحدد فقط. لا يتم اختيار الحسابات تلقائيًا مطلقًا.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "الإنفاق المسجل";
+"Highest recorded spend" = "أعلى إنفاق مسجل";
+"Previous day" = "اليوم السابق";
+"Next day" = "اليوم التالي";
+"Click to isolate a source. Click again to show all." = "انقر لعرض مصدر واحد. انقر مجددًا لعرض الكل.";
+"Recorded hourly spend" = "الإنفاق المسجل حسب الساعة";
+"Highest spend" = "أعلى إنفاق";
+"Models for this day" = "نماذج هذا اليوم";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "انقر على عمود لاستكشاف البيانات. استخدم القائمة أدناه لعرض المبالغ الدقيقة.";

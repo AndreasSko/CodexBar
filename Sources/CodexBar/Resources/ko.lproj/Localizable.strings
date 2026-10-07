@@ -1464,6 +1464,8 @@
 
 "Cumulative" = "누적";
 "Token activity" = "토큰 활동";
+"Earlier activity" = "이전 활동";
+"More recent activity" = "최근 활동";
 "View" = "보기";
 "in the last year" = "지난 1년";
 "No activity in the last 12 months" = "지난 12개월 동안 활동 없음";
@@ -1621,3 +1623,15 @@
 "Browser profile" = "브라우저 프로필";
 "Unavailable profile: %@" = "사용할 수 없는 프로필: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "선택한 %@ 프로필만 읽습니다. 계정은 자동으로 선택되지 않습니다.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "기록된 지출";
+"Highest recorded spend" = "기록된 최대 지출";
+"Previous day" = "이전 날짜";
+"Next day" = "다음 날짜";
+"Click to isolate a source. Click again to show all." = "클릭하면 이 소스만 표시됩니다. 다시 클릭하면 모두 표시됩니다.";
+"Recorded hourly spend" = "기록된 시간별 지출";
+"Highest spend" = "최대 지출";
+"Models for this day" = "이 날짜의 모델";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "막대를 클릭해 자세히 살펴보세요. 아래 메뉴에서 정확한 금액을 확인할 수 있습니다.";

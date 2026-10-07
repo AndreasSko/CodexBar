@@ -48,6 +48,9 @@ sessions, Codex projects, and a 365-day token heatmap. A heatmap day with no cov
 and is not clickable. Custom list-price overlays are documented in `docs/model-pricing.md`.
 Cached and combined reports retain token-class details and known request counts. Coverage is combined from each
 source's existing classification, so a priced source cannot hide another source's unpriced or unmetered rows.
+The daily ledger retains known request counts when another source cannot count requests and marks that subtotal
+with `≥`. If every source omits its request count, the ledger shows a dash. Request-count gaps do not make known
+token or cost totals partial, and partial cost estimates do not erase known request counts.
 If coverage totals cannot fit, aggregation falls back to existing request or daily-row inference without changing costs or stored data.
 Token sums that exceed the supported integer range remain unavailable for that aggregation pass; later rows do not
 restore a partial count. Other token classes, pricing, and explicit totals retain their existing meaning. Materialized
@@ -131,7 +134,7 @@ complete when the available scan window covers fewer days.
 | Codebuff | API token from config/env or `codebuff login` credentials → usage API (`api`). |
 | Venice | Auto/API: API key from config/env → DIEM/USD balance (`api`). Explicit Web: Chrome or manual cookies → subscription credit details (`web`). |
 | Command Code | Web billing API via Command Code session cookies (`web`). |
-| ClinePass | API key from config/env, then the existing `cline auth` session file → 5-hour, weekly, and monthly subscription usage limits (`api`). |
+| ClinePass | API key from config/env or labeled API-key accounts, then the existing `cline auth` session file → 5-hour, weekly, and monthly subscription usage limits (`api`). |
 | Qoder | Browser or manual cookies → big model credit usage (`web`). |
 | StepFun | Username/password login or manual Oasis token (`web`). |
 | AWS Bedrock | AWS credentials → Cost Explorer spend/budgets and optional CloudWatch Claude activity (`api`). |
@@ -569,7 +572,7 @@ refresh the token; renew an expired session with `cline auth`. See the path over
 
 ClinePass usage is fetched by the bundled TypeScript plugin on macOS and Linux; QuickJS is the default engine and
 JavaScriptCore is the macOS rollback engine. The committed `.js` is generated from `clinepass.ts`.
-- API key from `~/.codexbar/config.json`, `CLINE_API_KEY`, or `CLINEPASS_API_KEY`.
+- Selected labeled API-key account, otherwise an API key from `~/.codexbar/config.json`, `CLINE_API_KEY`, or `CLINEPASS_API_KEY`; a rejected selected key never falls back to another credential.
 - Reads 5-hour, weekly, and monthly usage limits from `GET https://api.cline.bot/api/v1/users/me/plan/usage-limits`.
 - ClinePass subscription limits are distinct from Cline pay-as-you-go balance and usage.
 - Status: none yet.

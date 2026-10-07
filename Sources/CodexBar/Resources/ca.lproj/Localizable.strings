@@ -1501,6 +1501,8 @@
 
 "Cumulative" = "Acumulat";
 "Token activity" = "Activitat de tokens";
+"Earlier activity" = "Activitat anterior";
+"More recent activity" = "Activitat més recent";
 "View" = "Vista";
 "in the last year" = "l'últim any";
 "No activity in the last 12 months" = "Sense activitat en els últims 12 mesos";
@@ -1654,3 +1656,15 @@
 "Browser profile" = "Perfil del navegador";
 "Unavailable profile: %@" = "Perfil no disponible: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Llegeix només el perfil de %@ seleccionat. Els comptes no se seleccionen mai automàticament.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Despesa registrada";
+"Highest recorded spend" = "Despesa registrada màxima";
+"Previous day" = "Dia anterior";
+"Next day" = "Dia següent";
+"Click to isolate a source. Click again to show all." = "Fes clic per aïllar una font. Torna a fer clic per mostrar-les totes.";
+"Recorded hourly spend" = "Despesa horària registrada";
+"Highest spend" = "Despesa màxima";
+"Models for this day" = "Models per aquest dia";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Fes clic en una barra per explorar. Consulta els imports exactes al menú inferior.";

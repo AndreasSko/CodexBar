@@ -1495,6 +1495,8 @@
 
 "Cumulative" = "累計";
 "Token activity" = "トークンアクティビティ";
+"Earlier activity" = "以前の記録";
+"More recent activity" = "最近の記録";
 "View" = "表示";
 "in the last year" = "過去1年";
 "No activity in the last 12 months" = "過去12か月にアクティビティなし";
@@ -1652,3 +1654,15 @@
 "Browser profile" = "ブラウザープロファイル";
 "Unavailable profile: %@" = "利用できないプロファイル: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "選択した %@ プロファイルのみを読み取ります。アカウントが自動で選択されることはありません。";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "記録済みの支出";
+"Highest recorded spend" = "記録済みの最大支出";
+"Previous day" = "前の日";
+"Next day" = "次の日";
+"Click to isolate a source. Click again to show all." = "クリックでこのソースのみ表示。再クリックで全て表示。";
+"Recorded hourly spend" = "記録された時間別支出";
+"Highest spend" = "最大支出";
+"Models for this day" = "この日のモデル";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "棒をクリックして詳しく確認できます。下のメニューで正確な金額を確認できます。";

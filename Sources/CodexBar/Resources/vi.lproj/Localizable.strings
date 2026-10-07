@@ -1495,6 +1495,8 @@
 
 "Cumulative" = "Tích lũy";
 "Token activity" = "Hoạt động token";
+"Earlier activity" = "Hoạt động trước đây";
+"More recent activity" = "Hoạt động gần đây";
 "View" = "Chế độ xem";
 "in the last year" = "trong năm qua";
 "No activity in the last 12 months" = "Không có hoạt động trong 12 tháng qua";
@@ -1653,3 +1655,15 @@
 "Browser profile" = "Hồ sơ trình duyệt";
 "Unavailable profile: %@" = "Hồ sơ không khả dụng: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Chỉ đọc hồ sơ %@ đã chọn. Tài khoản không bao giờ được chọn tự động.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Chi tiêu đã ghi nhận";
+"Highest recorded spend" = "Chi tiêu đã ghi nhận cao nhất";
+"Previous day" = "Ngày trước";
+"Next day" = "Ngày tiếp theo";
+"Click to isolate a source. Click again to show all." = "Nhấp để chỉ xem một nguồn. Nhấp lần nữa để xem tất cả.";
+"Recorded hourly spend" = "Chi tiêu theo giờ đã ghi nhận";
+"Highest spend" = "Chi tiêu cao nhất";
+"Models for this day" = "Mô hình của ngày này";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Nhấp vào cột để khám phá. Dùng menu bên dưới để xem số tiền chính xác.";

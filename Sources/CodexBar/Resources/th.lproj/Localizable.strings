@@ -1498,6 +1498,8 @@
 
 "Cumulative" = "สะสม";
 "Token activity" = "กิจกรรมโทเทน";
+"Earlier activity" = "กิจกรรมก่อนหน้า";
+"More recent activity" = "กิจกรรมล่าสุด";
 "View" = "มุมมอง";
 "in the last year" = "ในปีที่ผ่านมา";
 "No activity in the last 12 months" = "ไม่มีกิจกรรมในช่วง 12 เดือนที่ผ่านมา";
@@ -1656,3 +1658,15 @@
 "Browser profile" = "โปรไฟล์เบราว์เซอร์";
 "Unavailable profile: %@" = "โปรไฟล์ไม่พร้อมใช้งาน: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "อ่านเฉพาะโปรไฟล์ %@ ที่เลือกเท่านั้น ระบบจะไม่เลือกบัญชีโดยอัตโนมัติ";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "ค่าใช้จ่ายที่บันทึกไว้";
+"Highest recorded spend" = "ค่าใช้จ่ายที่บันทึกไว้สูงสุด";
+"Previous day" = "วันก่อนหน้า";
+"Next day" = "วันถัดไป";
+"Click to isolate a source. Click again to show all." = "คลิกเพื่อดูแหล่งเดียว คลิกอีกครั้งเพื่อดูทั้งหมด";
+"Recorded hourly spend" = "ค่าใช้จ่ายรายชั่วโมงที่บันทึกไว้";
+"Highest spend" = "ค่าใช้จ่ายสูงสุด";
+"Models for this day" = "โมเดลของวันนี้";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "คลิกแท่งกราฟเพื่อดูรายละเอียด ใช้เมนูด้านล่างเพื่อดูจำนวนเงินที่แน่นอน";

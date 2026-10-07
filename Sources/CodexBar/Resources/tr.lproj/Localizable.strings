@@ -1496,6 +1496,8 @@
 
 "Cumulative" = "Kümülatif";
 "Token activity" = "Token etkinliği";
+"Earlier activity" = "Önceki etkinlik";
+"More recent activity" = "Daha yeni etkinlik";
 "View" = "Görünüm";
 "in the last year" = "son yılda";
 "No activity in the last 12 months" = "Son 12 ayda etkinlik yok";
@@ -1654,3 +1656,15 @@
 "Browser profile" = "Tarayıcı profili";
 "Unavailable profile: %@" = "Profil kullanılamıyor: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Yalnızca seçilen %@ profilini oku. Hesaplar asla otomatik seçilmez.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Kaydedilen harcama";
+"Highest recorded spend" = "En yüksek kaydedilen harcama";
+"Previous day" = "Önceki gün";
+"Next day" = "Sonraki gün";
+"Click to isolate a source. Click again to show all." = "Tek kaynağı görmek için tıklayın. Tümünü görmek için tekrar tıklayın.";
+"Recorded hourly spend" = "Kaydedilen saatlik harcama";
+"Highest spend" = "En yüksek harcama";
+"Models for this day" = "Bu günün modelleri";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Ayrıntılar için bir çubuğa tıklayın. Kesin tutarlar için aşağıdaki menüyü kullanın.";

@@ -1494,6 +1494,8 @@
 
 "Cumulative" = "Cumulatief";
 "Token activity" = "Token-activiteit";
+"Earlier activity" = "Eerdere activiteit";
+"More recent activity" = "Recentere activiteit";
 "View" = "Weergave";
 "in the last year" = "in het afgelopen jaar";
 "No activity in the last 12 months" = "Geen activiteit in de afgelopen 12 maanden";
@@ -1651,3 +1653,15 @@
 "Browser profile" = "Browserprofiel";
 "Unavailable profile: %@" = "Profiel niet beschikbaar: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Lees alleen het geselecteerde %@-profiel. Accounts worden nooit automatisch geselecteerd.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Geregistreerde uitgaven";
+"Highest recorded spend" = "Hoogste geregistreerde uitgaven";
+"Previous day" = "Vorige dag";
+"Next day" = "Volgende dag";
+"Click to isolate a source. Click again to show all." = "Klik om één bron te tonen. Klik opnieuw om alles te tonen.";
+"Recorded hourly spend" = "Geregistreerde uitgaven per uur";
+"Highest spend" = "Hoogste uitgaven";
+"Models for this day" = "Modellen voor deze dag";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Klik op een balk voor details. Het menu hieronder toont exacte bedragen.";

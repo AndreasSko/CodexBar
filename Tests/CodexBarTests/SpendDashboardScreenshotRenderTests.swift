@@ -10,6 +10,53 @@ import XCTest
 ///   CODEXBAR_SPEND_PROOF_DIR=.github/pr-proof swift test --filter SpendDashboardScreenshotRenderTests
 @MainActor
 final class SpendDashboardScreenshotRenderTests: XCTestCase {
+    func test_renderPartialRequestLedger() throws {
+        guard let path = ProcessInfo.processInfo.environment["CODEXBAR_REQUEST_LEDGER_PROOF_DIR"] else {
+            throw XCTSkip("Set CODEXBAR_REQUEST_LEDGER_PROOF_DIR for synthetic request ledger proof")
+        }
+        let output = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let now = try XCTUnwrap(Self.gmtCalendar.date(from: DateComponents(year: 2026, month: 7, day: 16)))
+        for scenario in ["mixed", "unknown", "partial-cost"] {
+            let counted = scenario == "mixed"
+            let inputs = [UsageProvider.claude, .codex].enumerated().map { index, provider in
+                let entry = CostUsageDailyReport.Entry(
+                    date: "2026-07-16",
+                    inputTokens: 10,
+                    outputTokens: 0,
+                    totalTokens: 10,
+                    requestCount: counted && index == 0 ? 2 : nil,
+                    costUSD: 1,
+                    modelsUsed: ["fixture-model"],
+                    modelBreakdowns: [.init(modelName: "fixture-model", costUSD: 1, totalTokens: 10)],
+                    unpricedRequestCount: scenario == "partial-cost" && index == 1 ? 1 : nil,
+                    pricedRequestCount: scenario == "partial-cost" && index == 1 ? 2 : nil)
+                return SpendDashboardModel.ProviderInput(
+                    provider: provider,
+                    displayName: index == 0 ? "Synthetic Claude" : "Synthetic Codex",
+                    snapshot: CostUsageTokenSnapshot(
+                        sessionTokens: 10,
+                        sessionCostUSD: 1,
+                        last30DaysTokens: 10,
+                        last30DaysCostUSD: 1,
+                        historyDays: 1,
+                        daily: [entry],
+                        updatedAt: now))
+            }
+            let model = SpendDashboardModel.build(
+                inputs: inputs, requestedDays: 1, now: now, calendar: Self.gmtCalendar)
+            let group = try XCTUnwrap(model.groups.first)
+            let view = AnyView(SpendDashboardCurrencySection(group: group, requestedDays: 1, hidePersonalInfo: true)
+                .padding(24)
+                .frame(width: 820)
+                .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+                .environment(\.colorScheme, .light)
+                .background(Color.white))
+            let data = try XCTUnwrap(Self.pngData(for: view))
+            try data.write(to: output.appendingPathComponent("\(scenario).png"))
+        }
+    }
+
     func test_renderIndependentChatScreenshots() throws {
         guard let dir = ProcessInfo.processInfo.environment["CODEXBAR_SPEND_CHAT_PROOF_DIR"] else {
             throw XCTSkip("Set CODEXBAR_SPEND_CHAT_PROOF_DIR for synthetic independent-chat screenshots.")

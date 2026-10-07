@@ -145,7 +145,7 @@ struct SpendProviderBreakdownRows: View {
     private func providerGroup(_ breakdown: SpendProviderBreakdown) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                SpendProviderIcon(provider: breakdown.provider, size: 22)
+                SpendProviderIcon(provider: breakdown.provider)
                 Text(breakdown.displayName)
                     .font(.headline)
                     .lineLimit(1)
@@ -174,12 +174,11 @@ struct SpendProviderBreakdownRows: View {
                     if index > 0 {
                         self.childDivider
                     }
-                    HStack(spacing: 8) {
+                    HStack(spacing: 9) {
                         SpendProviderIcon(
                             provider: row.provider,
                             sourceKind: row.sourceKind,
-                            style: .monochrome,
-                            size: 16)
+                            style: .monochrome)
                             .opacity(0.76)
                         Text(row.displayName)
                             .lineLimit(1)
@@ -210,9 +209,12 @@ struct SpendProviderBreakdownRows: View {
                 }
                 let models = self.expandedProviders.contains(breakdown.provider)
                     ? breakdown.models : Array(breakdown.models.prefix(spendProviderModelDisplayLimit))
-                ForEach(models) { row in
-                    HStack(spacing: 8) {
-                        SpendProviderIcon(provider: row.provider, style: .monochrome, size: 16)
+                ForEach(Array(models.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        self.childDivider
+                    }
+                    HStack(spacing: 9) {
+                        SpendProviderIcon(provider: row.provider, style: .monochrome)
                             .opacity(0.76)
                         Text(row.modelName)
                             .foregroundStyle(.primary)
@@ -248,7 +250,7 @@ struct SpendProviderBreakdownRows: View {
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .padding(.leading, 56)
+                    .padding(.leading, 61)
                     .padding(.top, 5)
                 }
             } else if breakdown.hasPartialModelHistory {
@@ -265,7 +267,7 @@ struct SpendProviderBreakdownRows: View {
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 32)
+                .padding(.leading, 61)
                 .padding(.vertical, 4)
         }
     }
@@ -287,7 +289,7 @@ struct SpendProviderBreakdownRows: View {
 
     private var childDivider: some View {
         Divider()
-            .padding(.leading, 56)
+            .padding(.leading, 61)
     }
 }
 
@@ -301,17 +303,18 @@ struct SpendProviderIcon: View {
         Group {
             if self.sourceKind == .openCodex {
                 Image(systemName: "arrow.triangle.branch")
-                    .font(.body.weight(.semibold))
+                    .resizable().scaledToFit()
             } else if let icon = ProviderBrandIcon.image(for: self.provider, style: self.style) {
                 Image(nsImage: icon)
                     .resizable()
                     .renderingMode(icon.isTemplate ? .template : .original)
                     .scaledToFit()
                     .frame(
-                        width: self.size * (icon.isTemplate ? 1 : self.brandArtworkScale),
-                        height: self.size * (icon.isTemplate ? 1 : self.brandArtworkScale))
+                        width: self.size * self.artworkScale(for: icon),
+                        height: self.size * self.artworkScale(for: icon))
             } else {
                 Image(systemName: "circle.dotted")
+                    .resizable().scaledToFit()
             }
         }
         .foregroundStyle(.primary)
@@ -319,11 +322,14 @@ struct SpendProviderIcon: View {
         .accessibilityHidden(true)
     }
 
-    private var brandArtworkScale: CGFloat {
-        // Provider-specific by design: these marks need size corrections for equal apparent weight.
+    private func artworkScale(for icon: NSImage) -> CGFloat {
+        // Provider-specific by design: normalize each bundled mark's transparent padding in the shared icon slot.
         switch self.provider {
-        case .bedrock: 0.84
-        case .muse, .vertexai: 1.08
+        case .cursor: 1.25
+        case .codex: icon.isTemplate ? 1.24 : 1.17
+        case .antigravity: icon.isTemplate ? 1.14 : 1.38
+        case .bedrock: icon.isTemplate ? 1 : 0.84
+        case .muse, .vertexai: icon.isTemplate ? 1 : 1.08
         default: 1
         }
     }

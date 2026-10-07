@@ -1501,6 +1501,8 @@
 
 "Cumulative" = "累计";
 "Token activity" = "Token 活动";
+"Earlier activity" = "更早记录";
+"More recent activity" = "最近记录";
 "View" = "视图";
 "in the last year" = "近一年";
 "No activity in the last 12 months" = "近 12 个月暂无活动";
@@ -1666,3 +1668,15 @@
 "Browser profile" = "浏览器配置文件";
 "Unavailable profile: %@" = "配置文件不可用：%@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "仅读取所选的 %@ 配置文件。绝不会自动选择账户。";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "已记录支出";
+"Highest recorded spend" = "最高已记录支出";
+"Previous day" = "前一天";
+"Next day" = "后一天";
+"Click to isolate a source. Click again to show all." = "点击单独查看此来源，再次点击显示全部。";
+"Recorded hourly spend" = "已记录的小时支出";
+"Highest spend" = "最高支出";
+"Models for this day" = "查看当天模型";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "点击柱形逐层查看，下方菜单可查询具体金额。";

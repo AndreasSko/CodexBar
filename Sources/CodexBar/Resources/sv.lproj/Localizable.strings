@@ -1493,6 +1493,8 @@
 
 "Cumulative" = "Kumulativt";
 "Token activity" = "Token-aktivitet";
+"Earlier activity" = "Tidigare aktivitet";
+"More recent activity" = "Senare aktivitet";
 "View" = "Vy";
 "in the last year" = "det senaste året";
 "No activity in the last 12 months" = "Ingen aktivitet de senaste 12 månaderna";
@@ -1651,3 +1653,15 @@
 "Browser profile" = "Webbläsarprofil";
 "Unavailable profile: %@" = "Profilen är inte tillgänglig: %@";
 "Read only the selected %@ profile. Accounts are never selected automatically." = "Läs endast den valda %@-profilen. Konton väljs aldrig automatiskt.";
+
+// Spend chart navigation and inspection
+"Recorded spend" = "Registrerade utgifter";
+"Highest recorded spend" = "Högsta registrerade utgifter";
+"Previous day" = "Föregående dag";
+"Next day" = "Nästa dag";
+"Click to isolate a source. Click again to show all." = "Klicka för att visa en källa. Klicka igen för att visa alla.";
+"Recorded hourly spend" = "Registrerade utgifter per timme";
+"Highest spend" = "Högsta utgift";
+"Models for this day" = "Modeller för denna dag";
+
+"Click a bar to explore. Use the menu below for exact amounts." = "Klicka på en stapel för detaljer. Menyn nedan visar exakta belopp.";
