@@ -104,6 +104,10 @@ emails require the UUID. The app and CLI share the same preservation and workspa
 live credentials are saved before an owner-only atomic replacement, and detected changes to either
 auth file abort the replacement. A nonblocking process lock serializes participating account writers
 and is released automatically after a crash. External Codex processes do not share that lock.
+Preservation also checks legacy email-only destinations and rechecks saved authentication before
+replacing or deleting a managed destination. Read failures or conflicting credentials abort the promotion.
+Refreshed copies are read back before their fingerprints are committed, and every preserved copy is checked
+again immediately before the live replacement. External writers can still race after the final read.
 
 CLI promotion reads local files only and never requests Keychain access or starts login. It leaves
 the app's display selection and running Codex processes alone; `CODEX_HOME` selects the live destination.
@@ -486,6 +490,11 @@ invalid home is omitted; it never falls back to ambient `~/.codex` or to the glo
 These account rows intentionally exclude pi and OMP sessions because their history is machine-local rather than owned
 by one Codex account. The normal Codex cost menu and CLI scan continue to include supported pi-compatible history. The
 dashboard labels its values as local estimates and keeps currencies separate.
+
+## Local storage footprint
+
+Storage scans reuse top-level component paths within each scan. Symbolic links stay excluded, and path aliases
+and unnormalized roots retain their normalization fallback; directory totals and component names are unchanged.
 
 ## Key files
 - Web: `Sources/CodexBarCore/OpenAIWeb/*`

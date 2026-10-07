@@ -29,8 +29,9 @@ JetBrains AI is a local-only provider. We read quota information directly from t
 - `quotaInfo` attribute (JSON):
   - `type`: quota type (e.g., "Available")
   - `current`: tokens used
-  - `maximum`: total tokens
-  - `tariffQuota.available`: remaining tokens
+  - `maximum`: total tokens (monthly tariff + top-up credits)
+  - `tariffQuota.current` / `tariffQuota.maximum` / `tariffQuota.available`: monthly credits used / granted / remaining
+  - `topUpQuota.current` / `topUpQuota.maximum` / `topUpQuota.available`: purchased top-up credits
   - `until`: subscription end date
 - `nextRefill` attribute (JSON):
   - `type`: refill type (e.g., "Known")
@@ -40,7 +41,10 @@ JetBrains AI is a local-only provider. We read quota information directly from t
 
 ## Parsing and mapping
 
-- Usage calculation: `tariffQuota.available / maximum * 100` for remaining percent
+- Usage calculation: `tariffQuota.current / tariffQuota.maximum * 100` for used percent, matching the IDE's
+  "monthly credits left" display; top-up credits are not included in this monthly percentage
+- If either monthly value is missing or non-finite, use the top-level `current` / `maximum` together and derive
+  the remaining total from them; never combine monthly and total balances
 - Reset date: from `nextRefill.next`, not `quotaInfo.until`
 - HTML entity decoding: `&#10;` → newline, `&quot;` → quote
 
@@ -51,6 +55,7 @@ JetBrains AI is a local-only provider. We read quota information directly from t
   - Label: `Current` (primary only)
 - Identity: detected IDE name + version (e.g., "IntelliJ IDEA 2025.3")
 - Status badge: none (no status page integration)
+- Source detail: `local`; no Version row because this provider has no CLI version detector
 
 ## Settings
 
