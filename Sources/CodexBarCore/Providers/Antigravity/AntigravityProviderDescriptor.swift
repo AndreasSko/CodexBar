@@ -1092,8 +1092,11 @@ struct AntigravityOfflineFetchStrategy: ProviderFetchStrategy {
                 return "check Diagnostics for per-source details"
             }
         case let remoteError as AntigravityRemoteFetchError:
-            if case .notLoggedIn = remoteError {
+            switch remoteError {
+            case .notLoggedIn, .reauthenticationRequired:
                 return remoteError.localizedDescription
+            case .permissionDenied, .apiError, .parseFailed:
+                break
             }
             return "the Antigravity API request failed"
         case let urlError as URLError:
@@ -1122,15 +1125,15 @@ struct AntigravityOfflineFetchStrategy: ProviderFetchStrategy {
 /// modes stay authoritative and are never second-guessed here.
 enum AntigravitySelectedAccountGuard {
     static func matches(snapshotAccountEmail: String?, expectedAccountEmail: String?) -> Bool {
-        guard let expected = self.normalizedEmail(expectedAccountEmail) else { return true }
-        guard let found = self.normalizedEmail(snapshotAccountEmail) else { return false }
+        guard let expected = expectedAccountEmail?.trimmedNonEmpty else { return true }
+        guard let found = snapshotAccountEmail?.trimmedNonEmpty else { return false }
         return found.caseInsensitiveCompare(expected) == .orderedSame
     }
 
     static func validate(_ usage: UsageSnapshot, context: ProviderFetchContext) throws {
         guard context.sourceMode == .auto, context.selectedTokenAccountID != nil else { return }
         let expected = self.selectedAccountEmail(context: context)
-        let found = self.normalizedEmail(usage.identity?.accountEmail)
+        let found = usage.identity?.accountEmail?.trimmedNonEmpty
         guard let expected, let found, found.caseInsensitiveCompare(expected) == .orderedSame else {
             throw AntigravityStatusProbeError.accountMismatch(expected: expected, found: found)
         }
@@ -1145,12 +1148,5 @@ enum AntigravitySelectedAccountGuard {
             return nil
         }
         return credentials.resolvedAccountEmail
-    }
-
-    private static func normalizedEmail(_ email: String?) -> String? {
-        guard let trimmed = email?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-            return nil
-        }
-        return trimmed
     }
 }
