@@ -18,6 +18,7 @@ read_when:
 - General → Default terminal supports installed Terminal, iTerm, Ghostty, and stable Warp. Terminal is the default and fallback. Warp launches target its app directly and use owner-only temporary tab configs, removed after one minute; interrupted-launch leftovers are cleaned on the next app start.
 - Provider → Visible usage items includes titled provider detail sections. Choices persist across language changes and apply to provider cards and Overview. Untitled details remain visible; cost-summary sections stay controlled by their existing display setting.
 - The empty SwiftUI Settings placeholder is dismissed once per presentation. Retained hidden windows are left alone; the real Settings window remains reusable.
+- The placeholder never promotes the app to a Dock application or keeps it there. This avoids the launch-time Dock icon on macOS 27 when AppKit accepts promotion but refuses to restore accessory policy. Real Settings and update dialogs still request temporary Dock presence; the OS can still refuse demotion after those dialogs close.
 - Usage & Spend heatmap tooltips prefer the space above the hovered cell and stay within the grid, falling below when needed. On narrow grids they compact vertically and may overlap cells; keyboard selection remains available in the daily grid.
 - Token activity uses appearance-aware colors, brighter high-usage cells in Dark mode, and a slashed outline for unavailable history. The continuous annual grid keeps day cells at least 10 points wide with 3-point gaps; narrow cards scroll horizontally from the recent end and show labeled controls for earlier and more recent activity. The controls page with overlapping weeks, disable at each end, and disappear when the year fits. Month labels scroll with the grid, keyboard navigation reveals the active date, and tooltips stay inside the visible viewport.
 - Calendar columns keep their chronological left-to-right order in right-to-left interfaces, so paging and keyboard date reveal follow the same coordinates as the drawn activity cells; surrounding controls retain the interface's layout direction.
@@ -35,7 +36,8 @@ read_when:
 - Merge Icons toggle combines providers into one status item with a switcher.
 - With separate icons, explicitly reordering providers in Settings reassigns CodexBar's saved menu bar slots in that order, from right to left. Recreated items retain their stable autosave and accessibility identities. Orders changed while icons are merged also update these saved slots before returning to separate icons. Ordinary refreshes and visibility recovery continue to preserve manual Command-drag placement.
 - With the automatic metric selected, switcher progress honors a provider's exhausted-quota selection before
-  showing normal weekly progress. Healthy allowances, explicit metric choices, and separate provider pools
+  showing normal weekly progress. OpenCode Go's automatic percentage and switcher use the least remaining
+  five-hour, weekly, or monthly allowance even before exhaustion. Explicit choices and separate provider pools
   retain their existing selection rules.
 - Normal quit removes status items with their stable identities intact, preventing retained blank menu bar slots on macOS 26.6.2 while preserving saved placement.
 - Status items receive stable autosave names before normal sizing, including during visibility recovery. Saved
@@ -50,7 +52,9 @@ read_when:
 - Display → Menu Bar → Layout provides presets plus a token editor. Tokens can be clicked to append, dragged from the
   palette, reordered between one or two lines, dragged out, or removed with Delete. Layouts can be global or overridden
   per provider. Manual edits select the Custom preset.
-- For Codex or Claude weekly usage, select that provider in Layout and add **Weekly %** from Usage.
+- For Codex or Claude weekly usage without a `W` prefix, select that provider in Layout, remove the existing percentage,
+  and add the **second Weekly %** chip from Usage (the provider's secondary lane). Repeat for the other provider
+  if needed. The first **Weekly %** is a semantic window token and keeps its prefix; lane tokens omit it.
   For Antigravity's two independent families, add **Gemini weekly %** and **Claude/GPT weekly %**;
   both appear when known weekly quota-summary data is available. The separate Gemini provider reports
   Pro/Flash quotas, not these Antigravity family allowances; it does not synthesize a weekly quota.
