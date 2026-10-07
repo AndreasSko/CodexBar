@@ -96,7 +96,7 @@ struct StatusItemBalanceDisplayTests {
     }
 
     @Test
-    func `menu bar display text keeps open code subscription percentage`() {
+    func `menu bar display text prefers the most constrained open code subscription quota to zen balance`() {
         let settings = self.makeSettings(
             suiteName: "StatusItemBalanceDisplayTests-opencodego-subscription",
             provider: .opencodego)
@@ -118,7 +118,7 @@ struct StatusItemBalanceDisplayTests {
 
         let displayText = controller.menuBarDisplayText(for: .opencodego, snapshot: snapshot)
 
-        #expect(displayText == "12%")
+        #expect(displayText == "34%")
     }
 
     @Test

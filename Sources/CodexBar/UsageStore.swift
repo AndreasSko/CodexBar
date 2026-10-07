@@ -578,7 +578,7 @@ final class UsageStore {
         self.startPlanUtilizationHistoryLoad(
             gate: planUtilizationHistoryLoadGateForTesting,
             enabled: self.startupBehavior.automaticallyStartsBackgroundWork)
-        self.sessionLimitResetDetectorStates = Self.loadLimitResetDetectorStates(
+        self.sessionLimitResetDetectorStates = Self.loadPlanUtilizationStates(
             from: settings.userDefaults,
             defaultsKey: Self.sessionLimitResetDetectorDefaultsKey,
             logName: "session")

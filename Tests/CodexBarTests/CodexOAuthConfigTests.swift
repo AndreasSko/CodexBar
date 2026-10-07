@@ -23,4 +23,17 @@ struct CodexOAuthConfigTests {
         let url = CodexOAuthUsageFetcher._resolveUsageURLForTesting(configContents: config)
         #expect(url.absoluteString == "https://proxy.example/backend-api/wham/usage")
     }
+
+    @Test(arguments: [false, true])
+    func `loads only active base URL overrides from config file`(hasOverride: Bool) throws {
+        let home = CodexCredentialFixtures.root
+        var config = "# chatgpt_base_url = \"http://127.0.0.1:8788/backend-api/\"\n"
+        if hasOverride {
+            config += "chatgpt_base_url = 'https://proxy.example/backend-api/' # Active override\n"
+        }
+        try config.write(to: home.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
+        let url = CodexOAuthUsageFetcher._resolveUsageURLForTesting(env: ["CODEX_HOME": home.path])
+        let base = hasOverride ? "https://proxy.example" : "https://chatgpt.com"
+        #expect(url.absoluteString == "\(base)/backend-api/wham/usage")
+    }
 }
