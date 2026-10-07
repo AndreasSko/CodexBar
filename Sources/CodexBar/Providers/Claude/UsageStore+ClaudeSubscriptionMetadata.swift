@@ -2,6 +2,13 @@ import CodexBarCore
 import Foundation
 
 extension UsageStore {
+    #if DEBUG
+    // Test only the external I/O boundary; scheduling, guards and publication remain production code.
+    @TaskLocal static var claudeSubscriptionProofTransport: (any ProviderHTTPTransport)?
+    @TaskLocal static var claudeSubscriptionProofCredentials:
+        (@Sendable (String, [String: String]) -> ClaudeOAuthCredentials?)?
+    #endif
+
     func carryingClaudeSubscriptionMetadata(
         _ snapshot: UsageSnapshot,
         provider: UsageProvider,
@@ -10,17 +17,11 @@ extension UsageStore {
     {
         guard provider == .claude, [.web, .oauth].contains(strategy),
               let prior = self.snapshots[.claude] else { return snapshot }
-        var bound = snapshot
-        if snapshot.identity?.widgetAccountOwnerID == nil,
-           let history = oauthHistoryOwner, let binding = self.claudeSubscriptionHistoryBinding,
-           binding.history == history, prior.identity?.widgetAccountOwnerID == binding.owner
-        {
-            bound = Self.subscriptionSnapshot(snapshot, owner: binding.owner)
-        }
-        guard Self.matchesClaudeSubscriptionOwner(
-            bound,
-            expected: prior) else { return snapshot }
-        return bound.withSubscriptionMetadata(
+        // OAuth ownership must be verified anew by the optional path. A history identifier
+        // cannot attest that the credential's current organization is unchanged.
+        guard strategy == .web, Self.matchesClaudeSubscriptionOwner(snapshot, expected: prior)
+        else { return snapshot }
+        return snapshot.withSubscriptionMetadata(
             expiresAt: prior.subscriptionExpiresAt,
             renewsAt: prior.subscriptionRenewsAt,
             expiresAtIsDateOnly: prior.subscriptionExpiresAtIsDateOnly,
@@ -101,7 +102,20 @@ extension UsageStore {
             source: self.settings.claudeCookieSource,
             accountToken: account?.token,
             configuredHeader: self.settings.claudeCookieHeader)
-        guard self.startupBehavior.automaticallyStartsBackgroundWork,
+        #if DEBUG
+        let transportOverride = Self.claudeSubscriptionProofTransport
+        let credentialOverride = Self.claudeSubscriptionProofCredentials
+        #else
+        let transportOverride: (any ProviderHTTPTransport)? = nil
+        let credentialOverride: (@Sendable (String, [String: String]) -> ClaudeOAuthCredentials?)? = nil
+        #endif
+        let transport = transportOverride ?? ProviderHTTPClient.shared
+        let credentialsForHistory: @Sendable (String, [String: String]) -> ClaudeOAuthCredentials? =
+            credentialOverride ?? { history, environment in
+                ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
+                    historyOwner: history, environment: environment)
+            }
+        guard self.startupBehavior.automaticallyStartsBackgroundWork || transportOverride != nil,
               manual != nil || self.settings.claudeCookieSource == .auto,
               snapshot.identity?.widgetAccountOwnerID != nil || oauthHistoryOwner != nil else { return }
         self.claudeSubscriptionMetadataTask?.cancel()
@@ -115,22 +129,38 @@ extension UsageStore {
             // Cache I/O and the optional requests never hold up usage publication or refresh completion.
             let worker = Task.detached(priority: .utility) {
                 let credentials = oauthHistoryOwner.flatMap {
-                    ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
-                        historyOwner: $0,
-                        environment: environment)
+                    credentialsForHistory($0, environment)
                 }
-                let owner: String? = if let bound = snapshot.identity?.widgetAccountOwnerID {
-                    bound
-                } else if let credentials {
-                    await ClaudeSubscriptionMetadataFetcher.oauthOwner(accessToken: credentials.accessToken)
+                let owner: String?
+                if oauthHistoryOwner != nil {
+                    guard let credentials,
+                          let verified = await ClaudeSubscriptionMetadataFetcher.oauthOwner(
+                              accessToken: credentials.accessToken, transport: transport),
+                          snapshot.identity?.widgetAccountOwnerID == nil
+                          || snapshot.identity?.widgetAccountOwnerID == verified
+                    else {
+                        return (
+                            ClaudeSubscriptionFetchResult.unavailable,
+                            CookieHeaderCache.Entry?.none,
+                            String?.none,
+                            credentials?.accessToken)
+                    }
+                    owner = verified
                 } else {
-                    nil
+                    owner = snapshot.identity?.widgetAccountOwnerID
                 }
                 let cache = manual == nil ? CookieHeaderCache.load(provider: .claude) : nil
                 guard let owner, let header = manual ?? cache?.cookieHeader else {
                     return (ClaudeSubscriptionFetchResult.unavailable, cache, owner, credentials?.accessToken)
                 }
-                let result = await ClaudeSubscriptionMetadataFetcher.fetch(cookieHeader: header, expectedOwnerID: owner)
+                let result = await ClaudeSubscriptionMetadataFetcher.fetch(
+                    cookieHeader: header, expectedOwnerID: owner, transport: transport)
+                if let credentials,
+                   await ClaudeSubscriptionMetadataFetcher.oauthOwner(
+                       accessToken: credentials.accessToken, transport: transport) != owner
+                {
+                    return (ClaudeSubscriptionFetchResult.unavailable, cache, Optional(owner), credentials.accessToken)
+                }
                 return (result, cache, Optional(owner), credentials?.accessToken)
             }
             let fetched = await withTaskCancellationHandler {
@@ -154,9 +184,7 @@ extension UsageStore {
             let cacheUnchanged = await Task.detached(priority: .utility) {
                 let cookieMatches = manual != nil || CookieHeaderCache.load(provider: .claude) == fetched.1
                 let oauthMatches = fetched.3 == nil || oauthHistoryOwner.flatMap {
-                    ClaudeOAuthCredentialsStore.cachedCredentialsForSubscription(
-                        historyOwner: $0,
-                        environment: environment)
+                    credentialsForHistory($0, environment)
                 }?.accessToken == fetched.3
                 return cookieMatches && oauthMatches
             }.value
@@ -179,9 +207,6 @@ extension UsageStore {
                     owner: owner),
                 result: .available(metadata))
             else { return }
-            if let history = oauthHistoryOwner {
-                self.claudeSubscriptionHistoryBinding = (history, owner)
-            }
             self.snapshots[.claude] = enriched
             if let resetSnapshot = self.lastKnownResetSnapshots[.claude],
                let updatedReset = Self.enrichingClaudeSubscriptionSnapshot(

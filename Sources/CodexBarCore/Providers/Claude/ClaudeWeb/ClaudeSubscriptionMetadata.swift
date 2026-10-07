@@ -73,7 +73,12 @@ public enum ClaudeSubscriptionMetadataFetcher {
     }
 
     /// Uses ONLY an existing, verified web-owner binding. No cookie discovery or credential mutation.
-    public static func fetch(cookieHeader: String, expectedOwnerID: String) async -> ClaudeSubscriptionFetchResult {
+    public static func fetch(
+        cookieHeader: String,
+        expectedOwnerID: String,
+        transport: (any ProviderHTTPTransport)? = nil) async -> ClaudeSubscriptionFetchResult
+    {
+        let transport = transport ?? ClaudeWebHTTPTransport.current
         do {
             let session = try ClaudeWebAPIFetcher.sessionKeyInfo(cookieHeader: cookieHeader)
             func get(_ path: String) async throws -> Data {
@@ -82,7 +87,7 @@ public enum ClaudeSubscriptionMetadataFetcher {
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.httpMethod = "GET"
                 request.timeoutInterval = 5
-                let (data, response) = try await ClaudeWebHTTPTransport.current.data(for: request)
+                let (data, response) = try await transport.data(for: request)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                     throw ClaudeSubscriptionMetadata.ParseError.unrecognized
                 }

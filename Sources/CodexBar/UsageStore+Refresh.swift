@@ -1303,7 +1303,6 @@ extension UsageStore {
         // unresolved accounts.
         self.claudeSubscriptionMetadataTask?.cancel()
         self.claudeSubscriptionMetadataToken = nil
-        self.claudeSubscriptionHistoryBinding = nil
         self.widgetUsagePreservationBlockedProviders.insert(.claude)
         self.snapshots.removeValue(forKey: .claude)
         self.lastKnownResetSnapshots.removeValue(forKey: .claude)

@@ -253,7 +253,6 @@ final class UsageStore {
     @ObservationIgnored var openAIDashboardRefreshTaskToken: UUID?
     @ObservationIgnored var claudeSubscriptionMetadataTask: Task<Void, Never>?
     @ObservationIgnored var claudeSubscriptionMetadataToken: UUID?
-    @ObservationIgnored var claudeSubscriptionHistoryBinding: (history: String, owner: String)?
     @ObservationIgnored var openAISubscriptionMetadataEnrichmentTask: Task<Void, Never>?
     @ObservationIgnored var openAISubscriptionMetadataEnrichmentToken: UUID?
     @ObservationIgnored var _test_openAISubscriptionMetadataLoaderOverride: (@MainActor (String?) async
