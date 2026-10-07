@@ -34,6 +34,7 @@
 - Codex: preserve terminal local-cost catch-up pauses across scheduled refreshes while allowing explicit retries (#4251). Thanks @vincent-peng!
 - Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
 - Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+- JetBrains AI: show monthly credit usage accurately when top-up credits exist, keep partial quota data on a consistent balance, and replace misleading version detection with the local source label (#4287). Thanks @taihua!
 
 ## 0.72.0 — 2026-10-04
 
