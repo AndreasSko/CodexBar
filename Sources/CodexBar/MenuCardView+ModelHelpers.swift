@@ -713,18 +713,33 @@ extension UsageMenuCardView.Model {
     static func subscriptionMetadataNotes(snapshot: UsageSnapshot?, provider: UsageProvider) -> [String] {
         guard let snapshot else { return [] }
         if let renewsAt = snapshot.subscriptionRenewsAt {
-            return [String(format: L("Renews: %@"), self.subscriptionDateString(renewsAt, provider: provider))]
+            // Provider-specific by design: Claude labels its optional billing date separately from quota resets.
+            return [String(
+                format: provider == .claude ? L("Plan renews: %@") : L("Renews: %@"),
+                self.subscriptionDateString(
+                    renewsAt,
+                    provider: provider,
+                    dateOnly: snapshot.subscriptionRenewsAtIsDateOnly))]
         }
         if let expiresAt = snapshot.subscriptionExpiresAt {
-            return [String(format: L("Plan expires: %@"), self.subscriptionDateString(expiresAt, provider: provider))]
+            return [String(
+                format: L("Plan expires: %@"),
+                self.subscriptionDateString(
+                    expiresAt,
+                    provider: provider,
+                    dateOnly: snapshot.subscriptionExpiresAtIsDateOnly))]
         }
         return []
     }
 
-    private static func subscriptionDateString(_ date: Date, provider: UsageProvider) -> String {
+    private static func subscriptionDateString(
+        _ date: Date,
+        provider: UsageProvider,
+        dateOnly: Bool = false) -> String
+    {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
-        formatter.timeZone = self.subscriptionDateTimeZone(provider: provider)
+        formatter.timeZone = dateOnly ? TimeZone(secondsFromGMT: 0) : self.subscriptionDateTimeZone(provider: provider)
         formatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
         return formatter.string(from: date)
     }

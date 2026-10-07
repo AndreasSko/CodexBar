@@ -950,7 +950,9 @@ struct ClaudeWebFetchStrategy: ProviderFetchStrategy {
                 manualCookieHeader: Self.manualCookieHeader(from: context),
                 webOrganizationID: context.settings?.claude?.organizationID,
                 includePrepaidBalance: context.includeOptionalUsage,
-                includeAccountIdentity: context.includeAccountIdentity)
+                // The authenticated web response already supplies owner email and org UUID.
+                // Bind app billing without another request or enabling account widgets.
+                includeAccountIdentity: context.runtime == .app || context.includeAccountIdentity)
             return try await fetcher.loadLatestUsage(model: "sonnet")
         }
         let race = BoundedTaskJoin(sourceTask: sourceTask)

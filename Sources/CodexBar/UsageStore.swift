@@ -251,6 +251,8 @@ final class UsageStore {
     @ObservationIgnored var openAIDashboardRefreshTask: Task<Void, Never>?
     @ObservationIgnored var openAIDashboardRefreshTaskKey: String?
     @ObservationIgnored var openAIDashboardRefreshTaskToken: UUID?
+    @ObservationIgnored var claudeSubscriptionMetadataTask: Task<Void, Never>?
+    @ObservationIgnored var claudeSubscriptionMetadataToken: UUID?
     @ObservationIgnored var openAISubscriptionMetadataEnrichmentTask: Task<Void, Never>?
     @ObservationIgnored var openAISubscriptionMetadataEnrichmentToken: UUID?
     @ObservationIgnored var _test_openAISubscriptionMetadataLoaderOverride: (@MainActor (String?) async
@@ -1009,6 +1011,7 @@ final class UsageStore {
         self.creditsRefreshTask?.cancel()
         self.openAIDashboardBackgroundRefreshTask?.cancel()
         self.openAIDashboardRefreshTask?.cancel()
+        self.claudeSubscriptionMetadataTask?.cancel()
         self.openAISubscriptionMetadataEnrichmentTask?.cancel()
         self.memoryPressureReliefTask?.cancel()
         self.startupConnectivityRetryTask?.cancel()
@@ -1016,13 +1019,6 @@ final class UsageStore {
         self.codexPlanHistoryBackfillTask?.cancel()
         self.resetBoundaryRefreshTask?.cancel()
         self.planUtilizationHistoryLoadTask?.cancel()
-    }
-
-    enum SessionQuotaWindowSource: String {
-        case primary
-        case copilotSecondaryFallback
-        case antigravityQuotaSummary
-        case antigravityLegacy
     }
 
     func postQuotaWarning(_ event: QuotaWarningEvent, provider: UsageProvider) {

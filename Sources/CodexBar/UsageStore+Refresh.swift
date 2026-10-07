@@ -2,6 +2,13 @@ import CodexBarCore
 import Foundation
 
 extension UsageStore {
+    enum SessionQuotaWindowSource: String {
+        case primary
+        case copilotSecondaryFallback
+        case antigravityQuotaSummary
+        case antigravityLegacy
+    }
+
     private struct CodexRefreshPublicationPreparation {
         let expectedGuard: CodexAccountScopedRefreshGuard
         let limitResetOwnerKey: CodexLimitResetOwnerKey?
@@ -674,8 +681,10 @@ extension UsageStore {
             }
             // Resolve display-only allowances after any suspended request has completed.
             let allowanceCurrent = self.resolvingCurrentCopilotAllowance(in: accountScoped, provider: provider)
-            let backfilled = self.preparePublishedSnapshot(
+            let prepared = self.preparePublishedSnapshot(
                 allowanceCurrent, provider: provider, resetBackfillSource: resetBackfillSource, context: context)
+            let backfilled = self.carryingClaudeSubscriptionMetadata(
+                prepared, provider: provider, strategy: result.strategyKind)
             let notifications = self.handleProviderRefreshNotifications(
                 provider: provider, result: result, snapshot: backfilled, context: context)
             self.lastKnownResetSnapshots[provider.instanceID] = backfilled
@@ -758,6 +767,8 @@ extension UsageStore {
                 provider: provider, settings: self.settings, store: self)
             runtime.providerDidRefresh(context: runtimeContext, provider: provider)
         }
+        self.scheduleClaudeSubscriptionMetadataIfSupported(
+            snapshot: backfilled, provider: provider, strategy: result.strategyKind, generation: context.generation)
         if provider == .codex {
             self.recordCodexHistoricalSampleIfNeeded(snapshot: backfilled)
         }
@@ -1283,6 +1294,8 @@ extension UsageStore {
     private func clearClaudeCredentialDerivedStateForCredentialSwap() {
         // Provider-specific by design: retire Claude projections but preserve scoped warning episodes, including
         // unresolved accounts.
+        self.claudeSubscriptionMetadataTask?.cancel()
+        self.claudeSubscriptionMetadataToken = nil
         self.widgetUsagePreservationBlockedProviders.insert(.claude)
         self.snapshots.removeValue(forKey: .claude)
         self.lastKnownResetSnapshots.removeValue(forKey: .claude)
