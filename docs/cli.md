@@ -58,6 +58,7 @@ sources and setup guide. The [provider ID list](provider-ids.md) is generated fr
 - `codexbar` defaults to the `usage` command.
   - `--format text|json|toon` (default: text).
   - Text output and full terminal cards include history already supplied by the selected provider, such as OpenRouter Activity spend or Grok local token totals. They preserve the source period, currency, known zero values, and reported/estimated cost labels. This live history remains separate from the ordinary usage JSON schema and the `cost` command.
+  - Usage JSON includes optional `resetCredits` with `available` and `nextExpiresAt`, derived from the shared unexpired, available reset-credit inventory. This compact summary contains no credit identifiers; an absent inventory omits the summary.
   - Usage JSON includes optional `rateWindowLabels` for present windows from built-in providers. Consumers can use these display labels when a window omits its cadence; missing windows and unknown provider IDs do not gain invented labels.
   - JSON uses the generic `usage.details` array for provider-specific information. Each section contains an optional
     `title`, `rows` (`label`, `value`, and optional `secondaryValue`), and an optional `bars` or `line` chart. The same
@@ -207,7 +208,7 @@ sources and setup guide. The [provider ID list](provider-ids.md) is generated fr
   Without it, hook rules only ever fire from the macOS app, so a headless install can configure hooks that never run.
   - `--interval <seconds>`: poll period. Default `300`, minimum `60`; a smaller value is rejected rather than
     clamped, because each tick fetches every selected provider.
-  - `--provider <id>`: restrict to one provider; repeatable. Defaults to every enabled provider.
+  - `--provider <id|both|all>`: restrict polling; repeatable. Defaults to every enabled provider. `both` selects the primary providers; `all` selects every registered provider, including providers not enabled in the config.
   - `--format json`/`--json`/`--pretty`: emit each attempted event as JSON, excluding throttled candidates.
   - Events are edge-triggered against the previous poll, so a condition that merely persists (a saturated window,
     an ongoing outage) does not re-fire every tick. State is in-memory only: a restart re-establishes baselines and
