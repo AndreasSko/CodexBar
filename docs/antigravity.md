@@ -34,6 +34,10 @@ login still needs the app's OAuth client or the explicit client environment over
 expose the generated token (1.1.28, 1.2.0, and 1.2.1 answer the same request with `200`). When the selected
 executable reports 1.2.2 or later, CodexBar still spends its bounded warm-reuse check but does not spawn a
 managed session or wait for its readiness deadline. Unknown versions keep the managed spawn.
+The legacy gate and ambient or account-scoped print fallback share one `agy --version` result per refresh,
+including unknown versions and probe failures. Each later refresh probes again; successful warm reuse needs
+no version subprocess. On the CSRF-gated fallback, CLI launches drop from three to two: one version check
+and one usage report, without caching across accounts or refreshes.
 
 For `agy` 1.2.2 and later, a failed legacy HTTPS fetch can fall back to
 `agy -p /usage --output-format json`. CodexBar checks that the same executable reports version 1.1.11
