@@ -374,7 +374,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     append-only log contract; identity changes, anchor mismatches, and unexplained same-size large-file edits invalidate pricing.
     Parser-revision upgrades use the same source validation to preserve matching historical prices when a file
     grows or a recovery scan is interrupted. Appended requests cannot borrow prices from the historical prefix,
-    and an invalidated pricing map remains invalid through subsequent upgrades. Native stores from 0.62.0's
+    and an invalidated pricing map remains invalid through subsequent upgrades. A saved unpriced request that shares
+    its pricing key with a priced request counts as conflicting saved pricing, so neither keeps an estimate. Native stores from 0.62.0's
     `865a444e01b818f1` fingerprint retain their history while individual files are reparsed with corrected accounting.
   - Fully read empty session fragments retain completion records even when another file contributes the same session.
     They contribute no usage and reparse from the start if they grow. Usage-bearing duplicates and incomplete fragments
@@ -394,7 +395,12 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
   reconcile with matching owned responses after the existing counter checks.
   Paired observations retain their response identity across files; the owned response supplies the date while
-  matching saved pricing survives replacement of an older legacy page.
+  matching saved pricing survives replacement of an older legacy page. Parser upgrades look up that pricing with the
+  replaced legacy row's own timestamp, because the owned response and its token_count mirror are usually recorded
+  a few hundred milliseconds apart; bounded upgrades restore it to a retained ledger row when a later slice reaches
+  the mirror. Stores from 0.72.0 (`ed735dc27ffa70d9`) are adopted with their rows and markers unchanged, because a
+  stored marker does not record whether it came from that release's timestamp mismatch or from invalidated evidence.
+  `codexbar cache clear --cost` rebuilds such a cache from the session logs.
   Thread and execution-session identities are validated separately; copied child history remains excluded by the
   existing subagent boundaries. Cached tails retain these identities across refreshes and SQLite reopen.
   Compatible caches retain stored history and matching saved prices while older parser revisions reparse in bounded
@@ -406,7 +412,7 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   still scan local history. Faster provider refreshes still update quota/status. The scanner's default 60-second
   debounce is a separate internal limit, bypassed by forced scans and catch-up passes; it is not the app's refresh cadence.
 - Usage & Spend catch-up remains inactive after a no-progress or error pause until you choose **Refresh** in the dashboard toolbar or catch-up panel. Opening the dashboard or receiving background updates does not retry those terminal pauses. Low-power and thermal pauses can still recover automatically; this retry policy does not change cached history or token accounting.
-- Menu cost catch-up discards an overlapping refresh queued before a no-progress or error pause, preventing an immediate retry. A later normal or manual refresh can still start a fresh attempt; successful completion still honors queued refreshes for newly discovered history.
+- Menu cost catch-up keeps user stops and no-progress/error pauses across scheduled refreshes. Choose **Refresh** to retry after the worker stops. Successful completion still honors queued refreshes for newly discovered history; low-power and thermal pauses can recover automatically.
 - Automatic Codex catch-up scheduling in both usage and Spend Dashboard honors the app’s 30-minute Low Power Mode minimum after each pass. Explicit acceleration remains immediate, and physical low-power/thermal pauses retain their own retry policy. The setting applies when the next delay is computed; an already pending sleep is not replanned.
 - Automatic catch-up reports thermal pressure when serious heat and Low Power Mode coexist. Both constraints keep the existing 60-second pause before rechecking resource state.
 - Automatic catch-up starts without an assumed prior scan delay and continues cheap discovery pages within a two-second burst, capped at eight passes. Each pass receives the remaining scan time, checks normal window readiness, and can publish validated totals before the next sleep. The subsequent duty-cycle delay accounts for the whole burst, excluding waits on the shared account/provider queue. Returning to automatic mode counts only the in-flight accelerated pass toward its next delay. App Low Power Mode still floors each delay, and physical low-power/thermal pauses, no-progress detection, cancellation, and complete-history publication rules still apply.
@@ -480,6 +486,11 @@ invalid home is omitted; it never falls back to ambient `~/.codex` or to the glo
 These account rows intentionally exclude pi and OMP sessions because their history is machine-local rather than owned
 by one Codex account. The normal Codex cost menu and CLI scan continue to include supported pi-compatible history. The
 dashboard labels its values as local estimates and keeps currencies separate.
+
+## Local storage footprint
+
+Storage scans reuse top-level component paths within each scan. Symbolic links stay excluded, and path aliases
+and unnormalized roots retain their normalization fallback; directory totals and component names are unchanged.
 
 ## Key files
 - Web: `Sources/CodexBarCore/OpenAIWeb/*`
