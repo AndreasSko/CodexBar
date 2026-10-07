@@ -159,9 +159,9 @@ struct CostUsageRequestLedgerMigrationTests {
         (ledgerFirst: false, offsetMs: -350, bounded: false),
         (ledgerFirst: true, offsetMs: 400, bounded: true),
         (ledgerFirst: false, offsetMs: -350, bounded: true),
-    ])
+    ], [false, true])
     func `legacy upgrade keeps saved pricing when ledger and token count timestamps differ`(
-        _ scenario: (ledgerFirst: Bool, offsetMs: Int, bounded: Bool)) throws
+        _ scenario: (ledgerFirst: Bool, offsetMs: Int, bounded: Bool), counterDrift: Bool) throws
     {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
@@ -170,7 +170,7 @@ struct CostUsageRequestLedgerMigrationTests {
             day: day,
             filename: "offset-migration.jsonl",
             contents: Self.offsetLedgerLines(
-                day: day, env: env, scenario: (scenario.ledgerFirst, scenario.offsetMs)))
+                day: day, env: env, scenario: (scenario.ledgerFirst, scenario.offsetMs), counterDrift: counterDrift))
         var options = Self.options(env: env)
         let canonical = Self.report(day: day, options: options)
         let standardCost = try #require(canonical.summary?.totalCostUSD)
@@ -180,7 +180,7 @@ struct CostUsageRequestLedgerMigrationTests {
         var usage = try #require(old.files[file.path])
         usage.codexParserRevision = 5
         usage.codexRequestLedgerState = nil
-        usage.codexRows = try usage.codexRows?.enumerated().map { index, row in
+        usage.codexRows = try usage.codexRows?.filter { $0.responseID != nil }.enumerated().map { index, row in
             var object = try #require(
                 JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any])
             object.removeValue(forKey: "responseID")
@@ -263,9 +263,9 @@ struct CostUsageRequestLedgerMigrationTests {
         (ledgerFirst: true, bounded: false),
         (ledgerFirst: false, bounded: false),
         (ledgerFirst: true, bounded: true),
-    ])
+    ], [5, 8])
     func `legacy upgrade keeps a marker that shares its pricing key with a priced request`(
-        _ scenario: (ledgerFirst: Bool, bounded: Bool)) throws
+        _ scenario: (ledgerFirst: Bool, bounded: Bool), revision: Int) throws
     {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
@@ -284,13 +284,15 @@ struct CostUsageRequestLedgerMigrationTests {
 
         var old = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
         var usage = try #require(old.files[file.path])
-        usage.codexParserRevision = 5
+        usage.codexParserRevision = revision
         usage.codexRequestLedgerState = nil
         usage.codexRows = try usage.codexRows?.enumerated().map { index, row in
             var object = try #require(
                 JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any])
-            object.removeValue(forKey: "responseID")
-            object.removeValue(forKey: "requestMirrorKeys")
+            if revision < 8 {
+                object.removeValue(forKey: "responseID")
+                object.removeValue(forKey: "requestMirrorKeys")
+            }
             object["timestampUnixMs"] = Int64(day.timeIntervalSince1970 * 1000)
             object["pricingMode"] = "priority"
             if index == 1 { object["unpricedTokens"] = row.input + row.output }
@@ -302,7 +304,9 @@ struct CostUsageRequestLedgerMigrationTests {
         #expect(Set(legacyRows.compactMap(CostUsageScanner.CodexSourcePricingKey.init)).count == 1)
         old.files[file.path] = usage
         #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: old).catchUpRequired)
-        try Self.markPredecessor(cacheRoot: env.cacheRoot, parserHash: "4a4c4ef34ce6f037")
+        try Self.markPredecessor(
+            cacheRoot: env.cacheRoot,
+            parserHash: revision < 8 ? "4a4c4ef34ce6f037" : "ed735dc27ffa70d9")
         if scenario.bounded {
             options.maxCodexScanBytesPerRefresh = 256
             options.maxCodexSessionFileBytes = 256
@@ -502,7 +506,8 @@ struct CostUsageRequestLedgerMigrationTests {
         env: CostUsageTestEnvironment,
         scenario: (ledgerFirst: Bool, offsetMs: Int),
         inputs: [Int] = [200_000, 50000, 25000],
-        spacingSeconds: Double = 10) throws -> String
+        spacingSeconds: Double = 10,
+        counterDrift: Bool = false) throws -> String
     {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -537,7 +542,7 @@ struct CostUsageRequestLedgerMigrationTests {
                 "type": "event_msg", "timestamp": formatter.string(from: countedAt), "payload": [
                     "type": "token_count", "turn_id": "offset-turn", "info": [
                         "last_token_usage": tokens(input, output: 1000),
-                        "total_token_usage": tokens(total, output: 1000 * (index + 1)),
+                        "total_token_usage": tokens(total + (counterDrift ? 10000 : 0), output: 1000 * (index + 1)),
                     ],
                 ],
             ]

@@ -19,6 +19,8 @@ read_when:
 - Provider → Visible usage items includes titled provider detail sections. Choices persist across language changes and apply to provider cards and Overview. Untitled details remain visible; cost-summary sections stay controlled by their existing display setting.
 - The empty SwiftUI Settings placeholder is dismissed once per presentation. Retained hidden windows are left alone; the real Settings window remains reusable.
 - Usage & Spend heatmap tooltips prefer the space above the hovered cell and stay within the grid, falling below when needed. On narrow grids they compact vertically and may overlap cells; keyboard selection remains available in the daily grid.
+- Token activity uses appearance-aware colors, brighter high-usage cells in Dark mode, and a slashed outline for unavailable history. The continuous annual grid keeps day cells at least 10 points wide with 3-point gaps; narrow cards scroll horizontally from the recent end and show labeled controls for earlier and more recent activity. The controls page with overlapping weeks, disable at each end, and disappear when the year fits. Month labels scroll with the grid, keyboard navigation reveals the active date, and tooltips stay inside the visible viewport.
+- Calendar columns keep their chronological left-to-right order in right-to-left interfaces, so paging and keyboard date reveal follow the same coordinates as the drawn activity cells; surrounding controls retain the interface's layout direction.
 - Both the application menu and status menu open About in the Settings window. An existing Settings window is reused
   and switches to the About pane.
 - Homebrew-managed installs show an Updates section in About with the automatic-check toggle, Check for Updates, and the tap status: checking, up to date, or "CodexBar x is available" with a prominent "Update to x" button. The menu shows the same "Update to x" action, then "Updating with Homebrew…" while `brew upgrade` runs; the app relaunches after verifying the installed version reached the offered update.
@@ -209,7 +211,7 @@ Long ranges initially show the newest 30 daily rows. **Show all** expands the co
 
 Usage & Spend includes a daily ledger for each currency group. Rows use the selected bucket time zone and app language, retain priced days when another day is unpriced, and mark unavailable amounts with a dash. When one source on a day has no price, the row shows the known spend of the other sources with a tilde, the same partial marker as the group total. A day with no known spend keeps the dash. Zero-usage rows require established common coverage; unknown activity is not described as idle. Narrow settings windows allow horizontal ledger scrolling. Source filtering and dashboard accounting remain authoritative.
 
-OpenCodex cost and request aggregates cover the selected history window, including All; older activity remains included alongside its token counts.
+OpenCodex cost and request aggregates cover the selected history window, including All; older activity remains included alongside its token counts. Imported requests without token evidence retain the other models' known subtotals and mark the model breakdown as partial. Missing-usage counts propagate through daily, session, window, CLI, and exported totals; sharing excludes incomplete model rankings. Explicit zero usage stays known, and numeric overflow is not reclassified as missing usage. Cached imports apply the same accounting without rereading unchanged logs.
 
 ### Per-provider usage visibility
 
