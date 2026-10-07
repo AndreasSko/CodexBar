@@ -210,7 +210,7 @@ Long ranges initially show the newest 30 daily rows. **Show all** expands the co
 
 Usage & Spend includes a daily ledger for each currency group. Rows use the selected bucket time zone and app language, retain priced days when another day is unpriced, and mark unavailable amounts with a dash. When one source on a day has no price, the row shows the known spend of the other sources with a tilde, the same partial marker as the group total. A day with no known spend keeps the dash. Zero-usage rows require established common coverage; unknown activity is not described as idle. Narrow settings windows allow horizontal ledger scrolling. Source filtering and dashboard accounting remain authoritative.
 
-OpenCodex cost and request aggregates cover the selected history window, including All; older activity remains included alongside its token counts.
+OpenCodex cost and request aggregates cover the selected history window, including All; older activity remains included alongside its token counts. Imported requests without token evidence retain the other models' known subtotals and mark the model breakdown as partial. Missing-usage counts propagate through daily, session, window, CLI, and exported totals; sharing excludes incomplete model rankings. Explicit zero usage stays known, and numeric overflow is not reclassified as missing usage. Cached imports apply the same accounting without rereading unchanged logs.
 
 ### Per-provider usage visibility
 
