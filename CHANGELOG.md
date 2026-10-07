@@ -26,8 +26,6 @@
 
 ### Fixed
 
-- JetBrains AI: show monthly credit usage accurately when top-up credits exist, keep partial quota data on a consistent balance, and replace misleading version detection with the local source label (#4287). Thanks @taihua!
-- JetBrains AI: refresh stale quota from the selected IDE's bounded `idea.log` tail, preserving XML fallback when log records are incomplete or unsupported (#4288). Thanks @taihua!
 - Claude: let explicit Refresh request Keychain access with direct-read consent and an allowing prompt policy, while ordinary OAuth polling stays noninteractive (#4257). Thanks @stromseng!
 - Antigravity: use agy's consumer OAuth client for new Google sign-ins and ask affected accounts to sign in again instead of showing placeholder 100% quotas (#4293). Thanks @oldcai!
 - Claude: label a CLI `/usage` subscription notice without quota data as a configuration issue instead of an authentication failure in logs and diagnostics (#4225, related to #4083). Thanks @sudoHG!
@@ -36,6 +34,9 @@
 - Codex: preserve terminal local-cost catch-up pauses across scheduled refreshes while allowing explicit retries (#4251). Thanks @vincent-peng!
 - Settings: finish pending configuration writes before normal quit so edits made immediately before quitting survive a restart (#4224). Thanks @Shenrui-Ma!
 - Codex costs: preserve saved request pricing during bounded cache upgrades when ledger and token-count timestamps differ (#4270). Thanks @gabrielrojasc!
+- Usage & Spend: retain valid imported model subtotals when other OpenCodex requests have no token evidence, preserving incomplete markers in exports and excluding partial model rankings from sharing (#4299). Thanks @Yuxin-Qiao!
+- JetBrains AI: show monthly credit usage accurately when top-up credits exist, keep partial quota data on a consistent balance, and replace misleading version detection with the local source label (#4287). Thanks @taihua!
+- JetBrains AI: refresh stale quota from the selected IDE's bounded `idea.log` tail, preserving XML fallback when log records are incomplete or unsupported (#4288). Thanks @taihua!
 
 ## 0.72.0 — 2026-10-04
 
