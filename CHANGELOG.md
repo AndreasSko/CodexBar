@@ -17,6 +17,7 @@
 - Usage & Spend: preserve provider brand artwork, keep source and model icons monochrome, and clarify compact breakdown rows without changing totals or menu/widget accents (#4294). Thanks @Yuxin-Qiao!
 
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
+- Antigravity: avoid a duplicate `agy --version` process during each CLI usage refresh, including account-scoped fallbacks (#4254). Thanks @djbclark!
 - Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!

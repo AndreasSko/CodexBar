@@ -240,6 +240,7 @@ extension AntigravityCLIHTTPSFetchStrategy {
         binary: String,
         environment: [String: String],
         timeout: TimeInterval = 90,
+        versionResolver: AgyVersionResolver = AgyVersionResolver(),
         dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
         credentialsUpdateHandler: (@Sendable (AntigravityOAuthCredentials) async throws -> Void)? = nil)
         async throws
@@ -261,7 +262,11 @@ extension AntigravityCLIHTTPSFetchStrategy {
             from: environment, home: staged.home)
 
         let parsed = try await Self.runPrintUsage(
-            binary: binary, environment: scopedEnvironment, directory: staged.home, timeout: timeout)
+            binary: binary,
+            environment: scopedEnvironment,
+            directory: staged.home,
+            timeout: timeout,
+            versionResolver: versionResolver)
         if let reportedEmail = AntigravityScopedAgyStaging.normalizedEmail(parsed.accountEmail),
            reportedEmail != AntigravityScopedAgyStaging.normalizedEmail(expectedAccountEmail)
         {
