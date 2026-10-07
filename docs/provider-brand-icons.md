@@ -23,6 +23,9 @@ provider SVGs often contain white silhouettes and must not simply be switched to
 This fallback does not assert that the provider has an officially monochrome-only identity.
 The OpenCodex source retains its existing branch symbol.
 
+All production Usage & Spend icons share a 20-point slot, including account/source and model child
+rows. Transparent padding is compensated for in both brand and monochrome artwork; see
+[spend-chart-brand-icons.md](spend-chart-brand-icons.md) for the shared sizing rules.
 The filled Bedrock tile renders at 84% of the icon slot; the open Meta and Vertex AI marks render
 at 108%. This balances their apparent weight without modifying artwork or colors. Single-model
 groups omit the repeated Models heading, while multi-model, multi-source and partial-history groups
