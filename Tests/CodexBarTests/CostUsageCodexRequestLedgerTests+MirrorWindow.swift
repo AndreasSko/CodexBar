@@ -317,13 +317,18 @@ extension CostUsageCodexRequestLedgerTests {
     {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
-        var pairs = try (0..<scenario.pairs).map { index in
-            try Self.mirrorPair(
+        var pairs: [[[String: Any]]] = []
+        for index in 0..<scenario.pairs {
+            let thread: [Int] = [1100 + index * 100, 220 + index * 20, 110 + index * 10, 44 + index * 4]
+            let total: [Int] = [900 + index * 100, 180 + index * 20, 90 + index * 10, 36 + index * 4]
+            let gap: Int = delayed && index == scenario.pairs - 1 ? 20000 : 2
+            let pair: [[String: Any]] = try Self.mirrorPair(
                 id: String(index),
-                thread: [1100 + index * 100, 220 + index * 20, 110 + index * 10, 44 + index * 4],
-                total: [900 + index * 100, 180 + index * 20, 90 + index * 10, 36 + index * 4],
+                thread: thread,
+                total: total,
                 at: index * 30000,
-                gap: delayed && index == scenario.pairs - 1 ? 20000 : 2)
+                gap: gap)
+            pairs.append(pair)
         }
         if scenario.totalOnly {
             var payload = try #require(pairs[0][1]["payload"] as? [String: Any])
@@ -334,14 +339,22 @@ extension CostUsageCodexRequestLedgerTests {
         let last = pairs.removeLast()
         let baseline = Self.realLegacy(
             timestamp: Self.timestampA, usage: [0, 0, 0, 0], total: [800, 160, 80, 32])
-        let body = [baseline] + pairs.flatMap(\.self) + [replay, last[0], last[0], replay, last[1]]
+        var body: [[String: Any]] = [baseline]
+        for pair in pairs {
+            body.append(contentsOf: pair)
+        }
+        body.append(contentsOf: [replay, last[0], last[0], replay, last[1]])
+        let expectedTokens: Int = scenario.pairs * 110
         if scenario.fork {
-            try Self.assertForkReplay(body: body, expectedTokens: scenario.pairs * 110)
+            try Self.assertForkReplay(body: body, expectedTokens: expectedTokens)
         } else {
             let result = try Self.parse(Self.header() + body, env: env)
-            #expect(result.rows.compactMap(\.responseID) == (0..<scenario.pairs).map(String.init))
+            let responseIDs: [String] = result.rows.compactMap(\CostUsageScanner.CodexUsageRow.responseID)
+            let expectedResponseIDs: [String] = (0..<scenario.pairs).map { String($0) }
+            let totalTokens: Int = result.rows.reduce(0) { $0 + $1.input + $1.output }
+            #expect(responseIDs == expectedResponseIDs)
             #expect(result.rows.count == scenario.pairs)
-            #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == scenario.pairs * 110)
+            #expect(totalTokens == expectedTokens)
         }
     }
 
@@ -499,9 +512,14 @@ extension CostUsageCodexRequestLedgerTests {
         let cold = try CostUsageScanner.parseCodexFileCancellable(
             fileURL: file, range: range, inheritedTotalsResolver: { _, _ in .resolved(parent) })
         let kept = first.rows.filter { !resumed.replacedLegacyRowIndices.contains($0.eventIndex ?? -1) }
-        #expect(cold.rows.reduce(0) { $0 + $1.input + $1.output } == expectedTokens)
-        #expect((kept + resumed.rows).reduce(0) { $0 + $1.input + $1.output } == expectedTokens)
-        #expect((kept + resumed.rows).compactMap(\.responseID) == cold.rows.compactMap(\.responseID))
+        let combinedRows: [CostUsageScanner.CodexUsageRow] = kept + resumed.rows
+        let coldTokens: Int = cold.rows.reduce(0) { $0 + $1.input + $1.output }
+        let resumedTokens: Int = combinedRows.reduce(0) { $0 + $1.input + $1.output }
+        let coldResponseIDs: [String] = cold.rows.compactMap(\CostUsageScanner.CodexUsageRow.responseID)
+        let resumedResponseIDs: [String] = combinedRows.compactMap(\CostUsageScanner.CodexUsageRow.responseID)
+        #expect(coldTokens == expectedTokens)
+        #expect(resumedTokens == expectedTokens)
+        #expect(resumedResponseIDs == coldResponseIDs)
     }
 
     private static func resume(

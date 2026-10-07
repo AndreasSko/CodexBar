@@ -651,7 +651,9 @@ struct CostUsageCodexRequestLedgerTests {
             provider: .codex, since: day, until: day, now: day, options: options)
         #expect(report.summary?.totalTokens == 110)
         let cache = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
-        #expect(cache.files.values.flatMap { $0.codexRows ?? [] }.compactMap(\.responseID) == ["partial"])
+        let rows: [CostUsageScanner.CodexUsageRow] = cache.files.values.flatMap { $0.codexRows ?? [] }
+        let responseIDs: [String] = rows.compactMap(\CostUsageScanner.CodexUsageRow.responseID)
+        #expect(responseIDs == ["partial"])
     }
 
     private static func partialLegacy(lastOnly: Bool) throws -> [String: Any] {
