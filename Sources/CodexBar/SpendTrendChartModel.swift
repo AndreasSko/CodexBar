@@ -241,6 +241,19 @@ struct SpendTrendChartModel {
         return self.buckets.first { $0.date == start }
     }
 
+    /// Plot padding can resolve to an adjacent date. Daily inspection must refer to a drawn bucket;
+    /// hourly gaps within the selected day still distinguish missing data from recorded zero.
+    func inspectionDate(at date: Date) -> Date? {
+        guard date >= self.domain.lowerBound, date < self.domain.upperBound else { return nil }
+        if self.section == .daily { return self.bucket(at: date)?.date }
+        return self.calendar.dateInterval(of: self.unit, for: date)?.start
+    }
+
+    func legendProviders(in group: SpendDashboardModel.CurrencyGroup) -> [SpendDashboardModel.ProviderRow] {
+        let sourceIDs = Set(self.segments.filter { $0.cost > 0 }.map(\.sourceID))
+        return group.providers.filter { sourceIDs.contains($0.id) }
+    }
+
     func interval(at date: Date) -> DateInterval? {
         guard let interval = self.calendar.dateInterval(of: self.unit, for: date) else { return nil }
         let start = max(interval.start, self.scope.lowerBound)
@@ -249,13 +262,16 @@ struct SpendTrendChartModel {
     }
 
     static func hourlyDays(_ group: SpendDashboardModel.CurrencyGroup) -> [Date] {
-        Set(group.hourlyPoints.map { group.calendar.startOfDay(for: $0.hour) }).sorted()
+        Set(group.hourlyPoints.filter {
+            $0.hour >= group.chartDomain.lowerBound && $0.hour < group.chartDomain.upperBound
+        }.map { group.calendar.startOfDay(for: $0.hour) }).sorted()
     }
 
     static func focusedDay(_ day: Date?, group: SpendDashboardModel.CurrencyGroup) -> Date? {
         let days = self.hourlyDays(group)
-        if let selectedDay = group.selectedDay { return selectedDay }
-        if let day, days.contains(day) { return day }
+        if let selectedDay = group.selectedDay.map({ group.calendar.startOfDay(for: $0) }),
+           days.contains(selectedDay) { return selectedDay }
+        if let day = day.map({ group.calendar.startOfDay(for: $0) }), days.contains(day) { return day }
         return days.last
     }
 }
