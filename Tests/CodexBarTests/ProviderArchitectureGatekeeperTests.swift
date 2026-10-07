@@ -2711,9 +2711,16 @@ struct ProviderArchitectureGatekeeperTests {
             path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
             anchor: "let samples = provider == .antigravity",
             expectedProviderIDs: ["antigravity", "claude"],
-            expectedReferenceCount: 4,
-            expectedReferenceFingerprint: ["antigravity@0", "claude@9", "claude@19", "claude@29"],
+            expectedReferenceCount: 2,
+            expectedReferenceFingerprint: ["antigravity@0", "claude@9"],
             reason: "This exact app-runtime bridge coordinates provider-owned state through the shared controller."),
+        AllowedProviderConstruct(
+            path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
+            anchor: "let detectorAccountKey = if provider == .claude, isClaudeOAuthSample {",
+            expectedProviderIDs: ["claude"],
+            expectedReferenceCount: 2,
+            expectedReferenceFingerprint: ["claude@0", "claude@9"],
+            reason: "Claude OAuth history requires corroborated ownership before reset detection or persistence."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
             anchor: "if provider == .antigravity,",

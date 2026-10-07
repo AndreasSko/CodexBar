@@ -13,6 +13,15 @@ The **Plan Usage** submenu includes recorded remaining-quota burndown above util
 using the same Session, Weekly, and Sonnet labels. See [recorded quota burndown](widgets/burndown-proof.md)
 for capture-age semantics and the existing history retention/privacy behavior.
 
+OAuth history uses a stable account/profile identity after two stable credential observations corroborate that
+binding. External token rotations therefore continue the same history after the new credential is corroborated.
+Saved token-scoped fragments with matching verified bindings migrate into that account's history on a successful
+sample. Unbound fragments, obsolete bindings, and other accounts stay separate; correcting a conflicting binding
+preserves its ambiguous old fragment without attributing it to the newly confirmed account. If that fragment was
+already merged, the affected account bucket is preserved but hidden, and fresh samples start a new account scope.
+This quarantine survives empty responses and restarts. Explicit OAuth tokens without Claude Code account evidence
+remain credential-scoped.
+
 Claude supports three usage data paths plus local cost usage. The main provider pipeline uses runtime-specific
 automatic selection, but the codebase still has multiple active Claude `.auto` decision sites while the refactor is
 pending. For the exact current-state parity contract, see
