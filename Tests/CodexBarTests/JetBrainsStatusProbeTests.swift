@@ -356,4 +356,87 @@ struct JetBrainsStatusProbeTests {
             _ = try JetBrainsStatusProbe.parseXMLData(data, detectedIDE: nil)
         }
     }
+
+    @Test
+    func `uses monthly tariff quota when top-up credits inflate the overall maximum`() throws {
+        let quotaInfo = [
+            "{&#10;  &quot;type&quot;: &quot;Available&quot;,",
+            "&#10;  &quot;current&quot;: &quot;346000&quot;,",
+            "&#10;  &quot;maximum&quot;: &quot;6489986.397&quot;,",
+            "&#10;  &quot;tariffQuota&quot;: {",
+            "&#10;    &quot;current&quot;: &quot;346000&quot;,",
+            "&#10;    &quot;maximum&quot;: &quot;1000000&quot;,",
+            "&#10;    &quot;available&quot;: &quot;654000&quot;",
+            "&#10;  },",
+            "&#10;  &quot;topUpQuota&quot;: {",
+            "&#10;    &quot;current&quot;: &quot;0&quot;,",
+            "&#10;    &quot;maximum&quot;: &quot;5489986.397&quot;,",
+            "&#10;    &quot;available&quot;: &quot;5489986.397&quot;",
+            "&#10;  }",
+            "&#10;}",
+        ].joined()
+        let xml = """
+        <application>
+          <component name="AIAssistantQuotaManager2">
+            <option name="quotaInfo" value="\(quotaInfo)" />
+          </component>
+        </application>
+        """
+
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.quotaInfo.used == 346_000)
+        #expect(snapshot.quotaInfo.maximum == 1_000_000)
+        #expect(snapshot.quotaInfo.available == 654_000)
+        #expect(abs(snapshot.quotaInfo.usedPercent - 34.6) < 0.001)
+        #expect(abs(snapshot.quotaInfo.remainingPercent - 65.4) < 0.001)
+    }
+
+    @Test(arguments: [
+        ["current": "25000"],
+        ["maximum": "100000"],
+        ["current": "NaN", "maximum": "100000"],
+        ["current": "25000", "maximum": "invalid"],
+    ])
+    func `incomplete monthly quota falls back to one consistent total balance`(monthly: [String: String]) throws {
+        let quota: [String: Any] = [
+            "type": "Available",
+            "current": "50000",
+            "maximum": "200000",
+            "tariffQuota": monthly.merging(["available": "75000"]) { value, _ in value },
+        ]
+        let json = try JSONSerialization.data(withJSONObject: quota)
+        let encoded = try #require(String(bytes: json, encoding: .utf8))
+            .replacingOccurrences(of: "\"", with: "&quot;")
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="\(encoded)" />
+        </component></application>
+        """
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.quotaInfo.used == 50000)
+        #expect(snapshot.quotaInfo.maximum == 200_000)
+        #expect(snapshot.quotaInfo.available == 150_000)
+        #expect(snapshot.quotaInfo.usedPercent == 25)
+        #expect(snapshot.quotaInfo.remainingPercent == 75)
+    }
+
+    @Test
+    func `preserves flat refill fields ahead of nested tariff fields`() throws {
+        let xml = """
+        <application><component name="AIAssistantQuotaManager2">
+          <option name="quotaInfo" value="{&quot;current&quot;:&quot;0&quot;,&quot;maximum&quot;:&quot;100&quot;}" />
+          <option name="nextRefill"
+            value="{&quot;type&quot;:&quot;Known&quot;,&quot;amount&quot;:&quot;200&quot;,
+            &quot;duration&quot;:&quot;PT720H&quot;,&quot;tariff&quot;:{&quot;amount&quot;:&quot;100&quot;,
+            &quot;duration&quot;:&quot;PT24H&quot;}}" />
+        </component></application>
+        """
+        let snapshot = try JetBrainsStatusProbe.parseXMLData(Data(xml.utf8), detectedIDE: nil)
+
+        #expect(snapshot.refillInfo?.type == "Known")
+        #expect(snapshot.refillInfo?.amount == 200)
+        #expect(snapshot.refillInfo?.duration == "PT720H")
+    }
 }
