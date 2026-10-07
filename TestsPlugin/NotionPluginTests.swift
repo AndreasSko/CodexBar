@@ -9,6 +9,80 @@ struct NotionPluginTests {
     private static let now = Date(timeIntervalSince1970: 1_785_600_000)
     private static let spaces = #"{"user":{"notion_user":{"user":{"value":{"value":{"id":"user","email":"fixture@example.test"}}}},"space":{"free":{"value":{"id":"00000000-0000-0000-0000-000000000000","name":"Personal","subscription_tier":"free"}},"paid":{"value":{"id":"11111111-2222-3333-4444-555555555555","name":"Fixture team","subscription_tier":"business"}}}}}"#
 
+    #if os(macOS)
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `automatic import reaches Edge after Chrome and maps its Notion session`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await KeychainCacheStore.withServiceOverrideForTesting("notion-edge-\(UUID().uuidString)") {
+            try await CookieHeaderCache.withLegacyBaseURLOverrideForTesting(directory) {
+                let runtime = try Self.runtime(engine: engine, usage: """
+                {"window":{"window":"6h","used":25,"limit":100},"resetsInSeconds":3600,
+                "billingPeriodWindow":{"used":18,"limit":100,"periodEndMs":1788000000000}}
+                """)
+                let visited = Calls()
+                let broker = ProviderPluginCookieBroker(
+                    provider: .notion,
+                    domains: runtime.manifest.cookieDomains,
+                    settings: .init(cookieSource: .auto),
+                    batches: { _, _ in Issue.record("Notion must import opaque cookie jars"); return nil },
+                    jarImporter: {
+                        try BrowserCookieImportSupport.collectSessions(
+                            from: BrowserCookieImportSupport.importOrder(for: .notion),
+                            missingError: nil,
+                            logger: { _ in },
+                            load: { browser in
+                                visited.append(browser.rawValue)
+                                guard browser == .edge else { return [] }
+                                let cookie = try #require(HTTPCookie(properties: [
+                                    .domain: "notion.so", .path: "/", .name: "token_v2",
+                                    .value: "synthetic", .secure: "TRUE",
+                                ]))
+                                return [.init(
+                                    header: "", source: "Microsoft Edge Profile 2", origin: "",
+                                    records: [ProviderPluginCookieRecord(cookie: cookie)])]
+                            })
+                    },
+                    policy: runtime.manifest.cookiePolicy,
+                    sessionFileURL: directory.appendingPathComponent("notion-session.json"))
+                // Engine callbacks do not retain the task-local test cache scope.
+                let session = try #require(try broker.nextSession(domain: "app.notion.com"))
+                let usage = try await runtime.fetchUsage(
+                    now: Self.now,
+                    cookieSessionResolver: { _, _ in session },
+                    cookieSessionValidator: { _, id in #expect(id == session.id) })
+                #expect(visited.values == ["chrome", "edge"])
+                #expect(usage.primary?.usedPercent == 25)
+                #expect(usage.primary?.resetsAt == Self.now.addingTimeInterval(3600))
+                #expect(usage.secondary?.usedPercent == 18)
+                #expect(usage.identity?.accountOrganization == "Fixture team")
+            }
+        }
+    }
+
+    @Test
+    func `Notion browser order retains the background no prompt gate`() {
+        let browsers = BrowserCookieImportSupport.importOrder(for: .notion)
+        #expect(browsers == [.chrome, .edge])
+        KeychainAccessGate.withTaskOverrideForTesting(false) {
+            ProviderInteractionContext.$current.withValue(.background) {
+                KeychainAccessPreflight.withCheckGenericPasswordOverrideForTesting { _, _ in
+                    .interactionRequired
+                } operation: {
+                    #expect(browsers.allSatisfy { !BrowserCookieAccessGate.shouldAttempt($0) })
+                }
+                KeychainAccessPreflight.withCheckGenericPasswordOverrideForTesting { _, _ in
+                    .allowed
+                } operation: {
+                    #expect(browsers.allSatisfy { BrowserCookieAccessGate.shouldAttempt($0) })
+                }
+            }
+        }
+    }
+    #endif
+
     @Test(arguments: BundledPluginTestSupport.engines)
     func `workspace selection identity and overage match native snapshots`(
         engine: ProviderPluginEngineKind) async throws

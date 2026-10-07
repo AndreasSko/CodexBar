@@ -76,10 +76,8 @@ enum MenuBarMetricWindowResolver {
         -> RateWindow?
     {
         if presentation.automaticSelectionPrioritizesExhaustedWindow,
-           let exhausted = exhaustedWindow(
-               primary: snapshot.primary,
-               secondary: snapshot.secondary,
-               tertiary: snapshot.tertiary)
+           let exhausted = [snapshot.primary, snapshot.secondary, snapshot.tertiary]
+               .compactMap(\.self).first(where: { $0.usedPercent >= 100 })
         {
             return exhausted
         }
@@ -169,17 +167,6 @@ enum MenuBarMetricWindowResolver {
             return nil
         }
         return family
-    }
-
-    private static func exhaustedWindow(
-        primary: RateWindow?,
-        secondary: RateWindow?,
-        tertiary: RateWindow?)
-        -> RateWindow?
-    {
-        [primary, secondary, tertiary]
-            .compactMap(\.self)
-            .first { $0.usedPercent >= 100 }
     }
 
     /// The Claude spend-limit window when the account only exposes an enterprise/extra-usage spend limit

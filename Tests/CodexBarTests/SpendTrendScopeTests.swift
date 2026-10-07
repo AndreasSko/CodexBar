@@ -14,7 +14,9 @@ struct SpendTrendScopeTests {
         #expect(try chart.inspectionDate(at: Self.day(4, calendar: group.calendar)) == nil)
         let first = try Self.day(1, calendar: group.calendar)
         #expect(chart.inspectionDate(at: first.addingTimeInterval(12 * 3600)) == first)
-        #expect(try chart.inspectionDate(at: Self.day(7, calendar: group.calendar)) == group.dailyPoints.last?.day)
+        #expect(try chart.inspectionDate(at: Self.day(7, calendar: group.calendar)) == Self.day(
+            7,
+            calendar: group.calendar))
     }
 
     @Test
@@ -41,12 +43,17 @@ struct SpendTrendScopeTests {
     }
 
     @Test
-    func `legend omits idle and unpriced sources while keeping used accounts distinct`() throws {
+    func `legend keeps recorded zero sources and omits missing or unpriced sources`() throws {
         let group = try Self.group()
         let chart = SpendTrendChartModel(group: group, section: .daily, day: nil)
         #expect(group.providers.count == 6)
-        #expect(chart.legendProviders(in: group).map(\.id) == ["native", "opencodex", "cursor"])
+        #expect(chart.legendProviders(in: group).map(\.id) == ["native", "opencodex", "cursor", "idle"])
         #expect(chart.total == 17)
+        let zero = SpendTrendChartModel(group: group, section: .daily, day: nil, sourceID: "idle")
+        #expect(zero.legendProviders(in: group).map(\.id) == ["idle"])
+        #expect(zero.buckets.count == 1)
+        #expect(zero.total == 0)
+        #expect(try zero.inspectionDate(at: Self.day(2, calendar: group.calendar)) == zero.buckets.first?.date)
         let colors = chart.legendProviders(in: group).map {
             SpendChartPalette.color(sourceID: $0.id, provider: $0.provider, providers: group.providers)
         }
@@ -68,7 +75,7 @@ struct SpendTrendScopeTests {
             group: group,
             section: .hourly,
             day: Self.day(7, calendar: group.calendar))
-        #expect(hourly.legendProviders(in: group).map(\.id) == ["native", "opencodex"])
+        #expect(hourly.legendProviders(in: group).map(\.id) == ["native", "opencodex", "idle"])
     }
 
     @Test
@@ -117,6 +124,7 @@ struct SpendTrendScopeTests {
         let amounts: [(Int, String, UsageProvider, Double)] = [
             (1, "native", .codex, 2), (1, "cursor", .cursor, 1), (2, "native", .codex, 3),
             (7, "native", .codex, 4), (7, "opencodex", .codex, 5), (7, "cursor", .cursor, 2),
+            (2, "idle", .claude, 0),
         ]
         let daily = try amounts.map { day, id, provider, cost in
             try SpendDashboardModel.DailyPoint(

@@ -13,7 +13,11 @@ struct SpendDashboardTrendPanel: View {
     @State private var focusedInterval: DateInterval?
 
     var body: some View {
-        let legendProviders = self.legendProviders
+        let legendProviders = SpendTrendChartModel(
+            group: self.group,
+            section: self.activeSection,
+            day: self.day,
+            overviewInterval: self.focusedInterval).legendProviders(in: self.group)
         let sourceID = self.selectedSourceID.flatMap { id in legendProviders.contains { $0.id == id } ? id : nil }
         return SpendDashboardPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -100,14 +104,6 @@ struct SpendDashboardTrendPanel: View {
 
     private var day: Date? {
         SpendTrendChartModel.focusedDay(self.focusedDay, group: self.group)
-    }
-
-    private var legendProviders: [SpendDashboardModel.ProviderRow] {
-        SpendTrendChartModel(
-            group: self.group,
-            section: self.activeSection,
-            day: self.day,
-            overviewInterval: self.focusedInterval).legendProviders(in: self.group)
     }
 
     private func dayNavigation(_ day: Date) -> some View {
@@ -433,7 +429,7 @@ struct SpendTrendChart: View {
     }
 
     private func inspectionRows(_ bucket: SpendTrendChartModel.Bucket?) -> some View {
-        ForEach(bucket?.segments.filter { $0.cost > 0 } ?? []) { segment in
+        ForEach(bucket?.segments ?? []) { segment in
             HStack(spacing: 5) {
                 Circle().fill(Color(nsColor: SpendChartPalette.color(
                     sourceID: segment.sourceID, provider: segment.provider, providers: self.group.providers)))

@@ -14,6 +14,20 @@ import Testing
 struct MenuBarLayoutRendererTests {
     let now = Date(timeIntervalSince1970: 1_752_768_000)
 
+    @Test(arguments: [UsageProvider.codex, .claude], [false, true])
+    func `provider weekly lane token renders without a window prefix`(provider: UsageProvider, showUsed: Bool) {
+        let token = MenuBarLayoutToken.lanePercent(lane: .secondary)
+        #expect(MenuBarLayoutPaletteTokens.usage(provider: provider, snapshot: nil).contains(token))
+        let output = MenuBarLayoutRenderer().render(
+            layout: MenuBarLayout(lines: [[token]]),
+            data: self.data(provider: provider),
+            icon: nil,
+            options: self.options(showUsed: showUsed))
+        let expected = showUsed ? "9%" : "91%"
+        #expect(output.attributedTitle.string == expected)
+        #expect(output.accessibilityLabel == L("%@ %@", L("Weekly"), expected))
+    }
+
     @Test
     func `renderer composes every token with live values`() {
         let renderer = MenuBarLayoutRenderer()

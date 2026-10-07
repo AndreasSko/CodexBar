@@ -45,6 +45,9 @@ read_when:
 - Primary window: rolling 5-hour usage (`rollingUsage.usagePercent`, `rollingUsage.resetInSec`).
 - Secondary window: optional weekly usage (`weeklyUsage.usagePercent`, `weeklyUsage.resetInSec`).
 - Resets computed as `now + resetInSec`.
+- OpenCode Go's automatic menu-bar percentage and merged switcher show the least remaining of its reported
+  five-hour, weekly, and monthly quotas, with the selected window's reset metadata. Explicit window selections
+  retain their existing behavior, and the separate Zen balance is not ranked against subscription quota.
 
 ## Using OpenCode with Codex or OpenAI
 

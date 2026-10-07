@@ -1,54 +1,45 @@
 ---
-summary: "Synthetic screenshots and validation for spend chart date inspection and active source legends."
+summary: "Synthetic rendering and regression proof for scoped spend chart inspection."
 read_when:
   - Reviewing spend chart date selection and source visibility
 ---
 
 # Spend chart scope proof
 
-These screenshots render the production `SpendDashboardTrendPanel` with deterministic fixtures from
-`SpendTrendScopeTests` and `SpendTrendChartRenderTests`. Dates, account labels and amounts are synthetic.
+`SpendTrendChartRenderTests` renders the production `SpendDashboardTrendPanel` with synthetic dates,
+account labels and amounts. Its 14-image matrix covers daily/hourly, weekly/monthly, light/dark,
+wide/narrow and English/Chinese/German layouts.
 
-- `overview-narrow.png`: the fixture contains six source rows, but only the three sources with positive
-  spend in the displayed October 1–7 range appear in the legend. The amount inspector wraps items as
-  needed, and its date belongs to an actual bucket. Dates without daily buckets are excluded from inspection.
-- `hourly.png`: only the two sources with positive hourly spend on October 7 appear in the legend.
-  The zero-cost Claude record remains in the model, preserving recorded-zero versus missing-hour
-  behavior, while its legend and amount row do not occupy space.
+The scope fixture contains six sources. Four have recorded amounts in the overview range, and three
+have hourly records on October 7. Both include Claude with recorded zero-dollar spend. The legend
+retains those zero-dollar sources, omits missing/unpriced sources, and preserves account colors and
+labels from the full provider list. The amount inspector includes zero-dollar rows and wraps when
+needed. The original positive-only captures remain in PR #4329's history; they do not represent the
+corrected zero-dollar behavior.
 
-The overview legend follows the whole selected range or drilled interval. The hourly legend follows
-the selected day. The amount inspector follows its selected bucket. Source colors and identities use
-the complete source list, keeping multiple accounts distinct when unused sources are hidden.
+`SpendTrendScopeTests` checks adjacent dates, daily gaps, weekly boundary buckets, missing hourly
+records, zero-only source isolation, scoped legends and stale selections. `SpendTrendChartTests`
+checks inspection through every real hour of 23-hour and 25-hour DST days, including repeated hours.
 
-## Validation
-
-The production and test sources were validated at `70b194db18374bae6a90196b786771c684023a97`, based on
-upstream `03a51bdcf`. The later evidence commit only adds these screenshots and this document.
-
-- `make check` passed, with zero SwiftLint violations.
-- Full regression via `./Scripts/test.sh --direct-workers 4` passed all 1,586 test selections
-  in 144/144 groups on the first attempt, with zero retries or timeouts.
-- Focused regression passed 30 Swift Testing tests in five suites plus one XCTest native render test.
-  The render test produced 14 screenshots, including Chinese light/dark and wide/narrow layouts.
-- Tests cover out-of-range and empty daily dates in UTC, Asia/Shanghai and America/Los_Angeles,
-  partial weekly buckets, missing hourly data, used versus idle sources, account colors, drilled
-  intervals and stale focused dates.
-
-The initial serial `make test` run was stopped while switching to the complete direct run above and
-is not counted as a pass. Screenshots verify native component layout with isolated fixtures; a
-packaged-app pointer interaction was not captured. The installed application was not replaced.
-
-Reproduce from the repository root:
+Run from the repository root in Bash:
 
 ```sh
-make check
-CODEXBAR_SPEND_TREND_PROOF_DIR="$PWD/.build/spend-chart-proof" ./Scripts/test.sh --direct-workers 4
+source Scripts/test_environment.sh
 CODEXBAR_SPEND_TREND_PROOF_DIR="$PWD/.build/spend-chart-proof" \
-  ./Scripts/test_fast.sh --skip-build \
+  swift test --build-system native --jobs 4 -Xswiftc -gnone \
   --filter 'SpendTrendScopeTests|SpendTrendChartTests|SpendTrendPresentationRegressionTests|SpendTrendCalendarTests|SpendTrendOverflowTests|SpendTrendChartRenderTests'
 ```
 
-The published images correspond to `13-used-sources-narrow.png` and `14-hourly-used-sources.png` in
-the render output. Only optional EXIF metadata was removed for publication; image pixels and color
-profiles are unchanged. No user-supplied screenshots, personal account history or raw local logs
-are included.
+`13-used-sources-narrow.png` and `14-hourly-used-sources.png` show the corrected source membership.
+These are isolated native component renders and model regression tests, not a packaged-app pointer
+recording. They do not read real provider accounts or replace the installed application.
+
+## Recorded zero-dollar correction
+
+Before (the contributor's positive-only filter):
+
+![Synthetic hourly inspector before: recorded zero-dollar Claude source is hidden](https://github.com/user-attachments/assets/93ac1244-6a51-4105-953c-5c1f45c8d0ee)
+
+After (recorded zero-dollar source and amount retained; total unchanged):
+
+![Synthetic hourly inspector after: Claude zero-dollar amount and source are visible](https://github.com/user-attachments/assets/0d044b0d-fab0-425c-a8aa-619091cba893)

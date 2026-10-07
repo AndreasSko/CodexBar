@@ -156,9 +156,9 @@ struct ProviderArchitectureGatekeeperTests {
             Self.hash(descriptor.branding.burnDownWidgetColor, into: &burnDownFingerprint)
         }
 
-        // Langdock extends the palette without changing existing provider colors.
-        #expect(widgetFingerprint == 4_709_037_098_170_366_388)
-        #expect(burnDownFingerprint == 12_054_221_810_937_042_671)
+        // X API extends the palette without changing existing provider colors.
+        #expect(widgetFingerprint == 7_318_583_779_471_121_882)
+        #expect(burnDownFingerprint == 8_800_572_749_065_936_795)
     }
 
     @Test
@@ -197,7 +197,7 @@ struct ProviderArchitectureGatekeeperTests {
     func `small provider capabilities preserve legacy registries`() {
         let descriptors = ProviderDescriptorRegistry.all
         #expect(Set(descriptors.filter(\.metadata.balanceOnly).map(\.id)) == [
-            .deepseek, .deepinfra, .moonshot, .poe, .hyper, .atlascloud, .vercel, .lithosai,
+            .deepseek, .deepinfra, .moonshot, .poe, .hyper, .atlascloud, .vercel, .lithosai, .xapi,
         ])
         #expect(Set(descriptors.filter(\.metadata.usesDetailBackedWindow).map(\.id)) == [
             .perplexity,
@@ -2711,9 +2711,16 @@ struct ProviderArchitectureGatekeeperTests {
             path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
             anchor: "let samples = provider == .antigravity",
             expectedProviderIDs: ["antigravity", "claude"],
-            expectedReferenceCount: 4,
-            expectedReferenceFingerprint: ["antigravity@0", "claude@9", "claude@19", "claude@29"],
+            expectedReferenceCount: 2,
+            expectedReferenceFingerprint: ["antigravity@0", "claude@9"],
             reason: "This exact app-runtime bridge coordinates provider-owned state through the shared controller."),
+        AllowedProviderConstruct(
+            path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
+            anchor: "let detectorAccountKey = if provider == .claude, isClaudeOAuthSample {",
+            expectedProviderIDs: ["claude"],
+            expectedReferenceCount: 2,
+            expectedReferenceFingerprint: ["claude@0", "claude@9"],
+            reason: "Claude OAuth history requires corroborated ownership before reset detection or persistence."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/UsageStore+PlanUtilization.swift",
             anchor: "if provider == .antigravity,",

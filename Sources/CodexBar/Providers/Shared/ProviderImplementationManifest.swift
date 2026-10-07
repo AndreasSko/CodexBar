@@ -75,6 +75,7 @@ enum ProviderImplementationManifest {
         PluginAPIKeyProviderImplementation(spec: AiAndProviderDescriptor.spec),
         ZoomMateProviderImplementation(),
         PluginAPIKeyProviderImplementation(spec: XAIProviderDescriptor.spec),
+        PluginCookieProviderImplementation(spec: XAPIProviderDescriptor.spec),
         NotionProviderImplementation(),
         IBMBobProviderImplementation(),
         NousProviderImplementation(),
