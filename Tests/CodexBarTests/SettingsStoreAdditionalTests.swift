@@ -243,6 +243,7 @@ struct SettingsStoreAdditionalTests {
             .coderabbit: [.automatic],
             .replicate: [.automatic],
             .lithosai: [.automatic],
+            .xapi: [.automatic],
             .workbuddy: [.automatic, .primary],
             .aixy: [.automatic],
             .typesafe: [.automatic],

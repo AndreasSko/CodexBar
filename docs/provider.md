@@ -249,6 +249,8 @@ Adding a first-party provider currently requires all of these registration point
    `caseDisplayRepresentations` entry to the WidgetKit `ProviderChoice` `AppEnum`. AppIntents extracts this table
    statically, so widget display representations cannot be derived at runtime. `WidgetProviderChoiceTests` keeps the
    literal table synchronized with selectable descriptor metadata and display names.
+   Also add a literal case and display entry to `BurnProviderChoice` for every provider, including providers with
+   `burnDownWidgetSelectable: false`; its stable ID table is separate from runtime widget eligibility.
 7. Add focused tests for the provider's parser/snapshot mapping, strategy availability and fallback, credential or
    settings projection, and CLI aliases/source validation as applicable.
 8. Add or update the user-facing provider entry in `docs/providers.md`, including authentication and data-source
