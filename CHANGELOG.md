@@ -4,6 +4,8 @@
 
 ### Added
 
+- Linux: expose plan, balances, reset credits, pace, and opt-in cached spending in private desktop snapshots, using the shared reset-credit inventory and redacted display labels (#4285). Thanks @KihongK!
+
 - CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
 - Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
 - Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
@@ -14,13 +16,19 @@
 ### Changed
 
 - Usage & Spend: improve Dark-mode token activity contrast and keep annual activity readable in narrow windows with horizontal paging and keyboard date reveal, including right-to-left layouts (#4297). Thanks @Yuxin-Qiao!
+- Storage: reduce repeated path processing while scanning provider directories, preserving component totals and symbolic-link exclusions (#4286). Thanks @Yuxin-Qiao!
+- Usage & Spend: preserve provider brand artwork, keep source and model icons monochrome, and clarify compact breakdown rows without changing totals or menu/widget accents (#4294). Thanks @Yuxin-Qiao!
+
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
+- Antigravity: avoid a duplicate `agy --version` process during each CLI usage refresh, including account-scoped fallbacks (#4254). Thanks @djbclark!
 - Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Menu bar: make Cursor Grok Bot and other declared extra allowances selectable in provider metric settings, with labeled percentages and a dash for unknown readings (#4207). Thanks @marklights54-byte!
 
 ### Fixed
 
+- Claude: let explicit Refresh request Keychain access with direct-read consent and an allowing prompt policy, while ordinary OAuth polling stays noninteractive (#4257). Thanks @stromseng!
+- Antigravity: use agy's consumer OAuth client for new Google sign-ins and ask affected accounts to sign in again instead of showing placeholder 100% quotas (#4293). Thanks @oldcai!
 - Claude: label a CLI `/usage` subscription notice without quota data as a configuration issue instead of an authentication failure in logs and diagnostics (#4225, related to #4083). Thanks @sudoHG!
 - Claude: retain rejected-cache-write recovery through OAuth token refresh without losing refreshed credentials or replacing a newer credential's recovery (#4271). Thanks @vincent-peng!
 - CLI: accept and deduplicate `both` and `all` in `hooks watch`, and correct provider help for commands that require one provider (#4252). Thanks @vincent-peng!
