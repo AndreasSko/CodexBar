@@ -13,7 +13,7 @@ private struct SpendDashboardCodexCostCatchUpContext {
 extension UsageStore {
     func refreshSpendDashboard(accounts: [CodexSpendScanRequest]) {
         self.sharedSpendDashboardController().refresh()
-        guard self.spendDashboardCodexCostCatchUpRequiresExplicitResume else { return }
+        guard self.spendDashboardCodexCostCatchUpActivity?.requiresExplicitResume == true else { return }
         self.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts, mode: .automatic)
     }
 
@@ -32,7 +32,7 @@ extension UsageStore {
         // Observation-driven reloads must not undo a stop or repeatedly retry a stalled/failed pass.
         // Explicit Refresh uses startSpendDashboardCodexCostCatchUpIfNeeded directly.
         guard !self.spendDashboardCodexCostCatchUpStopRequested,
-              !self.spendDashboardCodexCostCatchUpRequiresExplicitResume else { return }
+              self.spendDashboardCodexCostCatchUpActivity?.requiresExplicitResume != true else { return }
         var mode = preferredMode
             ?? (self.spendDashboardCodexCostCatchUpTask == nil ? .automatic : self.spendDashboardCodexCostCatchUpMode)
         if preferredMode == .accelerated,
@@ -111,7 +111,7 @@ extension UsageStore {
                     self.spendDashboardCodexCostCatchUpScopeSignature = nil
                     let restartRequested = self.spendDashboardCodexCostCatchUpRestartRequested
                     self.spendDashboardCodexCostCatchUpRestartRequested = false
-                    if restartRequested, !self.spendDashboardCodexCostCatchUpRequiresExplicitResume {
+                    if restartRequested, self.spendDashboardCodexCostCatchUpActivity?.requiresExplicitResume != true {
                         self.startSpendDashboardCodexCostCatchUpIfNeeded(
                             accounts: context.accounts,
                             mode: self.spendDashboardCodexCostCatchUpMode)
@@ -127,17 +127,8 @@ extension UsageStore {
         self.spendDashboardCodexCostCatchUpStopRequested = true
         self.spendDashboardCodexCostCatchUpRestartRequested = false
         guard !self.spendDashboardCodexCostCatchUpPassIsRunning else { return }
-        if let activity = self.spendDashboardCodexCostCatchUpActivity {
-            self.spendDashboardCodexCostCatchUpActivity = CodexCostCatchUpActivity(
-                phase: .paused,
-                mode: activity.mode,
-                processedBytes: activity.processedBytes,
-                totalBytes: activity.totalBytes,
-                completedFiles: activity.completedFiles,
-                totalFiles: activity.totalFiles,
-                pauseReason: .user,
-                staleSnapshotUpdatedAt: activity.staleSnapshotUpdatedAt)
-        }
+        self.spendDashboardCodexCostCatchUpActivity?.phase = .paused
+        self.spendDashboardCodexCostCatchUpActivity?.pauseReason = .user
         self.spendDashboardCodexCostCatchUpTask?.cancel()
         self.spendDashboardCodexCostCatchUpTask = nil
         self.spendDashboardCodexCostCatchUpToken = nil
@@ -153,17 +144,6 @@ extension UsageStore {
         self.spendDashboardCodexCostCatchUpPassIsRunning = false
         self.spendDashboardCodexCostCatchUpRestartRequested = false
         self.spendDashboardCodexCostCatchUpActivity = nil
-    }
-
-    private var spendDashboardCodexCostCatchUpRequiresExplicitResume: Bool {
-        guard let activity = self.spendDashboardCodexCostCatchUpActivity,
-              activity.phase == .paused else { return false }
-        switch activity.pauseReason {
-        case .user, .noProgress, .error:
-            return true
-        case .lowPower, .thermal, .none:
-            return false
-        }
     }
 
     private func runSpendDashboardCodexCostCatchUp(
