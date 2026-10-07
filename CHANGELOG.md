@@ -4,6 +4,8 @@
 
 ### Added
 
+- Linux: expose plan, balances, reset credits, pace, and opt-in cached spending in private desktop snapshots, using the shared reset-credit inventory and redacted display labels (#4285). Thanks @KihongK!
+
 - CLI: persist provider data sources with `config set-source`, validate supported sources, and use `auto` to clear the override without changing provider enablement or credentials (#4142, #4197). Thanks @Yuxin-Qiao!
 - Usage & Spend: choose the statistics time zone or pin the Mac's current time zone without editing hidden preferences; existing selections stay pinned until changed (#4185). Thanks @DGPisces!
 - Langdock: add personal session and weekly usage through a bundled plugin bound to one selected Edge profile, with live session checks and no persistent quota history or widgets (#4171). Thanks @dYn36!
@@ -17,8 +19,10 @@
 - Codex: build each file cost report once across daily, session, and project refresh views, including cached dashboard loads, while keeping pricing scopes separate (#4275, #4277). Thanks @luochen211!
 
 - Storage: reduce repeated path processing while scanning provider directories, preserving component totals and symbolic-link exclusions (#4286). Thanks @Yuxin-Qiao!
+- Usage & Spend: preserve provider brand artwork, keep source and model icons monochrome, and clarify compact breakdown rows without changing totals or menu/widget accents (#4294). Thanks @Yuxin-Qiao!
 
 - Costs: reduce retained memory when loading and updating large Claude and Vertex transcript histories.
+- Antigravity: avoid a duplicate `agy --version` process during each CLI usage refresh, including account-scoped fallbacks (#4254). Thanks @djbclark!
 - Costs: use substantially less memory with large Claude and Vertex histories; cached cost history no longer keeps a second encoded copy in memory, cache files load from mapped reads and save as streams, and repeated session IDs and model names share storage.
 - Costs: reduce temporary memory while rebuilding Claude cost reports, reloading the report cache, and merging Pi usage that adds no exact-time entries.
 - Costs: reduce temporary memory when loading Codex reports, scans, and workspace history by decoding SQLite usage rows as they arrive (#4291). Thanks @kristofferR!
@@ -26,6 +30,7 @@
 
 ### Fixed
 
+- Claude: let explicit Refresh request Keychain access with direct-read consent and an allowing prompt policy, while ordinary OAuth polling stays noninteractive (#4257). Thanks @stromseng!
 - Antigravity: use agy's consumer OAuth client for new Google sign-ins and ask affected accounts to sign in again instead of showing placeholder 100% quotas (#4293). Thanks @oldcai!
 - Usage & Spend: retain known daily request counts when another source cannot count requests, showing the subtotal with ≥ while wholly unavailable counts remain a dash; partial costs do not erase request totals (#4295). Thanks @Yuxin-Qiao!
 - Codex costs: a request with unknown historical pricing no longer hides the estimate for the other requests of its model and day. The day shows the priced subtotal as a partial estimate with its unpriced request count, and a day with an unpriced model is no longer reported as fully priced (#4273, #4278, #4279). Thanks @gabrielrojasc and @luochen211!
