@@ -2,6 +2,10 @@
 
 ## 0.73.1 — Unreleased
 
+### Fixed
+
+- Docs: correct Codex Auto source order and explain credential renewal, local cost coverage, and the distinct Pi, OpenCodex, OpenCode, Amp, and dots paths (#3635, #3273, #3556, #4300).
+
 ## 0.73.0 — 2026-10-07
 
 ### Highlights
