@@ -122,6 +122,7 @@ actor CostUsageStore {
         parserHash: CodexParserHash.value)
     static let cacheGeneration = "sqlite:\(CostUsageStore.schemaVersion)"
     static let compatiblePredecessorParserHashes: Set<String> = [
+        "7ff985e81e281a11", // 0.73.0 row-string sharing preserves every persisted value and checkpoint.
         "99d920977063318a", // Preserve the saved-pricing migration before revision 9 reparses mirrors.
         "ed735dc27ffa70d9", // 0.72.0 rows and checkpoints are kept; revision 9 reparses duplicate ledger mirrors.
         "029fe80aa98f27e8", // Revision 7 caches retain history during bounded JSON-fallback reparsing.
