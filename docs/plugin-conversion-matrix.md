@@ -76,7 +76,7 @@ Abacus, Muse, LongCat, Replicate, and TypeSafe unchanged.
 | opencodego | `needs-files/subprocess/oauth-broker` | No | Local auth/SQLite state and browser sessions are required, with an additional bespoke usage model. |
 | alibaba | `needs-host-extension` | No | Form POST is available in host-caps-3; CSRF/sec-token parsing stays in the script. Cookie-jar lane host-caps-4 owns redirect-scoped cookies and the remaining session parity audit; not yet convertible. |
 | alibabatokenplan | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 must preserve domain/path metadata through redirects and define legacy-header migration before cutover. |
-| qwencloud | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 owns declared-origin redirects, dashboard/API domain/path routing, final-URL proof, and migration of the native paired-header cache; no cutover here. |
+| qwencloud | `needs-host-extension` | Team only | `qwencloud-team.ts` fetches Team credits with form POST and an opaque dashboard session supplied by native cookie selection. Individual remains native: its cookie-derived CSRF/cna payload and paired-host auth parity still need a separate conversion audit. |
 | factory | `needs-files/subprocess/oauth-broker` | No | The canonical fallback recovers WorkOS tokens from browser localStorage and persists sessions; cookie headers cover only part of auth. |
 | gemini | `needs-files/subprocess/oauth-broker` | No | Gemini CLI credential/config files, Google OAuth refresh, and a curl fallback own the current flow. |
 | antigravity | `needs-pty/webview/native` | No | Process/port discovery, localhost IDE RPC, OAuth files, and a persistent PTY make this a native integration. |

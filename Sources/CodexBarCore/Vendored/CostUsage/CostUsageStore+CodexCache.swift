@@ -51,6 +51,7 @@ extension CostUsageStore {
     {
         var decoded = DecodedCodexUsageRows()
         let decoder = JSONDecoder()
+        let rowStrings = CostUsageRowStringPool()
         let readablePaths = Set(files.compactMap { file -> String? in
             guard let data = file.scanState.detailsPayload,
                   (try? decoder.decode(StoredFileDetails.self, from: data)) != nil
@@ -63,7 +64,8 @@ extension CostUsageStore {
             decoded.rowCounts[stored.path, default: 0] += 1
             guard readablePaths.contains(stored.path) else { return }
             decodeAttempts += 1
-            if let row = try? decoder.decode(CostUsageScanner.CodexUsageRow.self, from: stored.payload) {
+            if var row = try? decoder.decode(CostUsageScanner.CodexUsageRow.self, from: stored.payload) {
+                row.turnID = row.turnID.map(rowStrings.intern)
                 decoded.rowsByPath[stored.path, default: []].append(row)
             }
         }
@@ -473,21 +475,6 @@ extension CostUsageStore {
         var validatedCurrentSnapshot = false
     }
 
-    private static func cache(
-        from snapshot: CostUsageStoreSnapshot,
-        recorder: CostUsageStoreReadWorkRecorder?,
-        retryPresence: [String: CostUsageCodexRetryBufferPresence]? = nil,
-        tokenSnapshotsLoaded: Bool = true) -> CostUsageCache
-    {
-        self.reconciledCodexCache(
-            self.decodeCodexCache(
-                from: snapshot,
-                recorder: recorder,
-                retryPresence: retryPresence,
-                tokenSnapshotsLoaded: tokenSnapshotsLoaded),
-            persistence: CodexPersistenceState(snapshot: snapshot))
-    }
-
     static func decodeCodexCache(
         from snapshot: CostUsageStoreSnapshot,
         recorder: CostUsageStoreReadWorkRecorder?,
@@ -499,6 +486,7 @@ extension CostUsageStore {
     {
         recorder?.recordCacheConversion()
         let decoder = makeDecoder()
+        let rowStrings = CostUsageRowStringPool()
         var cache = CostUsageCache()
         cache.files.reserveCapacity(snapshot.files.count)
         let metadata = snapshot.metadata
@@ -550,7 +538,10 @@ extension CostUsageStore {
             } else {
                 recorder?.recordUsageRowDecodes(count: rowsByPath[file.path]?.count ?? 0)
                 rows = (rowsByPath[file.path] ?? []).compactMap {
-                    try? decoder.decode(CostUsageScanner.CodexUsageRow.self, from: $0.payload)
+                    guard var row = try? decoder.decode(CostUsageScanner.CodexUsageRow.self, from: $0.payload)
+                    else { return nil }
+                    row.turnID = row.turnID.map(rowStrings.intern)
+                    return row
                 }
             }
             let restoredRows = rows.isEmpty ? Self.aggregateRows(from: aggregates) : rows
