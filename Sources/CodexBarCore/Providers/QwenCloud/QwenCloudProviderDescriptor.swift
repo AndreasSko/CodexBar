@@ -66,8 +66,10 @@ public enum QwenCloudProviderDescriptor {
                 noDataMessage: { "Qwen Cloud cost summary is not supported." }),
             presentation: ProviderUsagePresentation(
                 rateWindowLabeler: { metadata, snapshot, _ in
-                    ProviderRateWindowLabels(
-                        primary: snapshot.primary?.windowMinutes == 30 * 24 * 60 ? "Monthly" : metadata.sessionLabel,
+                    let primary = snapshot.primary?.resetDescription == "Team" ? "Team"
+                        : snapshot.primary?.windowMinutes == 30 * 24 * 60 ? "Monthly" : metadata.sessionLabel
+                    return ProviderRateWindowLabels(
+                        primary: primary,
                         secondary: metadata.weeklyLabel,
                         tertiary: metadata.opusLabel ?? "Sonnet",
                         showsTertiary: metadata.supportsOpus)
@@ -75,7 +77,9 @@ public enum QwenCloudProviderDescriptor {
                 primaryBindingQuotaLanes: [.secondary]),
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .web],
-                pipeline: ProviderFetchPipeline(resolveStrategies: self.resolveStrategies)),
+                pipeline: ProviderFetchPipeline(
+                    resolveStrategies: self.resolveStrategies,
+                    resolveFallbackError: QwenCloudTeamFetchStrategy.fallbackError)),
             cli: ProviderCLIConfig(
                 name: "qwen-cloud",
                 aliases: ["qwencloud", "qwen", "qwen-token-plan"],
@@ -96,7 +100,7 @@ public enum QwenCloudProviderDescriptor {
         guard context.settings?.qwenCloud?.cookieSource != .off else { return [] }
         switch context.sourceMode {
         case .auto, .web:
-            return [QwenCloudWebFetchStrategy()]
+            return [QwenCloudTeamFetchStrategy(), QwenCloudWebFetchStrategy()]
         case .api, .cli, .oauth:
             return []
         }
@@ -170,6 +174,10 @@ struct QwenCloudWebFetchStrategy: ProviderFetchStrategy {
 
     func shouldFallback(on _: Error, context _: ProviderFetchContext) -> Bool {
         false
+    }
+
+    func diagnostic(forPriorFailure error: Error) -> String? {
+        error is QwenCloudTeamUnavailable ? nil : "Team usage unavailable: \(error.localizedDescription)"
     }
 
     static func resolveCookieHeader(context: ProviderFetchContext, allowCached: Bool) throws -> String {
