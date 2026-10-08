@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- Usage & Spend: keep date inspection inside recorded chart buckets, wrap scoped source legends, and retain recorded zero-dollar sources and amounts (#4329). Thanks @Yuxin-Qiao!
+
 - Menu bar: keep the empty Settings placeholder from creating a persistent Dock icon at launch on macOS 27, and share its guarded dismissal path. (#4101)
 - OpenCode Go: show the most constrained five-hour, weekly, or monthly quota in the automatic menu-bar percentage and switcher before it runs out. (#3349)
 - Claude: preserve Plan Usage history across external OAuth token rotations and reunite saved fragments with verified account/profile bindings, while keeping other accounts and unverified history separate (#4322). Thanks @urda!
