@@ -956,6 +956,7 @@ extension CostUsageStoreTests {
 extension CostUsageStoreTests {
     @Test(arguments: [
         "ed735dc27ffa70d9", // Current release before session-tier evidence.
+        "7ff985e81e281a11",
         "99d920977063318a", // Scheduling diagnostics retain history and checkpoints.
         "029fe80aa98f27e8", // Before the shared JSON fallback.
         "c61aebb9cf043a72", // Previous request-ledger revision.
@@ -1003,6 +1004,7 @@ extension CostUsageStoreTests {
         let fixture = try StoreFixture()
         defer { fixture.remove() }
         #expect(CostUsageStore.compatiblePredecessorParserHashes == [
+            "7ff985e81e281a11",
             "99d920977063318a",
             "ed735dc27ffa70d9",
             "029fe80aa98f27e8",
