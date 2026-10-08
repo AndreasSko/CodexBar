@@ -100,7 +100,7 @@ extension UsageMenuCardView.Model {
                let total = input.snapshot?.detailRow(label: "Credits total")?.value,
                total != "0"
             {
-                presentation.detailLeft = String(format: L("%@ of %@ credits left"), remaining, total)
+                presentation.detailText = String(format: L("%@ of %@ credits left"), remaining, total)
             }
         case .none, .requestQuota:
             break

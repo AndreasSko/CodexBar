@@ -882,10 +882,10 @@ extension StatusItemController {
             return balance
         }
         if provider == .kiro {
-            return Self.kiroDisplayText(
+            return self.kiroMenuBarText(
+                provider: provider,
                 snapshot: snapshot,
-                mode: self.settings.kiroMenuBarDisplayMode,
-                showUsed: self.settings.usageBarsShowUsed)
+                now: now)
         }
         if mode != .resetTime,
            self.settings.menuBarMetricPreference(for: provider, snapshot: snapshot) == .extraUsage,
@@ -995,6 +995,22 @@ extension StatusItemController {
             return nil
         }
         return UsageFormatter.currencyString(cost.used, currencyCode: cost.currencyCode)
+    }
+
+    private func kiroMenuBarText(provider: UsageProvider, snapshot: UsageSnapshot?, now: Date) -> String? {
+        let mode = self.settings.menuBarDisplayMode
+        let text = Self.kiroDisplayText(
+            snapshot: snapshot,
+            mode: self.settings.kiroMenuBarDisplayMode,
+            showUsed: self.settings.usageBarsShowUsed)
+        guard mode == .pace || mode == .both, let text else { return text }
+        guard let paceText = self.store.menuBarLayoutPaceText(
+            provider: provider,
+            window: snapshot?.primary,
+            dataConfidence: snapshot?.dataConfidence ?? .unknown,
+            now: now)
+        else { return text }
+        return mode == .pace ? paceText : "\(text) · \(paceText)"
     }
 
     nonisolated static func kiroDisplayText(
