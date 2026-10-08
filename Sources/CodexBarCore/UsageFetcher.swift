@@ -178,6 +178,8 @@ public struct UsageSnapshot: Codable, Sendable {
     public let commandCodeMonthlyGrantDepleted: Bool
     public let subscriptionExpiresAt: Date?
     public let subscriptionRenewsAt: Date?
+    public let subscriptionRenewsAtIsDateOnly: Bool
+    public let subscriptionExpiresAtIsDateOnly: Bool
     public let updatedAt: Date
     public let identity: ProviderIdentitySnapshot?
     public let dataConfidence: UsageDataConfidence
@@ -195,6 +197,8 @@ public struct UsageSnapshot: Codable, Sendable {
         case copilotMeteredZeroCredits
         case subscriptionExpiresAt
         case subscriptionRenewsAt
+        case subscriptionRenewsAtIsDateOnly
+        case subscriptionExpiresAtIsDateOnly
         case updatedAt
         case identity
         case dataConfidence
@@ -227,6 +231,8 @@ public struct UsageSnapshot: Codable, Sendable {
         commandCodeMonthlyGrantDepleted: Bool = false,
         subscriptionExpiresAt: Date? = nil,
         subscriptionRenewsAt: Date? = nil,
+        subscriptionRenewsAtIsDateOnly: Bool = false,
+        subscriptionExpiresAtIsDateOnly: Bool = false,
         updatedAt: Date,
         identity: ProviderIdentitySnapshot? = nil,
         dataConfidence: UsageDataConfidence = .unknown)
@@ -257,6 +263,8 @@ public struct UsageSnapshot: Codable, Sendable {
         self.commandCodeMonthlyGrantDepleted = commandCodeMonthlyGrantDepleted
         self.subscriptionExpiresAt = subscriptionExpiresAt
         self.subscriptionRenewsAt = subscriptionRenewsAt
+        self.subscriptionRenewsAtIsDateOnly = subscriptionRenewsAtIsDateOnly
+        self.subscriptionExpiresAtIsDateOnly = subscriptionExpiresAtIsDateOnly
         self.updatedAt = updatedAt
         self.identity = identity
         self.dataConfidence = dataConfidence
@@ -290,10 +298,17 @@ public struct UsageSnapshot: Codable, Sendable {
         }
     }
 
-    public func withSubscriptionMetadata(expiresAt: Date?, renewsAt: Date?) -> UsageSnapshot {
+    public func withSubscriptionMetadata(
+        expiresAt: Date?,
+        renewsAt: Date?,
+        expiresAtIsDateOnly: Bool = false,
+        renewsAtIsDateOnly: Bool = false) -> UsageSnapshot
+    {
         self.replacing(
             subscriptionExpiresAt: .value(expiresAt),
-            subscriptionRenewsAt: .value(renewsAt))
+            subscriptionRenewsAt: .value(renewsAt),
+            subscriptionRenewsAtIsDateOnly: .value(renewsAtIsDateOnly),
+            subscriptionExpiresAtIsDateOnly: .value(expiresAtIsDateOnly))
     }
 
     public func with(primary: RateWindow?, secondary: RateWindow?) -> UsageSnapshot {
@@ -360,6 +375,12 @@ public struct UsageSnapshot: Codable, Sendable {
         self.commandCodeMonthlyGrantDepleted = false // Live-only fetch state
         self.subscriptionExpiresAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionExpiresAt)
         self.subscriptionRenewsAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionRenewsAt)
+        self.subscriptionRenewsAtIsDateOnly = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .subscriptionRenewsAtIsDateOnly) ?? false
+        self.subscriptionExpiresAtIsDateOnly = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .subscriptionExpiresAtIsDateOnly) ?? false
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         if let dataConfidence = try container.decodeIfPresent(String.self, forKey: .dataConfidence) {
             self.dataConfidence = UsageDataConfidence(rawValue: dataConfidence) ?? .unknown
@@ -388,6 +409,8 @@ public struct UsageSnapshot: Codable, Sendable {
         }
         try container.encodeIfPresent(self.subscriptionExpiresAt, forKey: .subscriptionExpiresAt)
         try container.encodeIfPresent(self.subscriptionRenewsAt, forKey: .subscriptionRenewsAt)
+        if self.subscriptionRenewsAtIsDateOnly { try container.encode(true, forKey: .subscriptionRenewsAtIsDateOnly) }
+        if self.subscriptionExpiresAtIsDateOnly { try container.encode(true, forKey: .subscriptionExpiresAtIsDateOnly) }
         try container.encode(self.updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(self.identity, forKey: .identity)
         if self.dataConfidence != .unknown {
@@ -563,6 +586,8 @@ public struct UsageSnapshot: Codable, Sendable {
         grokResetCredits: Replacement<GrokRateLimitResetCreditsSnapshot?> = .unchanged,
         subscriptionExpiresAt: Replacement<Date?> = .unchanged,
         subscriptionRenewsAt: Replacement<Date?> = .unchanged,
+        subscriptionRenewsAtIsDateOnly: Replacement<Bool> = .unchanged,
+        subscriptionExpiresAtIsDateOnly: Replacement<Bool> = .unchanged,
         identity: Replacement<ProviderIdentitySnapshot?> = .unchanged,
         dataConfidence: Replacement<UsageDataConfidence> = .unchanged) -> UsageSnapshot
     {
@@ -590,6 +615,10 @@ public struct UsageSnapshot: Codable, Sendable {
             commandCodeMonthlyGrantDepleted: self.commandCodeMonthlyGrantDepleted,
             subscriptionExpiresAt: subscriptionExpiresAt.resolving(self.subscriptionExpiresAt),
             subscriptionRenewsAt: subscriptionRenewsAt.resolving(self.subscriptionRenewsAt),
+            subscriptionRenewsAtIsDateOnly: subscriptionRenewsAtIsDateOnly
+                .resolving(self.subscriptionRenewsAtIsDateOnly),
+            subscriptionExpiresAtIsDateOnly: subscriptionExpiresAtIsDateOnly
+                .resolving(self.subscriptionExpiresAtIsDateOnly),
             updatedAt: self.updatedAt,
             identity: identity.resolving(self.identity),
             dataConfidence: dataConfidence.resolving(self.dataConfidence))
