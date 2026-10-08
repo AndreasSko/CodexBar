@@ -43,6 +43,7 @@ Usage source picker:
   the explicit OAuth path delegates recovery to the Codex CLI, which owns that file. If the CLI is unavailable,
   the OAuth error is surfaced instead of mutating the shared file.
 - Calls `GET https://chatgpt.com/backend-api/wham/usage` (default) with `Authorization: Bearer <token>`.
+- A `chatgpt_base_url` setting in `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) overrides the usage endpoint. Lines beginning with `#`, including indented comments, are ignored; a commented override cannot shadow an active setting later in the file. Trailing inline comments remain supported.
 - The app reads reset-credit inventory once per refresh with a best-effort
   `GET https://chatgpt.com/backend-api/wham/rate-limit-reset-credits` using the same account-scoped OAuth context;
   the CLI requests it only when optional credits are included.
